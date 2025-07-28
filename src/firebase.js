@@ -4,7 +4,7 @@ import { getFirestore } from "firebase/firestore";
 
 // Your Firebase config
 const firebaseConfig = {
-  apiKey: "AIza5yGONPpR2DnyU011PDurola2fuqolroq-I",
+  apiKey: "AIzaSyDdWPoRZDnVu9lIlDvUrolafjuoqlFoo-I",
   authDomain: "hia-lead-tracker-pro.firebaseapp.com",
   projectId: "hia-lead-tracker-pro",
   storageBucket: "hia-lead-tracker-pro.firebasestorage.app",
