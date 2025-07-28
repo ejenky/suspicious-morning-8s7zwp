@@ -4,11 +4,11 @@ import { getFirestore } from "firebase/firestore";
 
 // Your Firebase config
 const firebaseConfig = {
-  apiKey: "AIza5qJOUmPpR2DnyU011PDurola2fuqolroq-I",
+  apiKey: "AIza5yGONPpR2DnyU011PDurola2fuqolroq-I",
   authDomain: "hia-lead-tracker-pro.firebaseapp.com",
   projectId: "hia-lead-tracker-pro",
   storageBucket: "hia-lead-tracker-pro.firebasestorage.app",
-  messagingSenderId: "70645594",
+  messagingSenderId: "70227064594",
   appId: "1:570227064594:web:880073de9dd6ae3fe77dcb"
 };
 
