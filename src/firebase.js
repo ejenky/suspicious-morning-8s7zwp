@@ -4,13 +4,12 @@ import { getFirestore } from "firebase/firestore";
 
 // Your Firebase config
 const firebaseConfig = {
-  // Your actual config here
-  apiKey: "AIzaSyDdWPoRZDnVu9lIlDvUrolafjuoqlFoo-I",
-  authDomain: "hia-lead-tracker-pro.firebaseapp.com",
-  projectId: "hia-lead-tracker-pro",
-  storageBucket: "hia-lead-tracker-pro.firebasestorage.app",
-  messagingSenderId: "570227064594",
-  appId: "1:570227064594:web:880073de9dd6ae3fe77dcb",
+  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
+  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.REACT_APP_FIREBASE_APP_ID
 };
 
 // Initialize Firebase only if not already initialized
