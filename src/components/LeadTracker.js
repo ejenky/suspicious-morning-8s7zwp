@@ -109,6 +109,118 @@ const useLeads = (userId) => {
   return { leads, loading, addLead, calculateMetrics };
 };
 
+// Mock AuthComponent since it's referenced but not defined
+const AuthComponent = () => {
+  const [selectedRole, setSelectedRole] = useState('agent');
+  const [credentials, setCredentials] = useState({ email: '', password: '' });
+  const [showPassword, setShowPassword] = useState(false);
+  const { setUser } = useAuth();
+
+  const handleLogin = (e) => {
+    e.preventDefault();
+    // Mock login - create a user object based on selected role
+    const mockUser = {
+      id: Date.now().toString(),
+      name: credentials.email.split('@')[0] || 'User',
+      email: credentials.email || 'user@example.com',
+      role: selectedRole,
+      uid: Date.now().toString()
+    };
+    setUser(mockUser);
+    localStorage.setItem('currentUser', JSON.stringify(mockUser));
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
+      <div className="w-full max-w-md">
+        <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-8 border border-slate-700">
+          <div className="text-center mb-8">
+            <div className="inline-flex p-3 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 mb-4">
+              <Target className="w-8 h-8 text-white" />
+            </div>
+            <h1 className="text-2xl font-bold text-white mb-2">LeadTracker Login</h1>
+            <p className="text-slate-400">Access your sales dashboard</p>
+          </div>
+
+          {/* Role Selection */}
+          <div className="flex gap-2 mb-6 p-1 bg-slate-700/50 rounded-lg">
+            {[
+              { key: 'agent', label: 'Sales Agent', icon: User },
+              { key: 'manager', label: 'Manager', icon: Shield },
+              { key: 'administrator', label: 'Admin', icon: Building }
+            ].map((role) => (
+              <button
+                key={role.key}
+                onClick={() => setSelectedRole(role.key)}
+                className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                  selectedRole === role.key
+                    ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <role.icon className="w-4 h-4" />
+                {role.label}
+              </button>
+            ))}
+          </div>
+
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                <Mail className="w-4 h-4 inline mr-2" />
+                Email Address
+              </label>
+              <input
+                type="email"
+                value={credentials.email}
+                onChange={(e) => setCredentials(prev => ({ ...prev, email: e.target.value }))}
+                className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Enter your email"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                <Lock className="w-4 h-4 inline mr-2" />
+                Password
+              </label>
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={credentials.password}
+                  onChange={(e) => setCredentials(prev => ({ ...prev, password: e.target.value }))}
+                  className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-12"
+                  placeholder="Enter your password"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-white"
+                >
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium py-3 px-4 rounded-lg transition-all duration-200 transform hover:scale-[1.02]"
+            >
+              Sign In as {selectedRole.charAt(0).toUpperCase() + selectedRole.slice(1)}
+            </button>
+          </form>
+
+          <p className="text-center text-slate-400 text-sm mt-6">
+            Demo Mode - Use any email/password to login
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Mountain Time utilities (Enhancement 1: Fix date display to Mountain Time)
 const getMountainTime = () => {
   return new Date().toLocaleString("en-US", {
