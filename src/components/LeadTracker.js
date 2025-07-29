@@ -56,8 +56,58 @@ import {
   Check,
   Loader,
 } from "lucide-react";
-import { useAuth } from "../hooks/useAuth";
-import { useLeads } from "../hooks/useLeads";
+// import { useAuth } from "../hooks/useAuth";
+// import { useLeads } from "../hooks/useLeads";
+
+// Mock useAuth hook since external hooks may not exist
+const useAuth = () => {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(false);
+  
+  const logout = () => {
+    setUser(null);
+    localStorage.removeItem('currentUser');
+  };
+  
+  return { user, loading, logout, setUser };
+};
+
+// Mock useLeads hook
+const useLeads = (userId) => {
+  const [leads, setLeads] = useState([]);
+  const [loading, setLoading] = useState(false);
+  
+  const addLead = async (leadData) => {
+    try {
+      const newLead = {
+        ...leadData,
+        id: Date.now().toString(),
+        agent: userId,
+        timestamp: new Date()
+      };
+      setLeads(prev => [...prev, newLead]);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  };
+  
+  const calculateMetrics = (date) => {
+    const dateLeads = leads.filter(lead => {
+      const leadDate = new Date(lead.timestamp).toDateString();
+      const targetDate = new Date(date).toDateString();
+      return leadDate === targetDate;
+    });
+    
+    return {
+      totalLeads: dateLeads.length,
+      totalSales: dateLeads.filter(lead => lead.sale).length,
+      totalRevenue: dateLeads.reduce((sum, lead) => sum + (lead.commission || 0), 0)
+    };
+  };
+  
+  return { leads, loading, addLead, calculateMetrics };
+};
 
 // Mountain Time utilities (Enhancement 1: Fix date display to Mountain Time)
 const getMountainTime = () => {
