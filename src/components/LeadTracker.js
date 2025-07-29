@@ -4163,14 +4163,15 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                             type="number"
                           />
                         </div>
-                      </div>
-                    </div>
-                  ))}
-                  {(rankedTeams || []).length === 0 && (
-                    <p className="text-gray-300 text-center py-8">
-                      No teams configured yet
-                    </p>
-                  )}
+                   </div>
+            </div>
+          ))}
+        </div>
+        {(rankedTeams || []).length === 0 && (
+          <p className="text-gray-300 text-center py-8">
+            No teams configured yet
+          </p>
+        )}
                 </div>
               </div>
 
