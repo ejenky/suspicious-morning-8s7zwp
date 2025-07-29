@@ -6859,12 +6859,11 @@ const AuthComponent = () => {
   const [errors, setErrors] = useState({});
 
   const handleSubmit = async () => {
-    console.log('Login attempt started with:', { email: formData.email, userType });
     setErrors({});
     setLoading(true);
 
     if (!formData.email || !formData.password) {
-      setErrors({ general: "Please fill in all Firebase credentials" });
+      setErrors({ general: "Please fill in all fields" });
       setLoading(false);
       return;
     }
@@ -6883,11 +6882,9 @@ const AuthComponent = () => {
 
     try {
       let result;
-      console.log('Attempting Firebase authentication...');
 
       if (isLogin) {
         result = await login(formData.email, formData.password);
-        console.log('Firebase login result:', result);
       } else {
         result = await signup(formData.email, formData.password, {
           name: formData.name,
@@ -6895,18 +6892,13 @@ const AuthComponent = () => {
           company: formData.company,
           location: formData.location,
         });
-        console.log('Firebase signup result:', result);
       }
 
       if (!result || !result.success) {
-        console.error('Firebase authentication failed:', result);
-        setErrors({ general: result?.error || "Firebase authentication failed" });
-      } else {
-        console.log('Firebase authentication successful!');
+        setErrors({ general: result?.error || "Authentication failed" });
       }
     } catch (error) {
-      console.error('Firebase authentication error:', error);
-      setErrors({ general: "Firebase authentication error occurred" });
+      setErrors({ general: "An unexpected error occurred" });
     }
 
     setLoading(false);
@@ -6972,32 +6964,6 @@ const AuthComponent = () => {
                   : "Manage your team and monitor sales performance"}
               </p>
             </div>
-            
-            {/* Firebase Credentials Info */}
-            <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4 mb-6">
-              <div className="flex items-center mb-2">
-                <div className="w-2 h-2 bg-blue-400 rounded-full mr-2"></div>
-                <h3 className="text-blue-400 font-semibold text-sm">Firebase Authentication</h3>
-              </div>
-              <p className="text-slate-300 text-xs mb-3">
-                This system uses Firebase for authentication. Use any email/password combination for demo purposes:
-              </p>
-              <div className="grid grid-cols-1 gap-2 text-xs">
-                <div className="bg-slate-800/50 rounded px-3 py-2">
-                  <span className="text-blue-400 font-medium">Agent:</span>
-                  <span className="text-slate-300 ml-2">agent@demo.com / password123</span>
-                </div>
-                <div className="bg-slate-800/50 rounded px-3 py-2">
-                  <span className="text-emerald-400 font-medium">Manager:</span>
-                  <span className="text-slate-300 ml-2">manager@demo.com / password123</span>
-                </div>
-                <div className="bg-slate-800/50 rounded px-3 py-2">
-                  <span className="text-purple-400 font-medium">Admin:</span>
-                  <span className="text-slate-300 ml-2">admin@demo.com / password123</span>
-                </div>
-              </div>
-            </div>
-            
             <div className="space-y-6">
               {errors.general && (
                 <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-red-400 text-sm">
