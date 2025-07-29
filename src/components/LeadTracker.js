@@ -61,15 +61,70 @@ import {
 
 // Mock useAuth hook since external hooks may not exist
 const useAuth = () => {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(() => {
+    try {
+      const stored = localStorage.getItem('currentUser');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
   const [loading, setLoading] = useState(false);
+  
+  const login = async (email, password) => {
+    try {
+      setLoading(true);
+      // Mock login - accept any email/password
+      const mockUser = {
+        id: Date.now().toString(),
+        name: email.split('@')[0] || 'User',
+        email: email,
+        role: email.includes('admin') ? 'administrator' : email.includes('manager') ? 'manager' : 'agent',
+        uid: Date.now().toString(),
+        company: 'Demo Company',
+        location: 'Denver, CO'
+      };
+      
+      setUser(mockUser);
+      localStorage.setItem('currentUser', JSON.stringify(mockUser));
+      setLoading(false);
+      return { success: true, user: mockUser };
+    } catch (error) {
+      setLoading(false);
+      return { success: false, error: 'Login failed' };
+    }
+  };
+  
+  const signup = async (email, password, userData) => {
+    try {
+      setLoading(true);
+      // Mock signup - accept any data
+      const mockUser = {
+        id: Date.now().toString(),
+        name: userData.name || email.split('@')[0],
+        email: email,
+        role: userData.role || 'agent',
+        uid: Date.now().toString(),
+        company: userData.company || 'Demo Company',
+        location: userData.location || 'Denver, CO'
+      };
+      
+      setUser(mockUser);
+      localStorage.setItem('currentUser', JSON.stringify(mockUser));
+      setLoading(false);
+      return { success: true, user: mockUser };
+    } catch (error) {
+      setLoading(false);
+      return { success: false, error: 'Signup failed' };
+    }
+  };
   
   const logout = () => {
     setUser(null);
     localStorage.removeItem('currentUser');
   };
   
-  return { user, loading, logout, setUser };
+  return { user, loading, logout, setUser, login, signup };
 };
 
 // Mock useLeads hook
