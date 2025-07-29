@@ -7556,38 +7556,115 @@ const AdministratorDashboard = ({ user, onSignOut }) => {
   );
 };
 
+// Error Boundary Component
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('LeadTracker Error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+          <div className="text-center max-w-md mx-4">
+            <div className="inline-flex p-4 rounded-full bg-red-500/20 mb-4">
+              <AlertTriangle className="w-8 h-8 text-red-400" />
+            </div>
+            <h2 className="text-xl font-semibold text-white mb-2">Something went wrong</h2>
+            <p className="text-slate-400 mb-4">Please refresh the page or contact support</p>
+            <button 
+              onClick={() => window.location.reload()}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg"
+            >
+              Refresh Page
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 // Main App Component
 export default function LeadTracker() {
-  const { user, loading, logout } = useAuth();
+  try {
+    const { user, loading, logout } = useAuth();
 
-  // Show loading screen while checking authentication
-  if (loading) {
+    // Show loading screen while checking authentication
+    if (loading) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+          <div className="text-center">
+            <div className="inline-flex p-4 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 mb-4">
+              <Loader className="w-8 h-8 text-white animate-spin" />
+            </div>
+            <h2 className="text-xl font-semibold text-white mb-2">Loading...</h2>
+            <p className="text-slate-400">Setting up your dashboard</p>
+          </div>
+        </div>
+      );
+    }
+
+    // Show auth component if no user is logged in
+    if (!user) {
+      return (
+        <ErrorBoundary>
+          <AuthComponent />
+        </ErrorBoundary>
+      );
+    }
+
+    // Show appropriate dashboard based on user role
+    if (user?.role === "administrator") {
+      return (
+        <ErrorBoundary>
+          <AdministratorDashboard user={user} onSignOut={logout} />
+        </ErrorBoundary>
+      );
+    }
+    
+    if (user?.role === "manager") {
+      return (
+        <ErrorBoundary>
+          <ManagerDashboard user={user} onSignOut={logout} />
+        </ErrorBoundary>
+      );
+    }
+
+    return (
+      <ErrorBoundary>
+        <AgentDashboard user={user} onSignOut={logout} />
+      </ErrorBoundary>
+    );
+  } catch (error) {
+    console.error('LeadTracker render error:', error);
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-        <div className="text-center">
-          <div className="inline-flex p-4 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 mb-4">
-            <Loader className="w-8 h-8 text-white animate-spin" />
+        <div className="text-center max-w-md mx-4">
+          <div className="inline-flex p-4 rounded-full bg-red-500/20 mb-4">
+            <AlertTriangle className="w-8 h-8 text-red-400" />
           </div>
-          <h2 className="text-xl font-semibold text-white mb-2">Loading...</h2>
-          <p className="text-slate-400">Setting up your dashboard</p>
+          <h2 className="text-xl font-semibold text-white mb-2">Application Error</h2>
+          <p className="text-slate-400 mb-4">Please refresh the page</p>
+          <button 
+            onClick={() => window.location.reload()}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg"
+          >
+            Refresh Page
+          </button>
         </div>
       </div>
     );
   }
-
-  // Show auth component if no user is logged in
-  if (!user) {
-    return <AuthComponent />;
-  }
-
-  // Show appropriate dashboard based on user role
-  if (user.role === "administrator") {
-    return <AdministratorDashboard user={user} onSignOut={logout} />;
-  }
-  
-  if (user.role === "manager") {
-    return <ManagerDashboard user={user} onSignOut={logout} />;
-  }
-
-  return <AgentDashboard user={user} onSignOut={logout} />;
 }
