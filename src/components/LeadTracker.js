@@ -5912,48 +5912,53 @@ const AgentDashboard = ({ user, onSignOut }) => {
   };
 
   const handleAddLead = async () => {
-    if (!validateForm()) return;
+    try {
+      if (!validateForm()) return;
 
-    const leadTimestamp = new Date();
-    // Set the date components using local time
-    const [year, month, day] = selectedDate.split("-").map(Number);
-    leadTimestamp.setFullYear(year);
-    leadTimestamp.setMonth(month - 1); // Month is 0-indexed
-    leadTimestamp.setDate(day);
+      const leadTimestamp = new Date();
+      // Set the date components using local time
+      const [year, month, day] = selectedDate.split("-").map(Number);
+      leadTimestamp.setFullYear(year);
+      leadTimestamp.setMonth(month - 1); // Month is 0-indexed
+      leadTimestamp.setDate(day);
 
-    const leadData = {
-      leadType: newLead.leadType,
-      carrier: newLead.carrier,
-      notes: newLead.notes,
-      crmLink: newLead.crmLink,
-      sale: newLead.sale,
-      hra: newLead.hra,
-      commission: newLead.commission,
-      hraValue: newLead.hraValue,
-      clientName: newLead.clientName,
-      agentEmail: user.email,
-      date: selectedDate,
-      timestamp: leadTimestamp,
-    };
+      const leadData = {
+        leadType: newLead.leadType,
+        carrier: newLead.carrier,
+        notes: newLead.notes,
+        crmLink: newLead.crmLink,
+        sale: newLead.sale,
+        hra: newLead.hra,
+        commission: newLead.commission,
+        hraValue: newLead.hraValue,
+        clientName: newLead.clientName,
+        agentEmail: user?.email || '',
+        date: selectedDate,
+        timestamp: leadTimestamp,
+      };
 
-    const result = await addLead(leadData);
+      const result = await addLead(leadData);
 
-    if (result.success) {
-      setNewLead({
-        carrier: "",
-        leadType: "",
-        notes: "",
-        crmLink: "",
-        sale: false,
-        hra: false,
-        commission: 0,
-        hraValue: 0,
-        clientName: "",
-      });
-      setFormErrors({});
-      showToast("Lead added successfully! 🎉", "success");
-    } else {
-      showToast(`Error adding lead: ${result.error}`, "error");
+      if (result?.success) {
+        setNewLead({
+          carrier: "",
+          leadType: "",
+          notes: "",
+          crmLink: "",
+          sale: false,
+          hra: false,
+          commission: 0,
+          hraValue: 0,
+          clientName: "",
+        });
+        setFormErrors({});
+        showToast("Lead added successfully! 🎉", "success");
+      } else {
+        showToast(`Error adding lead: ${result?.error || 'Unknown error'}`, "error");
+      }
+    } catch (error) {
+      console.error('Error in handleAddLead:', error);
+      showToast(`Error adding lead: ${error.message || 'Unknown error'}`, "error");
     }
   };
 
