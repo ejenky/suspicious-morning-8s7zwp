@@ -56,136 +56,8 @@ import {
   Check,
   Loader,
 } from "lucide-react";
-// import { useAuth } from "../hooks/useAuth";
-// import { useLeads } from "../hooks/useLeads";
-
-// Mock useAuth hook since external hooks may not exist
-const useAuth = () => {
-  const [user, setUser] = useState(() => {
-    try {
-      const stored = localStorage.getItem('currentUser');
-      return stored ? JSON.parse(stored) : null;
-    } catch {
-      return null;
-    }
-  });
-  const [loading, setLoading] = useState(false);
-  
-  const login = async (email, password) => {
-    try {
-      setLoading(true);
-      // Mock login - accept any email/password
-      const mockUser = {
-        id: Date.now().toString(),
-        name: email.split('@')[0] || 'User',
-        email: email,
-        role: email.includes('admin') ? 'administrator' : email.includes('manager') ? 'manager' : 'agent',
-        uid: Date.now().toString(),
-        company: 'Demo Company',
-        location: 'Denver, CO'
-      };
-      
-      setUser(mockUser);
-      localStorage.setItem('currentUser', JSON.stringify(mockUser));
-      setLoading(false);
-      return { success: true, user: mockUser };
-    } catch (error) {
-      setLoading(false);
-      return { success: false, error: 'Login failed' };
-    }
-  };
-  
-  const signup = async (email, password, userData) => {
-    try {
-      setLoading(true);
-      // Mock signup - accept any data
-      const mockUser = {
-        id: Date.now().toString(),
-        name: userData.name || email.split('@')[0],
-        email: email,
-        role: userData.role || 'agent',
-        uid: Date.now().toString(),
-        company: userData.company || 'Demo Company',
-        location: userData.location || 'Denver, CO'
-      };
-      
-      setUser(mockUser);
-      localStorage.setItem('currentUser', JSON.stringify(mockUser));
-      setLoading(false);
-      return { success: true, user: mockUser };
-    } catch (error) {
-      setLoading(false);
-      return { success: false, error: 'Signup failed' };
-    }
-  };
-  
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem('currentUser');
-  };
-  
-  return { user, loading, logout, setUser, login, signup };
-};
-
-// Mock useLeads hook
-const useLeads = (userId) => {
-  const [leads, setLeads] = useState([]);
-  const [loading, setLoading] = useState(false);
-  
-  const addLead = async (leadData) => {
-    try {
-      const newLead = {
-        ...leadData,
-        id: Date.now().toString(),
-        agent: userId,
-        timestamp: new Date()
-      };
-      setLeads(prev => [...prev, newLead]);
-      return { success: true };
-    } catch (error) {
-      return { success: false, error: error.message };
-    }
-  };
-  
-  const calculateMetrics = (date) => {
-    const dateLeads = leads.filter(lead => {
-      const leadDate = new Date(lead.timestamp).toDateString();
-      const targetDate = new Date(date).toDateString();
-      return leadDate === targetDate;
-    });
-    
-    return {
-      totalLeads: dateLeads.length,
-      totalSales: dateLeads.filter(lead => lead.sale).length,
-      totalRevenue: dateLeads.reduce((sum, lead) => sum + (lead.commission || 0), 0)
-    };
-  };
-  
-  return { leads, loading, addLead, calculateMetrics };
-};
-
-// AuthComponent already exists in the file - removed duplicate declaration
-
-// Mountain Time utilities (Enhancement 1: Fix date display to Mountain Time)
-const getMountainTime = () => {
-  return new Date().toLocaleString("en-US", {
-    timeZone: "America/Denver",
-    year: "numeric", month: "2-digit", day: "2-digit",
-    hour: "2-digit", minute: "2-digit", second: "2-digit"
-  });
-};
-
-const getMountainDateString = () => {
-  return new Date().toLocaleDateString("en-CA", { timeZone: "America/Denver" });
-};
-
-const formatMountainTime = (date) => {
-  return new Date(date).toLocaleString("en-US", {
-    timeZone: "America/Denver",
-    month: "short", day: "numeric", year: "numeric",
-    hour: "numeric", minute: "2-digit", hour12: true
-  });
-};
+import { useAuth } from "../hooks/useAuth";
+import { useLeads } from "../hooks/useLeads";
 
 // Global state for leads data
 let globalLeadsData = [];
@@ -195,140 +67,45 @@ const mockAgents = [];
 
 const mockFive9Data = {};
 
-// Enhanced theme system (Enhancement 2: Remove dark mode, add 10 color themes)
+// Theme system
 const themes = {
-  blue: {
-    name: "Ocean Blue",
-    gradient: "from-blue-600 via-blue-500 to-cyan-500",
-    primary: "blue-600",
-    secondary: "blue-500",
-    accent: "cyan-500",
-    text: "blue-900",
-    bg: "blue-50"
+  default: {
+    primary: "from-indigo-900 via-purple-900 to-pink-900",
+    accent: "from-blue-500 to-purple-600",
+    card: "bg-white/10",
   },
-  green: {
-    name: "Forest Green",
-    gradient: "from-green-600 via-emerald-500 to-teal-500",
-    primary: "green-600",
-    secondary: "emerald-500",
-    accent: "teal-500",
-    text: "green-900",
-    bg: "green-50"
+  ocean: {
+    primary: "from-blue-900 via-cyan-900 to-teal-900",
+    accent: "from-cyan-500 to-blue-600",
+    card: "bg-blue-500/10",
   },
-  pink: {
-    name: "Cherry Blossom",
-    gradient: "from-pink-600 via-rose-500 to-pink-400",
-    primary: "pink-600",
-    secondary: "rose-500",
-    accent: "pink-400",
-    text: "pink-900",
-    bg: "pink-50"
+  forest: {
+    primary: "from-green-900 via-emerald-900 to-teal-900",
+    accent: "from-green-500 to-emerald-600",
+    card: "bg-green-500/10",
   },
   sunset: {
-    name: "Sunset Orange",
-    gradient: "from-orange-600 via-red-500 to-yellow-500",
-    primary: "orange-600",
-    secondary: "red-500",
-    accent: "yellow-500",
-    text: "orange-900",
-    bg: "orange-50"
+    primary: "from-orange-900 via-red-900 to-pink-900",
+    accent: "from-orange-500 to-red-600",
+    card: "bg-orange-500/10",
   },
-  teal: {
-    name: "Teal Cyan",
-    gradient: "from-teal-600 via-cyan-500 to-blue-400",
-    primary: "teal-600",
-    secondary: "cyan-500",
-    accent: "blue-400",
-    text: "teal-900",
-    bg: "teal-50"
+  midnight: {
+    primary: "from-slate-900 via-gray-900 to-black",
+    accent: "from-gray-500 to-slate-600",
+    card: "bg-slate-500/10",
   },
-  rose: {
-    name: "Rose Burgundy",
-    gradient: "from-rose-600 via-red-600 to-pink-500",
-    primary: "rose-600",
-    secondary: "red-600",
-    accent: "pink-500",
-    text: "rose-900",
-    bg: "rose-50"
+  aurora: {
+    primary: "from-violet-900 via-purple-900 to-fuchsia-900",
+    accent: "from-violet-500 to-fuchsia-600",
+    card: "bg-violet-500/10",
   },
-  emerald: {
-    name: "Emerald Jade",
-    gradient: "from-emerald-600 via-green-500 to-teal-400",
-    primary: "emerald-600",
-    secondary: "green-500",
-    accent: "teal-400",
-    text: "emerald-900",
-    bg: "emerald-50"
-  },
-  purple: {
-    name: "Royal Purple",
-    gradient: "from-purple-600 via-violet-500 to-indigo-500",
-    primary: "purple-600",
-    secondary: "violet-500",
-    accent: "indigo-500",
-    text: "purple-900",
-    bg: "purple-50"
-  },
-  amber: {
-    name: "Golden Amber",
-    gradient: "from-amber-600 via-yellow-500 to-orange-400",
-    primary: "amber-600",
-    secondary: "yellow-500",
-    accent: "orange-400",
-    text: "amber-900",
-    bg: "amber-50"
-  },
-  slate: {
-    name: "Modern Slate",
-    gradient: "from-slate-600 via-gray-500 to-zinc-500",
-    primary: "slate-600",
-    secondary: "gray-500",
-    accent: "zinc-500",
-    text: "slate-900",
-    bg: "slate-50"
-  }
 };
-
-// Enhancement 3: Updated lead types and commission system
-const leadTypes = [
-  "Appointment", "Call Back", "DNC", "FU Sale", "Interested", 
-  "No Interest", "Not Home", "Rewrite", "Sale", "Wrong Number"
-];
-
-const getCommission = (leadType) => {
-  const commissions = { "Sale": 100, "FU Sale": 75, "Rewrite": 50, "Appointment": 25, "Call Back": 15, "Interested": 10 };
-  return commissions[leadType] || 0;
-};
-
-// Enhancement 4: Alphabetized carriers (removed Rewrite)
-const carriers = ["Aetna", "Ambetter", "Anthem", "Blue Cross Blue Shield", "Cigna", "Humana", "Kaiser Permanente", "Molina", "UnitedHealthcare"];
-
-// Enhanced supervisor names
-const supervisorNames = ["Manager Alpha", "Manager Beta", "Manager Gamma", "Supervisor Johnson", "Supervisor Williams", "Supervisor Brown", "Team Lead Davis", "Team Lead Miller", "Team Lead Wilson", "Senior Manager Thompson"];
-
-// Enhancement 5: Data persistence utilities
-const saveToStorage = (key, data) => {
-  try { localStorage.setItem(`leadTracker_${key}`, JSON.stringify(data)); } catch (e) { console.error(e); }
-};
-
-const loadFromStorage = (key, defaultValue = null) => {
-  try { return JSON.parse(localStorage.getItem(`leadTracker_${key}`)) || defaultValue; } catch (e) { return defaultValue; }
-};
-
-// Global state with persistence
-let globalTeams = loadFromStorage('teams', [
-  { id: 1, name: "Team Alpha", agents: ["john@company.com", "mike@company.com"], supervisor: "Manager Alpha", created: new Date() },
-  { id: 2, name: "Team Beta", agents: ["sarah@company.com", "david@company.com"], supervisor: "Manager Beta", created: new Date() }
-]);
-let globalCurrentTheme = loadFromStorage('currentTheme', 'blue');
-let globalContests = loadFromStorage('contests', []);
 
 // Global state for supervisor help requests and goals
-let globalSupervisorRequests = loadFromStorage('supervisorRequests', []);
-let globalAgentGoals = loadFromStorage('agentGoals', {});
-let globalTeamGoals = loadFromStorage('teamGoals', {});
-let globalTeamAssignments = loadFromStorage('teamAssignments', {});
-let globalCallReviewForms = loadFromStorage('callReviewForms', []);
+let globalSupervisorRequests = [];
+let globalAgentGoals = {};
+let globalTeamAssignments = {};
+let globalCallReviewForms = [];
 
 // Utility function to get real agent stats from global leads data
 const getRealAgentStats = (agentEmail, dateFilter = null) => {
@@ -580,50 +357,108 @@ const Toast = ({ message, type = "success", isVisible, onClose }) => {
   );
 };
 
-// Enhanced Theme Selector Component (Enhancement 6: Removed dark mode toggle)
-const ThemeSelector = ({ currentTheme, onThemeChange }) => {
+// Theme Selector Component
+const ThemeSelector = ({
+  currentTheme,
+  onThemeChange,
+  isDarkMode,
+  onToggleDarkMode,
+}) => {
   const [isOpen, setIsOpen] = useState(false);
-  
-  return (
-    <div className="relative">
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className={`flex items-center space-x-2 px-4 py-2 rounded-lg bg-gradient-to-r ${themes[currentTheme].gradient} text-white hover:opacity-90 transition-opacity`}
-      >
-        <Palette className="w-4 h-4" />
-        <span>{themes[currentTheme].name}</span>
-        <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-      </button>
-      
-      {isOpen && (
-        <div className="absolute top-full left-0 mt-2 w-64 bg-white rounded-lg shadow-xl border z-50">
-          <div className="p-2">
-            <div className="text-sm font-medium text-gray-700 mb-2 px-2">Choose Theme</div>
-            <div className="grid grid-cols-2 gap-2">
-              {Object.entries(themes).map(([key, theme]) => (
-                <button
-                  key={key}
-                  onClick={() => {
-                    onThemeChange(key);
-                    globalCurrentTheme = key;
-                    saveToStorage('currentTheme', key);
-                    setIsOpen(false);
-                  }}
-                  className={`p-2 rounded-lg border-2 transition-all ${
-                    currentTheme === key 
-                      ? 'border-gray-400 bg-gray-50' 
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <div className={`w-full h-6 rounded bg-gradient-to-r ${theme.gradient} mb-1`}></div>
-                  <div className="text-xs font-medium text-gray-700">{theme.name}</div>
-                </button>
-              ))}
-            </div>
+  const [buttonRect, setButtonRect] = useState(null);
+
+  const handleToggle = (e) => {
+    if (!isOpen) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      setButtonRect(rect);
+    }
+    setIsOpen(!isOpen);
+  };
+
+  useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === "Escape") setIsOpen(false);
+    };
+    if (isOpen) {
+      document.addEventListener("keydown", handleEscape);
+      return () => document.removeEventListener("keydown", handleEscape);
+    }
+  }, [isOpen]);
+
+  const DropdownContent = () => (
+    <div
+      className="fixed bg-slate-900 rounded-xl p-4 shadow-2xl border border-white/20 min-w-[200px]"
+      style={{
+        top: buttonRect ? buttonRect.bottom + 8 : "60px",
+        left: buttonRect ? buttonRect.left : "24px",
+        zIndex: 9999,
+      }}
+    >
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <span className="text-white text-sm">Dark Mode</span>
+          <button
+            onClick={() => onToggleDarkMode()}
+            className={`w-10 h-6 rounded-full p-1 transition-colors ${
+              isDarkMode ? "bg-blue-600" : "bg-gray-400"
+            }`}
+          >
+            <div
+              className={`w-4 h-4 rounded-full bg-white transition-transform ${
+                isDarkMode ? "translate-x-4" : "translate-x-0"
+              }`}
+            />
+          </button>
+        </div>
+        <div className="space-y-2">
+          <span className="text-white text-sm">Color Themes</span>
+          <div className="grid grid-cols-2 gap-2">
+            {Object.entries(themes).map(([key, theme]) => (
+              <button
+                key={key}
+                onClick={() => {
+                  onThemeChange(key);
+                  setIsOpen(false);
+                }}
+                className={`h-8 rounded bg-gradient-to-r ${
+                  theme.primary
+                } border-2 ${
+                  currentTheme === key ? "border-white" : "border-transparent"
+                } transition-colors hover:scale-105 transform`}
+                title={key.charAt(0).toUpperCase() + key.slice(1)}
+              />
+            ))}
           </div>
         </div>
-      )}
+      </div>
     </div>
+  );
+
+  return (
+    <>
+      <div className="relative">
+        <button
+          onClick={handleToggle}
+          className="flex items-center gap-2 bg-white/10 hover:bg-white/20 px-3 py-2 rounded-lg transition-colors"
+        >
+          <Palette className="w-4 h-4" />
+          <span className="text-sm">Theme</span>
+        </button>
+      </div>
+      {isOpen && (
+        <>
+          {createPortal(
+            <div
+              className="fixed inset-0 bg-transparent"
+              style={{ zIndex: 9998 }}
+              onClick={() => setIsOpen(false)}
+            />,
+            document.body
+          )}
+          {createPortal(<DropdownContent />, document.body)}
+        </>
+      )}
+    </>
   );
 };
 
@@ -1500,9 +1335,9 @@ const AnalyticsDashboard = ({ leads, user, theme }) => {
   const [leadTypeFilter, setLeadTypeFilter] = useState("all");
 
   const getFilteredLeads = () => {
-    const userLeads = (leads || []).filter((lead) => lead?.agent === user?.uid);
+    const userLeads = leads.filter((lead) => lead.agent === user.uid);
     const now = new Date();
-    let filteredByDate = userLeads || [];
+    let filteredByDate = userLeads;
 
     switch (dateFilter) {
       case "today":
@@ -2844,445 +2679,6 @@ const ManagerSupervisorHelp = ({ user }) => {
   );
 };
 
-// Enhancement 7: Team Creation Modal Component
-const TeamCreationModal = ({ isOpen, onClose, onCreateTeam, theme }) => {
-  const [teamName, setTeamName] = useState('');
-  const [selectedAgents, setSelectedAgents] = useState([]);
-  const [selectedSupervisor, setSelectedSupervisor] = useState('');
-  const [isCreating, setIsCreating] = useState(false);
-
-  const availableAgents = mockAgents.filter(agent => 
-    !globalTeams.some(team => team.agents.includes(agent.email))
-  );
-
-  const handleCreateTeam = async () => {
-    if (!teamName.trim() || selectedAgents.length === 0 || !selectedSupervisor) {
-      alert('Please fill in all fields and select at least one agent.');
-      return;
-    }
-
-    setIsCreating(true);
-    const newTeam = {
-      id: Date.now(),
-      name: teamName.trim(),
-      agents: selectedAgents,
-      supervisor: selectedSupervisor,
-      created: new Date()
-    };
-
-    globalTeams.push(newTeam);
-    saveToStorage('teams', globalTeams);
-    onCreateTeam(newTeam);
-    
-    setTeamName(''); setSelectedAgents([]); setSelectedSupervisor(''); setIsCreating(false);
-    onClose();
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">Create New Team</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Team Name</label>
-            <input
-              type="text" value={teamName} onChange={(e) => setTeamName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Enter team name"
-            />
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Select Supervisor</label>
-            <select
-              value={selectedSupervisor} onChange={(e) => setSelectedSupervisor(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">Choose a supervisor</option>
-              {supervisorNames.map(supervisor => (
-                <option key={supervisor} value={supervisor}>{supervisor}</option>
-              ))}
-            </select>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Select Agents ({selectedAgents.length} selected)
-            </label>
-            <div className="max-h-40 overflow-y-auto border border-gray-300 rounded-md">
-              {availableAgents.length === 0 ? (
-                <div className="p-3 text-gray-500 text-center">No available agents</div>
-              ) : (
-                availableAgents.map(agent => (
-                  <label key={agent.email} className="flex items-center p-2 hover:bg-gray-50 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={selectedAgents.includes(agent.email)}
-                      onChange={() => setSelectedAgents(prev => 
-                        prev.includes(agent.email) 
-                          ? prev.filter(email => email !== agent.email)
-                          : [...prev, agent.email]
-                      )}
-                      className="mr-3"
-                    />
-                    <div>
-                      <div className="font-medium text-gray-900">{agent.name}</div>
-                      <div className="text-sm text-gray-500">{agent.email}</div>
-                    </div>
-                  </label>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-        
-        <div className="flex justify-end space-x-3 mt-6">
-          <button onClick={onClose} className="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300" disabled={isCreating}>
-            Cancel
-          </button>
-          <button
-            onClick={handleCreateTeam}
-            disabled={isCreating || !teamName.trim() || selectedAgents.length === 0 || !selectedSupervisor}
-            className={`px-4 py-2 text-white rounded-md bg-gradient-to-r ${themes[theme].gradient} hover:opacity-90 disabled:opacity-50 flex items-center`}
-          >
-            {isCreating && <Loader className="w-4 h-4 mr-2 animate-spin" />}
-            {isCreating ? 'Creating...' : 'Create Team'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// Enhancement 8: Lead Edit Modal Component
-const LeadEditModal = ({ isOpen, onClose, lead, onSave, theme }) => {
-  const [editedLead, setEditedLead] = useState(lead || {});
-  const [isLoading, setIsLoading] = useState(false);
-
-  useEffect(() => {
-    if (lead) setEditedLead(lead);
-  }, [lead]);
-
-  const handleSave = async () => {
-    setIsLoading(true);
-    
-    const updatedLead = {
-      ...editedLead,
-      lastModified: getMountainTime(),
-      editHistory: [...(editedLead.editHistory || []), {
-        timestamp: getMountainTime(),
-        changes: 'Lead details updated'
-      }]
-    };
-    
-    // Update global leads
-    const leadIndex = globalLeadsData.findIndex(l => l.id === updatedLead.id);
-    if (leadIndex >= 0) {
-      globalLeadsData[leadIndex] = updatedLead;
-    } else {
-      globalLeadsData.push(updatedLead);
-    }
-    
-    onSave(updatedLead);
-    setIsLoading(false);
-    onClose();
-  };
-
-  if (!isOpen || !lead) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">Edit Lead</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Client Name</label>
-            <input
-              type="text" value={editedLead.clientName || ''}
-              onChange={(e) => setEditedLead({...editedLead, clientName: e.target.value})}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-            <input
-              type="tel" value={editedLead.phone || ''}
-              onChange={(e) => setEditedLead({...editedLead, phone: e.target.value})}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Lead Type</label>
-            <select
-              value={editedLead.leadType || ''}
-              onChange={(e) => setEditedLead({...editedLead, leadType: e.target.value})}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">Select lead type</option>
-              {leadTypes.map(type => (
-                <option key={type} value={type}>{type}</option>
-              ))}
-            </select>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Carrier</label>
-            <select
-              value={editedLead.carrier || ''}
-              onChange={(e) => setEditedLead({...editedLead, carrier: e.target.value})}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">Select carrier</option>
-              {carriers.map(carrier => (
-                <option key={carrier} value={carrier}>{carrier}</option>
-              ))}
-            </select>
-          </div>
-          
-          <div className="col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Notes (Enhanced Height)</label>
-            <textarea
-              value={editedLead.notes || ''}
-              onChange={(e) => setEditedLead({...editedLead, notes: e.target.value})}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 h-32"
-              placeholder="Enter notes... (Enhancement 3: Taller notes box)"
-              rows={6}
-            />
-          </div>
-        </div>
-        
-        {editedLead.editHistory && editedLead.editHistory.length > 0 && (
-          <div className="mt-4">
-            <h4 className="text-sm font-medium text-gray-700 mb-2">Edit History</h4>
-            <div className="max-h-32 overflow-y-auto bg-gray-50 rounded p-2">
-              {editedLead.editHistory.map((edit, idx) => (
-                <div key={idx} className="text-xs text-gray-600 mb-1">
-                  {edit.timestamp}: {edit.changes}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-        
-        <div className="flex justify-end space-x-3 mt-6">
-          <button onClick={onClose} className="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300" disabled={isLoading}>
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={isLoading}
-            className={`px-4 py-2 text-white rounded-md bg-gradient-to-r ${themes[theme || 'blue'].gradient} hover:opacity-90 disabled:opacity-50 flex items-center`}
-          >
-            {isLoading && <Loader className="w-4 h-4 mr-2 animate-spin" />}
-            {isLoading ? 'Saving...' : 'Save Changes'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// Enhancement 9: Progress Meter Component with color coding
-const ProgressMeter = ({ current, goal, label, theme, type = 'number' }) => {
-  const percentage = goal > 0 ? Math.min((current / goal) * 100, 100) : 0;
-  
-  const getProgressColor = () => {
-    if (percentage >= 100) return 'bg-green-500';
-    if (percentage >= 75) return 'bg-blue-500';
-    if (percentage >= 50) return 'bg-yellow-500';
-    if (percentage >= 25) return 'bg-orange-500';
-    return 'bg-red-500';
-  };
-  
-  const getProgressTextColor = () => {
-    if (percentage >= 100) return 'text-green-700';
-    if (percentage >= 75) return 'text-blue-700';
-    if (percentage >= 50) return 'text-yellow-700';
-    if (percentage >= 25) return 'text-orange-700';
-    return 'text-red-700';
-  };
-
-  return (
-    <div className="bg-white p-4 rounded-lg border">
-      <div className="flex justify-between items-center mb-2">
-        <span className="text-sm font-medium text-gray-700">{label}</span>
-        <span className={`text-sm font-semibold ${getProgressTextColor()}`}>
-          {type === 'percentage' ? `${current}%` : current} / {type === 'percentage' ? `${goal}%` : goal}
-        </span>
-      </div>
-      <div className="w-full bg-gray-200 rounded-full h-2">
-        <div className={`h-2 rounded-full transition-all duration-300 ${getProgressColor()}`} style={{ width: `${percentage}%` }}></div>
-      </div>
-      <div className="text-xs text-gray-500 mt-1">{percentage.toFixed(1)}% complete</div>
-    </div>
-  );
-};
-
-// Enhancement 10: Sales Projection Calculator (8AM-5PM Mountain Time)
-const calculateSalesProjection = (currentSales, currentTime = new Date()) => {
-  const mountainTime = new Date(currentTime.toLocaleString("en-US", { timeZone: "America/Denver" }));
-  const currentHour = mountainTime.getHours();
-  const currentMinute = mountainTime.getMinutes();
-  
-  // Work hours: 8AM to 5PM Mountain Time
-  const workStartHour = 8;
-  const workEndHour = 17;
-  const totalWorkHours = workEndHour - workStartHour; // 9 hours
-  
-  if (currentHour < workStartHour) {
-    // Before work hours - project for full day
-    return { projection: 0, hoursWorked: 0, hoursRemaining: totalWorkHours };
-  } else if (currentHour >= workEndHour) {
-    // After work hours - no more projection
-    return { projection: currentSales, hoursWorked: totalWorkHours, hoursRemaining: 0 };
-  } else {
-    // During work hours
-    const hoursWorked = (currentHour - workStartHour) + (currentMinute / 60);
-    const hoursRemaining = totalWorkHours - hoursWorked;
-    const salesRate = hoursWorked > 0 ? currentSales / hoursWorked : 0;
-    const projection = Math.round(salesRate * totalWorkHours);
-    
-    return { projection, hoursWorked: Math.round(hoursWorked * 10) / 10, hoursRemaining: Math.round(hoursRemaining * 10) / 10 };
-  }
-};
-
-// Goal Setting Modal Component
-const GoalSettingModal = ({ isOpen, onClose, agent, team, theme }) => {
-  const [goals, setGoals] = useState({
-    dailySales: '', weeklySales: '', monthlySales: '',
-    dailyConversion: '', weeklyConversion: '', monthlyConversion: '',
-    dailyReferrals: '', weeklyReferrals: '', monthlyReferrals: ''
-  });
-
-  useEffect(() => {
-    if (agent) {
-      const agentGoals = globalAgentGoals[agent.email] || {};
-      setGoals({ ...goals, ...agentGoals });
-    } else if (team) {
-      const teamGoals = globalTeamGoals[team.name] || {};
-      setGoals({ ...goals, ...teamGoals });
-    }
-  }, [agent, team]);
-
-  const handleSaveGoals = () => {
-    if (agent) {
-      globalAgentGoals[agent.email] = goals;
-      saveToStorage('agentGoals', globalAgentGoals);
-    } else if (team) {
-      globalTeamGoals[team.name] = goals;
-      saveToStorage('teamGoals', globalTeamGoals);
-    }
-    onClose();
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">
-            Set Goals for {agent ? agent.name : team?.name}
-          </h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        
-        <div className="space-y-6">
-          <div>
-            <h4 className="font-medium text-gray-900 mb-3">Sales Goals</h4>
-            <div className="grid grid-cols-3 gap-3">
-              {['Daily', 'Weekly', 'Monthly'].map((period) => {
-                const key = `${period.toLowerCase()}Sales`;
-                return (
-                  <div key={period}>
-                    <label className="block text-sm text-gray-700 mb-1">{period}</label>
-                    <input
-                      type="number" value={goals[key]}
-                      onChange={(e) => setGoals({...goals, [key]: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="0"
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-          
-          <div>
-            <h4 className="font-medium text-gray-900 mb-3">Conversion Rate Goals (%)</h4>
-            <div className="grid grid-cols-3 gap-3">
-              {['Daily', 'Weekly', 'Monthly'].map((period) => {
-                const key = `${period.toLowerCase()}Conversion`;
-                return (
-                  <div key={period}>
-                    <label className="block text-sm text-gray-700 mb-1">{period}</label>
-                    <input
-                      type="number" value={goals[key]} max="100"
-                      onChange={(e) => setGoals({...goals, [key]: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="0"
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-          
-          <div>
-            <h4 className="font-medium text-gray-900 mb-3">Referral Goals</h4>
-            <div className="grid grid-cols-3 gap-3">
-              {['Daily', 'Weekly', 'Monthly'].map((period) => {
-                const key = `${period.toLowerCase()}Referrals`;
-                return (
-                  <div key={period}>
-                    <label className="block text-sm text-gray-700 mb-1">{period}</label>
-                    <input
-                      type="number" value={goals[key]}
-                      onChange={(e) => setGoals({...goals, [key]: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="0"
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-        
-        <div className="flex justify-end space-x-3 mt-6">
-          <button onClick={onClose} className="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300">
-            Cancel
-          </button>
-          <button
-            onClick={handleSaveGoals}
-            className={`px-4 py-2 text-white rounded-md bg-gradient-to-r ${themes[theme || 'blue'].gradient} hover:opacity-90`}
-          >
-            Save Goals
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 // Enhanced Manager Dashboard with real data integration
 const ManagerDashboard = ({ user, onSignOut }) => {
   console.log("=== DATE DEBUG ===");
@@ -3312,26 +2708,14 @@ const ManagerDashboard = ({ user, onSignOut }) => {
     const day = String(today.getDate()).padStart(2, "0");
     return `${year}-${month}-${day}`;
   });
-  const [currentTheme, setCurrentTheme] = useState(() => loadFromStorage('theme', 'forest'));
-  const currentThemeStyles = themes[currentTheme] || themes.forest || {
-    primary: 'from-green-600 to-emerald-600',
-    accent: 'from-green-500 to-emerald-500',
-    card: 'bg-white/10'
-  };
+  const [currentTheme, setCurrentTheme] = useState("forest");
+  const [isDarkMode, setIsDarkMode] = useState(true);
   const [userAvatar, setUserAvatar] = useState(null);
   const [teamName, setTeamName] = useState("Sales Team Alpha");
   const [isEditingTeamName, setIsEditingTeamName] = useState(false);
   const [myTeamAgents, setMyTeamAgents] = useState([]);
-  const [showCreateTeamModal, setShowCreateTeamModal] = useState(false);
-  const [showGoalSettingModal, setShowGoalSettingModal] = useState(false);
-  const [showLeadEditModal, setShowLeadEditModal] = useState(false);
-  const [selectedLead, setSelectedLead] = useState(null);
-  const [toast, setToast] = useState({ message: '', type: 'success', isVisible: false });
 
-  const [teams, setTeams] = useState(() => loadFromStorage('teams', [
-    { id: 1, name: "Team Alpha", agents: ["john@company.com", "mike@company.com"], supervisor: "Manager Alpha", created: new Date() },
-    { id: 2, name: "Team Beta", agents: ["sarah@company.com", "david@company.com"], supervisor: "Manager Beta", created: new Date() }
-  ]));
+  const [teams] = useState([]);
 
   const [notifications] = useState([]);
 
@@ -3394,57 +2778,6 @@ const ManagerDashboard = ({ user, onSignOut }) => {
       globalAgentGoals[agentEmail] = {};
     }
     globalAgentGoals[agentEmail][goalType] = value;
-    saveToStorage('agentGoals', globalAgentGoals);
-  };
-
-  const handleCreateTeam = (teamData) => {
-    const newTeam = {
-      id: Date.now(),
-      name: teamData.name,
-      agents: teamData.agents,
-      supervisor: teamData.supervisor,
-      created: new Date()
-    };
-    const updatedTeams = [...teams, newTeam];
-    setTeams(updatedTeams);
-    saveToStorage('teams', updatedTeams);
-    setShowCreateTeamModal(false);
-    setToast({ message: 'Team created successfully!', type: 'success', isVisible: true });
-    setTimeout(() => setToast(prev => ({ ...prev, isVisible: false })), 3000);
-  };
-
-  const handleThemeChange = (newTheme) => {
-    setCurrentTheme(newTheme);
-    saveToStorage('theme', newTheme);
-  };
-
-  const handleEditLead = (lead) => {
-    setSelectedLead(lead);
-    setShowLeadEditModal(true);
-  };
-
-  const handleSaveLead = (updatedLead) => {
-    // Update global leads data
-    const leadIndex = globalLeadsData.findIndex(l => l.id === updatedLead.id);
-    if (leadIndex !== -1) {
-      globalLeadsData[leadIndex] = {
-        ...globalLeadsData[leadIndex],
-        ...updatedLead,
-        editHistory: [
-          ...(globalLeadsData[leadIndex].editHistory || []),
-          {
-            timestamp: getMountainTime(),
-            editedBy: user.email,
-            changes: updatedLead
-          }
-        ]
-      };
-      saveToStorage('leadsData', globalLeadsData);
-      setShowLeadEditModal(false);
-      setSelectedLead(null);
-      setToast({ message: 'Lead updated successfully!', type: 'success', isVisible: true });
-      setTimeout(() => setToast(prev => ({ ...prev, isVisible: false })), 3000);
-    }
   };
 
   // Get real team stats using global data
@@ -3521,6 +2854,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   const strugglingAgents = getStrugglingAgents();
   const worstAdherenceAgents = getWorstAdherenceAgents();
   const rankedTeams = getAllTeamsData();
+  const currentThemeStyles = themes[currentTheme];
 
   // Get overall company stats
   const getCompanyStats = () => {
@@ -3955,79 +3289,16 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                     onClick={() => setIsEditingTeamName(!isEditingTeamName)}
                   />
                 </div>
-                <p className="text-gray-300">Welcome, {user.name} | {formatMountainTime(new Date())}</p>
+                <p className="text-gray-300">Welcome, {user.name}</p>
               </div>
             </div>
             <div className="flex items-center gap-4">
-              {/* Create Team Button - Enhancement 1 Requirement */}
-              <button
-                onClick={() => setShowCreateTeamModal(true)}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${
-                  currentTheme === 'ocean' ? 'bg-blue-600 hover:bg-blue-700 text-white' :
-                  currentTheme === 'forest' ? 'bg-green-600 hover:bg-green-700 text-white' :
-                  currentTheme === 'sunset' ? 'bg-orange-600 hover:bg-orange-700 text-white' :
-                  currentTheme === 'rose' ? 'bg-rose-600 hover:bg-rose-700 text-white' :
-                  currentTheme === 'teal' ? 'bg-teal-600 hover:bg-teal-700 text-white' :
-                  currentTheme === 'purple' ? 'bg-purple-600 hover:bg-purple-700 text-white' :
-                  currentTheme === 'emerald' ? 'bg-emerald-600 hover:bg-emerald-700 text-white' :
-                  currentTheme === 'amber' ? 'bg-amber-600 hover:bg-amber-700 text-white' :
-                  currentTheme === 'slate' ? 'bg-slate-600 hover:bg-slate-700 text-white' :
-                  'bg-pink-600 hover:bg-pink-700 text-white'
-                }`}
-                title="Create new team with custom name and agent selection"
-              >
-                <Users className="w-4 h-4" />
-                Create Team
-              </button>
-              
-              {/* Update Goals Button - Enhancement 4 Requirement */}
-              <button
-                onClick={() => setShowGoalSettingModal(true)}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${
-                  currentTheme === 'ocean' ? 'bg-blue-600 hover:bg-blue-700 text-white' :
-                  currentTheme === 'forest' ? 'bg-green-600 hover:bg-green-700 text-white' :
-                  currentTheme === 'sunset' ? 'bg-orange-600 hover:bg-orange-700 text-white' :
-                  currentTheme === 'rose' ? 'bg-rose-600 hover:bg-rose-700 text-white' :
-                  currentTheme === 'teal' ? 'bg-teal-600 hover:bg-teal-700 text-white' :
-                  currentTheme === 'purple' ? 'bg-purple-600 hover:bg-purple-700 text-white' :
-                  currentTheme === 'emerald' ? 'bg-emerald-600 hover:bg-emerald-700 text-white' :
-                  currentTheme === 'amber' ? 'bg-amber-600 hover:bg-amber-700 text-white' :
-                  currentTheme === 'slate' ? 'bg-slate-600 hover:bg-slate-700 text-white' :
-                  'bg-pink-600 hover:bg-pink-700 text-white'
-                }`}
-                title="Set individual agent and team goals with progress tracking"
-              >
-                <Target className="w-4 h-4" />
-                Update Goals
-              </button>
-              
-              {/* Team Contest Button - Enhancement 7 Requirement */}
-              <button
-                onClick={() => setActiveTab('contests')}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${
-                  currentTheme === 'ocean' ? 'bg-blue-600 hover:bg-blue-700 text-white' :
-                  currentTheme === 'forest' ? 'bg-green-600 hover:bg-green-700 text-white' :
-                  currentTheme === 'sunset' ? 'bg-orange-600 hover:bg-orange-700 text-white' :
-                  currentTheme === 'rose' ? 'bg-rose-600 hover:bg-rose-700 text-white' :
-                  currentTheme === 'teal' ? 'bg-teal-600 hover:bg-teal-700 text-white' :
-                  currentTheme === 'purple' ? 'bg-purple-600 hover:bg-purple-700 text-white' :
-                  currentTheme === 'emerald' ? 'bg-emerald-600 hover:bg-emerald-700 text-white' :
-                  currentTheme === 'amber' ? 'bg-amber-600 hover:bg-amber-700 text-white' :
-                  currentTheme === 'slate' ? 'bg-slate-600 hover:bg-slate-700 text-white' :
-                  'bg-pink-600 hover:bg-pink-700 text-white'
-                }`}
-                title="Create and manage team contests and competitions"
-              >
-                <Trophy className="w-4 h-4" />
-                Contests
-              </button>
-              
-              {/* Theme Selector - Enhancement 2: Removed dark mode toggle */}
               <ThemeSelector
                 currentTheme={currentTheme}
-                onThemeChange={handleThemeChange}
+                onThemeChange={setCurrentTheme}
+                isDarkMode={isDarkMode}
+                onToggleDarkMode={() => setIsDarkMode(!isDarkMode)}
               />
-              
               <div className="relative">
                 <div className="w-10 h-10 rounded-full bg-slate-600 flex items-center justify-center overflow-hidden">
                   {userAvatar ? (
@@ -4069,7 +3340,6 @@ const ManagerDashboard = ({ user, onSignOut }) => {
             { key: "myteam", label: "My Team", icon: Users },
             { key: "agents", label: "All Agents", icon: Users },
             { key: "performance", label: "Performance", icon: TrendingUp },
-            { key: "contests", label: "Team Contests", icon: Trophy },
             { key: "supervisor", label: "Supervisor Help", icon: Headphones },
             { key: "notifications", label: "Notifications", icon: Bell },
           ].map((tab) => (
@@ -4204,23 +3474,6 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                   For {new Date(dateFilter).toLocaleDateString()}
                 </p>
               </div>
-              
-              {/* Enhancement 5: Sales Projection with Mountain Time */}
-              <div
-                className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-4 border border-white/20 text-center`}
-              >
-                <TrendingUp className="w-6 h-6 text-cyan-400 mx-auto mb-2" />
-                <p className="text-gray-300 text-sm">Sales Projection</p>
-                <p className="text-xl font-bold text-white">
-                  {calculateSalesProjection(companyStats.totalSales, new Date())}
-                </p>
-                <p className="text-xs text-cyan-400">
-                  End of Day (5PM MT)
-                </p>
-                <p className="text-xs text-gray-400">
-                  Current: {formatMountainTime(new Date())}
-                </p>
-              </div>
             </div>
 
             {/* Team Performance Ranking */}
@@ -4232,7 +3485,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                   Team Performance Ranking
                 </h3>
                 <div className="space-y-3">
-                  {(rankedTeams && rankedTeams.length > 0) ? rankedTeams.slice(0, 9).map((team, index) => (
+                  {rankedTeams.slice(0, 9).map((team, index) => (
                     <div
                       key={team.id}
                       className="flex items-center justify-between p-3 bg-white/5 rounded-lg"
@@ -4254,25 +3507,17 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                           </p>
                         </div>
                       </div>
-                      <div className="text-right space-y-1">
+                      <div className="text-right">
                         <p className="font-bold text-green-400">
                           {team.totalSales} sales
                         </p>
                         <p className="text-xs text-blue-400">
                           {team.avgConversion}% conv
                         </p>
-                        <div className="w-32">
-                          <ProgressMeter
-                            current={team.totalSales || 0}
-                            goal={globalTeamGoals[team.name]?.dailySales || 10}
-                            label=""
-                            theme={currentTheme}
-                            type="number"
-                          />
-                        </div>
                       </div>
                     </div>
-                  )) : (
+                  ))}
+                  {rankedTeams.length === 0 && (
                     <p className="text-gray-300 text-center py-8">
                       No teams configured yet
                     </p>
@@ -4288,12 +3533,12 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                   Most Struggling Agents
                 </h3>
                 <div className="space-y-3 max-h-96 overflow-y-auto">
-                  {(strugglingAgents || []).length === 0 ? (
+                  {strugglingAgents.length === 0 ? (
                     <p className="text-gray-300 text-center py-8">
                       No agent data available yet
                     </p>
                   ) : (
-                    (strugglingAgents || []).map((agent, index) => (
+                    strugglingAgents.map((agent, index) => (
                       <div
                         key={agent.id}
                         className="flex items-center justify-between p-3 bg-red-500/10 rounded-lg border border-red-500/20"
@@ -4311,29 +3556,13 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                             </p>
                           </div>
                         </div>
-                        <div className="text-right space-y-1">
+                        <div className="text-right">
                           <p className="font-bold text-red-400">
                             {agent.sales} sales
                           </p>
                           <p className="text-xs text-yellow-400">
                             {agent.conversionRate}% conv
                           </p>
-                          {/* Enhancement 6: Lead Edit Integration */}
-                          <button
-                            onClick={() => handleEditLead({
-                              id: `agent-${agent.id}-lead`,
-                              clientName: agent.name,
-                              phone: agent.phone || '555-0000',
-                              leadType: 'Follow Up',
-                              carrier: 'Aetna',
-                              notes: `Agent performance review needed - ${agent.sales} sales, ${agent.conversionRate}% conversion`
-                            })}
-                            className="text-blue-400 hover:text-blue-300 text-xs flex items-center gap-1"
-                            title="Edit agent lead data"
-                          >
-                            <Edit className="w-3 h-3" />
-                            Edit Lead
-                          </button>
                         </div>
                       </div>
                     ))
@@ -4342,69 +3571,20 @@ const ManagerDashboard = ({ user, onSignOut }) => {
               </div>
             </div>
 
-            {/* Enhancement 5: Top 3 Lead Types (Non-Sale Only) */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div
-                className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-6 border border-white/20`}
-              >
-                <h3 className="text-xl font-semibold mb-4">
-                  Top 3 Lead Types (Non-Sale)
-                </h3>
-                <div className="space-y-3">
-                  {getTopNonSaleLeadTypes('all', dateFilter, 3).map((leadType, index) => (
-                    <div
-                      key={leadType.type}
-                      className="flex items-center justify-between p-3 bg-white/5 rounded-lg"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold ${
-                            index === 0 ? 'bg-gradient-to-r from-blue-400 to-blue-600' :
-                            index === 1 ? 'bg-gradient-to-r from-purple-400 to-purple-600' :
-                            'bg-gradient-to-r from-orange-400 to-orange-600'
-                          }`}
-                        >
-                          {index + 1}
-                        </div>
-                        <div>
-                          <p className="font-medium text-white">{leadType.type}</p>
-                          <p className="text-xs text-gray-400">
-                            {leadType.percentage}% of total leads
-                          </p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-bold text-blue-400">
-                          {leadType.count} leads
-                        </p>
-                        <p className="text-xs text-gray-400">
-                          ${(leadType.count * getCommission(leadType.type)).toLocaleString()} value
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                  {getTopNonSaleLeadTypes('all', dateFilter, 3).length === 0 && (
-                    <p className="text-gray-300 text-center py-8">
-                      No lead data available for {new Date(dateFilter).toLocaleDateString()}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Five9 Adherence Worst Offenders */}
-              <div
-                className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-6 border border-white/20`}
-              >
-                <h3 className="text-xl font-semibold mb-4">
-                  Worst Five9 Adherence
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {(worstAdherenceAgents || []).length === 0 ? (
+            {/* Five9 Adherence Worst Offenders */}
+            <div
+              className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-6 border border-white/20`}
+            >
+              <h3 className="text-xl font-semibold mb-4">
+                Worst Five9 Adherence
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {worstAdherenceAgents.length === 0 ? (
                   <p className="text-gray-300 text-center py-8 col-span-2">
                     No Five9 data available yet
                   </p>
                 ) : (
-                  (worstAdherenceAgents || []).map((agent, index) => (
+                  worstAdherenceAgents.map((agent, index) => (
                     <div
                       key={agent.id}
                       className="flex items-center justify-between p-3 bg-orange-500/10 rounded-lg border border-orange-500/20"
@@ -4422,16 +3602,15 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                       </div>
                       <div className="text-right">
                         <p className="font-bold text-orange-400">
-                          Talk: {agent.five9Data?.talkTime || 0}h
+                          Talk: {agent.five9Data.talkTime}h
                         </p>
                         <p className="text-xs text-red-400">
-                          NRT: {agent.five9Data?.nrt || 0}%
+                          NRT: {agent.five9Data.nrt}%
                         </p>
                       </div>
                     </div>
                   ))
                 )}
-                </div>
               </div>
             </div>
           </div>
@@ -5476,349 +4655,41 @@ const ManagerDashboard = ({ user, onSignOut }) => {
           </div>
         )}
 
-        {/* Enhancement 7: Team Contests and Competition Features */}
-        {activeTab === "contests" && (
-          <div className="space-y-6">
-            {/* Contest Creation Section */}
-            <div
-              className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-6 border border-white/20`}
-            >
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-xl font-semibold">Team Contests & Competitions</h3>
-                <button
-                  onClick={() => {
-                    const contestName = prompt('Enter contest name:');
-                    const contestType = prompt('Enter contest type (sales/leads/conversion):');
-                    const duration = prompt('Enter duration in days:');
-                    if (contestName && contestType && duration) {
-                      const newContest = {
-                        id: Date.now(),
-                        name: contestName,
-                        type: contestType,
-                        duration: parseInt(duration),
-                        startDate: getMountainTime(),
-                        endDate: new Date(Date.now() + parseInt(duration) * 24 * 60 * 60 * 1000).toISOString(),
-                        participants: teams.map(team => ({ teamId: team.id, teamName: team.name, score: 0 })),
-                        status: 'active',
-                        prize: '$500 Team Bonus',
-                        createdBy: user.name
-                      };
-                      globalContests.push(newContest);
-                      saveToStorage('contests', globalContests);
-                      setToast({ message: 'Contest created successfully!', type: 'success', isVisible: true });
-                    }
-                  }}
-                  className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 bg-gradient-to-r ${themes[currentTheme].gradient} hover:opacity-90 text-white`}
-                >
-                  <Trophy className="w-4 h-4" />
-                  Create Contest
-                </button>
-              </div>
-              
-              {/* Active Contests */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {globalContests.filter(contest => contest.status === 'active').map(contest => (
-                  <div key={contest.id} className="bg-white/5 rounded-lg p-4 border border-white/10">
-                    <div className="flex justify-between items-start mb-3">
-                      <div>
-                        <h4 className="font-semibold text-white">{contest.name}</h4>
-                        <p className="text-sm text-gray-300">{contest.type.toUpperCase()} Contest</p>
-                      </div>
-                      <div className="text-right">
-                        <span className="bg-green-500/20 text-green-400 px-2 py-1 rounded text-xs">
-                          {contest.status.toUpperCase()}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-gray-400">Duration:</span>
-                        <span className="text-white">{contest.duration} days</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-400">Prize:</span>
-                        <span className="text-yellow-400">{contest.prize}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-400">Participants:</span>
-                        <span className="text-blue-400">{contest.participants.length} teams</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-400">Started:</span>
-                        <span className="text-white">{formatMountainTime(contest.startDate)}</span>
-                      </div>
-                    </div>
-                    <div className="mt-4 flex gap-2">
-                      <button
-                        onClick={() => {
-                          const updatedContests = globalContests.map(c => 
-                            c.id === contest.id ? { ...c, status: 'completed' } : c
-                          );
-                          globalContests.splice(0, globalContests.length, ...updatedContests);
-                          saveToStorage('contests', globalContests);
-                          setToast({ message: 'Contest ended!', type: 'success', isVisible: true });
-                        }}
-                        className="text-red-400 hover:text-red-300 text-xs"
-                      >
-                        End Contest
-                      </button>
-                      <button
-                        onClick={() => {
-                          alert(`Contest Details:\n\nName: ${contest.name}\nType: ${contest.type}\nCreated by: ${contest.createdBy}\nStart: ${formatMountainTime(contest.startDate)}\nEnd: ${formatMountainTime(contest.endDate)}`);
-                        }}
-                        className="text-blue-400 hover:text-blue-300 text-xs"
-                      >
-                        View Details
-                      </button>
-                    </div>
-                  </div>
-                ))}
-                {globalContests.filter(contest => contest.status === 'active').length === 0 && (
-                  <div className="col-span-2 text-center py-8">
-                    <Trophy className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                    <p className="text-gray-300">No active contests</p>
-                    <p className="text-sm text-gray-400">Create a contest to motivate your teams!</p>
-                  </div>
-                )}
-              </div>
-            </div>
-            
-            {/* Contest Leaderboard */}
-            <div
-              className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-6 border border-white/20`}
-            >
-              <h3 className="text-xl font-semibold mb-4">Contest Leaderboard</h3>
-              <div className="space-y-4">
-                {globalContests.filter(contest => contest.status === 'active').map(contest => (
-                  <div key={contest.id} className="bg-white/5 rounded-lg p-4">
-                    <h4 className="font-semibold text-white mb-3">{contest.name} - Current Standings</h4>
-                    <div className="space-y-2">
-                      {contest.participants
-                        .sort((a, b) => b.score - a.score)
-                        .map((participant, index) => {
-                          const team = teams.find(t => t.id === participant.teamId);
-                          const teamStats = team ? getEnhancedTeamStats(team.name) : { totalSales: 0, totalLeads: 0, avgConversion: 0 };
-                          const score = contest.type === 'sales' ? teamStats.totalSales : 
-                                       contest.type === 'leads' ? teamStats.totalLeads : 
-                                       teamStats.avgConversion;
-                          return (
-                            <div key={participant.teamId} className="flex items-center justify-between p-2 bg-white/5 rounded">
-                              <div className="flex items-center gap-3">
-                                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-white text-sm font-bold ${
-                                  index === 0 ? 'bg-gradient-to-r from-yellow-400 to-yellow-600' :
-                                  index === 1 ? 'bg-gradient-to-r from-gray-400 to-gray-600' :
-                                  index === 2 ? 'bg-gradient-to-r from-orange-400 to-orange-600' :
-                                  'bg-slate-600'
-                                }`}>
-                                  {index + 1}
-                                </div>
-                                <span className="text-white font-medium">{participant.teamName}</span>
-                              </div>
-                              <div className="text-right">
-                                <span className="text-green-400 font-bold">
-                                  {contest.type === 'conversion' ? `${score}%` : score}
-                                </span>
-                                <p className="text-xs text-gray-400">{contest.type}</p>
-                              </div>
-                            </div>
-                          );
-                        })
-                      }
-                    </div>
-                  </div>
-                ))}
-                {globalContests.filter(contest => contest.status === 'active').length === 0 && (
-                  <p className="text-gray-300 text-center py-8">No active contests to display leaderboard</p>
-                )}
-              </div>
-            </div>
-            
-            {/* Contest History */}
-            <div
-              className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-6 border border-white/20`}
-            >
-              <h3 className="text-xl font-semibold mb-4">Contest History</h3>
-              <div className="space-y-3">
-                {globalContests.filter(contest => contest.status === 'completed').map(contest => (
-                  <div key={contest.id} className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
-                    <div>
-                      <p className="font-medium text-white">{contest.name}</p>
-                      <p className="text-sm text-gray-400">
-                        {contest.type.toUpperCase()} • {formatMountainTime(contest.startDate)} - {formatMountainTime(contest.endDate)}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <span className="bg-gray-500/20 text-gray-400 px-2 py-1 rounded text-xs">
-                        COMPLETED
-                      </span>
-                      <p className="text-xs text-yellow-400 mt-1">{contest.prize}</p>
-                    </div>
-                  </div>
-                ))}
-                {globalContests.filter(contest => contest.status === 'completed').length === 0 && (
-                  <p className="text-gray-300 text-center py-8">No completed contests yet</p>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
         {activeTab === "supervisor" && <ManagerSupervisorHelp user={user} />}
 
-        {/* Enhanced PvP System */}
-        {activeTab === "pvp" && (
-          <div className="space-y-6">
-            <div
-              className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-6 border border-white/20`}
-            >
-              <div className="flex items-center gap-3 mb-6">
-                <div className="bg-gradient-to-r from-red-500 to-orange-500 p-3 rounded-xl">
-                  <Sword className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <h3 className="text-xl font-semibold text-white">Player vs Player Arena</h3>
-                  <p className="text-gray-300">Challenge other agents and compete for glory!</p>
-                </div>
-              </div>
-              
-              {/* Active Challenges */}
-              <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-4 mb-6">
-                <h4 className="font-semibold text-yellow-400 mb-3 flex items-center gap-2">
-                  <Trophy className="w-5 h-5" />
-                  Active Challenges
-                </h4>
-                {pvpChallenges.length === 0 ? (
-                  <p className="text-gray-300">No active challenges. Challenge someone below!</p>
-                ) : (
-                  <div className="space-y-3">
-                    {pvpChallenges.map(challenge => (
-                      <div key={challenge.id} className="bg-white/5 rounded-lg p-3 flex justify-between items-center">
-                        <div>
-                          <p className="text-white font-medium">
-                            {challenge.type} Challenge vs {challenge.opponent}
-                          </p>
-                          <p className="text-sm text-gray-300">
-                            Duration: {challenge.duration} • Prize: {challenge.prize}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-green-400 font-bold">{challenge.yourScore} - {challenge.opponentScore}</p>
-                          <p className="text-xs text-gray-400">{challenge.timeRemaining} left</p>
-                        </div>
-                      </div>
-                    ))}
+        {activeTab === "notifications" && (
+          <div
+            className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-6 border border-white/20`}
+          >
+            <h3 className="text-xl font-semibold mb-6">
+              Management Notifications
+            </h3>
+            <div className="space-y-4">
+              {notifications.length === 0 ? (
+                <p className="text-gray-300 text-center py-8">
+                  No notifications yet
+                </p>
+              ) : (
+                notifications.map((notification) => (
+                  <div
+                    key={notification.id}
+                    className={`p-4 rounded-lg border ${
+                      notification.type === "achievement"
+                        ? "bg-green-500/10 border-green-500/20"
+                        : notification.type === "warning"
+                        ? "bg-yellow-500/10 border-yellow-500/20"
+                        : "bg-blue-500/10 border-blue-500/20"
+                    }`}
+                  >
+                    <div className="flex justify-between items-start">
+                      <p className="text-white">{notification.message}</p>
+                      <span className="text-xs text-gray-400">
+                        {notification.time}
+                      </span>
+                    </div>
                   </div>
-                )}
-              </div>
-              
-              {/* Challenge Other Agents */}
-              <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4">
-                <h4 className="font-semibold text-green-400 mb-4 flex items-center gap-2">
-                  <Users className="w-5 h-5" />
-                  Challenge Other Agents
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {mockAgents
-                    .filter((agent) => agent.email !== user.email)
-                    .map((agent) => {
-                      const agentStats = getRealAgentStats(agent.email, selectedDate);
-                      return (
-                        <div
-                          key={agent.id}
-                          className="bg-white/5 hover:bg-white/10 rounded-lg border border-white/10 p-4 transition-all duration-300 hover:border-white/20 hover:shadow-lg"
-                        >
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold">
-                                {agent.name.split(' ').map(n => n[0]).join('')}
-                              </div>
-                              <div>
-                                <p className="font-medium text-white">{agent.name}</p>
-                                <p className="text-sm text-gray-300">
-                                  {agent.center?.toUpperCase() || "No Center"}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-green-400 font-bold">{agentStats.sales} sales</p>
-                              <p className="text-xs text-gray-400">{agentStats.conversionRate}% conv</p>
-                            </div>
-                          </div>
-                          
-                          <div className="grid grid-cols-2 gap-2 mb-3">
-                            <button
-                              onClick={() => {
-                                const challenge = {
-                                  id: Date.now(),
-                                  type: 'Sales',
-                                  opponent: agent.name,
-                                  duration: '24 hours',
-                                  prize: '$50 bonus',
-                                  yourScore: 0,
-                                  opponentScore: 0,
-                                  timeRemaining: '23h 59m'
-                                };
-                                setPvpChallenges(prev => [...prev, challenge]);
-                              }}
-                              className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm transition-colors flex items-center justify-center gap-1"
-                            >
-                              <Target className="w-3 h-3" />
-                              Sales
-                            </button>
-                            <button
-                              onClick={() => {
-                                const challenge = {
-                                  id: Date.now() + 1,
-                                  type: 'Conversion',
-                                  opponent: agent.name,
-                                  duration: '24 hours',
-                                  prize: '$75 bonus',
-                                  yourScore: 0,
-                                  opponentScore: 0,
-                                  timeRemaining: '23h 59m'
-                                };
-                                setPvpChallenges(prev => [...prev, challenge]);
-                              }}
-                              className="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded text-sm transition-colors flex items-center justify-center gap-1"
-                            >
-                              <TrendingUp className="w-3 h-3" />
-                              Conv%
-                            </button>
-                          </div>
-                          
-                          <div className="text-center">
-                            <button
-                              onClick={() => {
-                                setSelectedPvpAgent(agent);
-                                setShowPvpModal(true);
-                              }}
-                              className="w-full px-3 py-2 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white rounded-lg text-sm font-medium transition-all duration-300 flex items-center justify-center gap-2"
-                            >
-                              <Sword className="w-4 h-4" />
-                              Challenge to Duel
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                </div>
-              </div>
-              
-              {/* PvP Stats */}
-              <div className="grid grid-cols-3 gap-4 mt-6">
-                <div className="bg-white/5 rounded-lg p-4 text-center">
-                  <p className="text-2xl font-bold text-green-400">0</p>
-                  <p className="text-sm text-gray-300">Wins</p>
-                </div>
-                <div className="bg-white/5 rounded-lg p-4 text-center">
-                  <p className="text-2xl font-bold text-red-400">0</p>
-                  <p className="text-sm text-gray-300">Losses</p>
-                </div>
-                <div className="bg-white/5 rounded-lg p-4 text-center">
-                  <p className="text-2xl font-bold text-yellow-400">0</p>
-                  <p className="text-sm text-gray-300">Draws</p>
-                </div>
-              </div>
+                ))
+              )}
             </div>
           </div>
         )}
@@ -5829,40 +4700,6 @@ const ManagerDashboard = ({ user, onSignOut }) => {
           onClose={() => setSelectedAgent(null)}
         />
       )}
-
-      {/* Team Creation Modal */}
-      <TeamCreationModal
-        isOpen={showCreateTeamModal}
-        onClose={() => setShowCreateTeamModal(false)}
-        onCreateTeam={handleCreateTeam}
-        theme={currentTheme}
-      />
-
-      {/* Goal Setting Modal */}
-      <GoalSettingModal
-        isOpen={showGoalSettingModal}
-        onClose={() => setShowGoalSettingModal(false)}
-        agent={null}
-        team={teamName}
-        theme={currentTheme}
-      />
-
-      {/* Lead Edit Modal */}
-      <LeadEditModal
-        isOpen={showLeadEditModal}
-        onClose={() => setShowLeadEditModal(false)}
-        lead={selectedLead}
-        onSave={handleSaveLead}
-        theme={currentTheme}
-      />
-
-      {/* Toast Notification */}
-      <Toast
-        message={toast.message}
-        type={toast.type}
-        isVisible={toast.isVisible}
-        onClose={() => setToast(prev => ({ ...prev, isVisible: false }))}
-      />
     </div>
   );
 };
@@ -5906,30 +4743,8 @@ const AgentDashboard = ({ user, onSignOut }) => {
   };
 
   const metrics = calculateMetrics(selectedDate);
-  const [currentTheme, setCurrentTheme] = useState(() => loadFromStorage('theme', 'forest'));
-  const [pvpChallenges, setPvpChallenges] = useState([]);
-  const [showPvpModal, setShowPvpModal] = useState(false);
-  const [selectedPvpAgent, setSelectedPvpAgent] = useState(null);
-  
-  // Real-time leaderboard data
-  const [leaderboardData, setLeaderboardData] = useState([]);
-  
-  useEffect(() => {
-    // Update leaderboard data every 30 seconds for real-time updates
-    const updateLeaderboard = () => {
-      const agentStats = mockAgents.map(agent => ({
-        ...agent,
-        ...getRealAgentStats(agent.email, selectedDate),
-        isCurrentUser: agent.email === user.email
-      })).sort((a, b) => b.sales - a.sales);
-      setLeaderboardData(agentStats);
-    };
-    
-    updateLeaderboard();
-    const interval = setInterval(updateLeaderboard, 30000); // Update every 30 seconds
-    
-    return () => clearInterval(interval);
-  }, [selectedDate, user.email]);
+  const [currentTheme, setCurrentTheme] = useState("default");
+  const [isDarkMode, setIsDarkMode] = useState(true);
   const [newLead, setNewLead] = useState({
     leadType: "",
     carrier: "",
@@ -5962,42 +4777,32 @@ const AgentDashboard = ({ user, onSignOut }) => {
     "Not Appointed",
     "Spanish",
     "No Sep",
-    "Rewrite", // Enhancement 3: Added Rewrite lead type
   ];
   const carriers = [
-    "Aetna", // Enhancement 3: Alphabetized carriers list
-    "Anthem",
-    "Cigna",
-    "ClearSpring",
-    "Clover",
-    "Florida Blue",
-    "Humana",
-    "KelseyCare",
-    "Molina",
-    "Oscar",
-    "UHC",
-    "Wellcare",
     "Zing",
-    // Enhancement 3: Removed "Rewrite" from carriers as it's now a lead type
+    "ClearSpring",
+    "Aetna",
+    "Wellcare",
+    "Molina",
+    "Florida Blue",
+    "Oscar",
+    "KelseyCare",
+    "Clover",
+    "Anthem",
+    "Humana",
+    "Cigna",
+    "UHC",
+    "Rewrite",
   ];
 
   // Load existing leads from global state
   useEffect(() => {
     if (["Sale", "FU Sale", "Referral Sale"].includes(newLead.leadType)) {
-      // Enhancement 3: Handle Rewrite lead type commission logic
-      if (newLead.leadType === "Rewrite") {
-        setNewLead((prev) => ({
-          ...prev,
-          commission: 50, // Rewrite commission amount
-          sale: true
-        }));
-      } else {
-        setNewLead((prev) => ({
-          ...prev,
-          sale: true,
-          commission: newLead.carrier === "Rewrite" ? 50 : 115,
-        }));
-      }
+      setNewLead((prev) => ({
+        ...prev,
+        sale: true,
+        commission: newLead.carrier === "Rewrite" ? 50 : 115,
+      }));
     } else {
       setNewLead((prev) => ({ ...prev, sale: false, commission: 0 }));
     }
@@ -6017,53 +4822,48 @@ const AgentDashboard = ({ user, onSignOut }) => {
   };
 
   const handleAddLead = async () => {
-    try {
-      if (!validateForm()) return;
+    if (!validateForm()) return;
 
-      const leadTimestamp = new Date();
-      // Set the date components using local time
-      const [year, month, day] = selectedDate.split("-").map(Number);
-      leadTimestamp.setFullYear(year);
-      leadTimestamp.setMonth(month - 1); // Month is 0-indexed
-      leadTimestamp.setDate(day);
+    const leadTimestamp = new Date();
+    // Set the date components using local time
+    const [year, month, day] = selectedDate.split("-").map(Number);
+    leadTimestamp.setFullYear(year);
+    leadTimestamp.setMonth(month - 1); // Month is 0-indexed
+    leadTimestamp.setDate(day);
 
-      const leadData = {
-        leadType: newLead.leadType,
-        carrier: newLead.carrier,
-        notes: newLead.notes,
-        crmLink: newLead.crmLink,
-        sale: newLead.sale,
-        hra: newLead.hra,
-        commission: newLead.commission,
-        hraValue: newLead.hraValue,
-        clientName: newLead.clientName,
-        agentEmail: user?.email || '',
-        date: selectedDate,
-        timestamp: leadTimestamp,
-      };
+    const leadData = {
+      leadType: newLead.leadType,
+      carrier: newLead.carrier,
+      notes: newLead.notes,
+      crmLink: newLead.crmLink,
+      sale: newLead.sale,
+      hra: newLead.hra,
+      commission: newLead.commission,
+      hraValue: newLead.hraValue,
+      clientName: newLead.clientName,
+      agentEmail: user.email,
+      date: selectedDate,
+      timestamp: leadTimestamp,
+    };
 
-      const result = await addLead(leadData);
+    const result = await addLead(leadData);
 
-      if (result?.success) {
-        setNewLead({
-          carrier: "",
-          leadType: "",
-          notes: "",
-          crmLink: "",
-          sale: false,
-          hra: false,
-          commission: 0,
-          hraValue: 0,
-          clientName: "",
-        });
-        setFormErrors({});
-        showToast("Lead added successfully! 🎉", "success");
-      } else {
-        showToast(`Error adding lead: ${result?.error || 'Unknown error'}`, "error");
-      }
-    } catch (error) {
-      console.error('Error in handleAddLead:', error);
-      showToast(`Error adding lead: ${error.message || 'Unknown error'}`, "error");
+    if (result.success) {
+      setNewLead({
+        carrier: "",
+        leadType: "",
+        notes: "",
+        crmLink: "",
+        sale: false,
+        hra: false,
+        commission: 0,
+        hraValue: 0,
+        clientName: "",
+      });
+      setFormErrors({});
+      showToast("Lead added successfully! 🎉", "success");
+    } else {
+      showToast(`Error adding lead: ${result.error}`, "error");
     }
   };
 
@@ -6167,11 +4967,7 @@ const AgentDashboard = ({ user, onSignOut }) => {
   const thermostat = getThermostatProgress();
   const selectedDateLeads = getSelectedDateLeads();
   const allTimeBests = getAllTimeBests();
-  const currentThemeStyles = themes[currentTheme] || themes.default || {
-    primary: 'from-blue-600 to-purple-600',
-    accent: 'from-blue-500 to-purple-500',
-    card: 'bg-white/10'
-  };
+  const currentThemeStyles = themes[currentTheme];
   const goals = globalAgentGoals[user.email] || {
     dailySales: 10,
     weeklySales: 50,
@@ -6894,8 +5690,8 @@ const AuthComponent = () => {
         });
       }
 
-      if (!result || !result.success) {
-        setErrors({ general: result?.error || "Authentication failed" });
+      if (!result.success) {
+        setErrors({ general: result.error });
       }
     } catch (error) {
       setErrors({ general: "An unexpected error occurred" });
@@ -7142,532 +5938,34 @@ const AuthComponent = () => {
   );
 };
 
-// Administrator Dashboard Component
-const AdministratorDashboard = ({ user, onSignOut }) => {
-  const [activeTab, setActiveTab] = useState('overview');
-  const [currentTheme, setCurrentTheme] = useState(globalCurrentTheme);
-  const [selectedDate, setSelectedDate] = useState(getMountainDateString());
-
-  const handleThemeChange = (newTheme) => {
-    setCurrentTheme(newTheme);
-    globalCurrentTheme = newTheme;
-    saveToStorage('currentTheme', newTheme);
-  };
-
-  const tabs = [
-    { id: 'overview', name: 'Overview', icon: BarChart3 },
-    { id: 'managers', name: 'Managers', icon: Users },
-    { id: 'health', name: 'Company Health', icon: Activity },
-    { id: 'five9', name: 'Five9 Data', icon: PhoneCall },
-    { id: 'settings', name: 'Settings', icon: Settings }
-  ];
-
-  const renderTabContent = () => {
-    switch (activeTab) {
-      case 'overview':
-        return (
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <div className="bg-white rounded-lg p-6 shadow-sm border">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Total Revenue</p>
-                    <p className="text-2xl font-bold text-gray-900">$127,450</p>
-                  </div>
-                  <div className={`p-3 rounded-full bg-gradient-to-r ${themes[currentTheme].gradient}`}>
-                    <DollarSign className="w-6 h-6 text-white" />
-                  </div>
-                </div>
-                <p className="text-xs text-green-600 mt-2">+12.5% from last month</p>
-              </div>
-              
-              <div className="bg-white rounded-lg p-6 shadow-sm border">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Active Agents</p>
-                    <p className="text-2xl font-bold text-gray-900">{mockAgents.length}</p>
-                  </div>
-                  <div className={`p-3 rounded-full bg-gradient-to-r ${themes[currentTheme].gradient}`}>
-                    <Users className="w-6 h-6 text-white" />
-                  </div>
-                </div>
-                <p className="text-xs text-blue-600 mt-2">Across {globalTeams.length} teams</p>
-              </div>
-              
-              <div className="bg-white rounded-lg p-6 shadow-sm border">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Total Leads</p>
-                    <p className="text-2xl font-bold text-gray-900">{globalLeadsData.length}</p>
-                  </div>
-                  <div className={`p-3 rounded-full bg-gradient-to-r ${themes[currentTheme].gradient}`}>
-                    <Target className="w-6 h-6 text-white" />
-                  </div>
-                </div>
-                <p className="text-xs text-purple-600 mt-2">Today: {getMountainDateString()}</p>
-              </div>
-              
-              <div className="bg-white rounded-lg p-6 shadow-sm border">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Conversion Rate</p>
-                    <p className="text-2xl font-bold text-gray-900">23.4%</p>
-                  </div>
-                  <div className={`p-3 rounded-full bg-gradient-to-r ${themes[currentTheme].gradient}`}>
-                    <TrendingUp className="w-6 h-6 text-white" />
-                  </div>
-                </div>
-                <p className="text-xs text-green-600 mt-2">+2.1% improvement</p>
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-white rounded-lg p-6 shadow-sm border">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Team Performance</h3>
-                <div className="space-y-4">
-                  {globalTeams.map(team => {
-                    const teamStats = getRealTeamStats(team.name, selectedDate);
-                    return (
-                      <div key={team.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <div>
-                          <p className="font-medium text-gray-900">{team.name}</p>
-                          <p className="text-sm text-gray-600">{team.agents.length} agents</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-semibold text-gray-900">${teamStats.totalRevenue}</p>
-                          <p className="text-sm text-gray-600">{teamStats.totalSales} sales</p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-              
-              <div className="bg-white rounded-lg p-6 shadow-sm border">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Activity</h3>
-                <div className="space-y-3">
-                  <div className="flex items-center space-x-3 p-3 bg-blue-50 rounded-lg">
-                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                      <Users className="w-4 h-4 text-blue-600" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">New team created</p>
-                      <p className="text-xs text-gray-600">{formatMountainTime(new Date())}</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center space-x-3 p-3 bg-green-50 rounded-lg">
-                    <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                      <Trophy className="w-4 h-4 text-green-600" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">Monthly goal achieved</p>
-                      <p className="text-xs text-gray-600">{formatMountainTime(new Date())}</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center space-x-3 p-3 bg-orange-50 rounded-lg">
-                    <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
-                      <AlertTriangle className="w-4 h-4 text-orange-600" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">System maintenance scheduled</p>
-                      <p className="text-xs text-gray-600">{formatMountainTime(new Date())}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-        
-      case 'managers':
-        return (
-          <div className="space-y-6">
-            <div className="bg-white rounded-lg p-6 shadow-sm border">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Manager Overview</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {supervisorNames.slice(0, 6).map((supervisor, idx) => (
-                  <div key={supervisor} className="p-4 border rounded-lg">
-                    <div className="flex items-center space-x-3 mb-3">
-                      <div className={`w-10 h-10 rounded-full bg-gradient-to-r ${themes[currentTheme].gradient} flex items-center justify-center`}>
-                        <User className="w-5 h-5 text-white" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-900">{supervisor}</p>
-                        <p className="text-sm text-gray-600">Manager</p>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <p className="text-gray-600">Team Size</p>
-                        <p className="font-semibold">{Math.floor(Math.random() * 8) + 3}</p>
-                      </div>
-                      <div>
-                        <p className="text-gray-600">Performance</p>
-                        <p className="font-semibold text-green-600">{85 + Math.floor(Math.random() * 15)}%</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        );
-        
-      case 'health':
-        return (
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              <div className="bg-white rounded-lg p-6 shadow-sm border">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900">System Health</h3>
-                  <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                </div>
-                <div className="space-y-3">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Uptime</span>
-                    <span className="font-semibold text-green-600">99.9%</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Response Time</span>
-                    <span className="font-semibold">142ms</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Active Users</span>
-                    <span className="font-semibold">{mockAgents.length + supervisorNames.length}</span>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="bg-white rounded-lg p-6 shadow-sm border">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Performance Metrics</h3>
-                <div className="space-y-4">
-                  <ProgressMeter current={87} goal={100} label="Overall Performance" theme={currentTheme} type="percentage" />
-                  <ProgressMeter current={23} goal={30} label="Daily Sales Goal" theme={currentTheme} />
-                  <ProgressMeter current={156} goal={200} label="Weekly Leads" theme={currentTheme} />
-                </div>
-              </div>
-              
-              <div className="bg-white rounded-lg p-6 shadow-sm border">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Alerts & Issues</h3>
-                <div className="space-y-3">
-                  <div className="flex items-center space-x-3 p-3 bg-yellow-50 rounded-lg">
-                    <AlertTriangle className="w-5 h-5 text-yellow-600" />
-                    <div>
-                      <p className="text-sm font-medium">Low conversion rate</p>
-                      <p className="text-xs text-gray-600">Team Beta needs attention</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-3 p-3 bg-green-50 rounded-lg">
-                    <CheckCircle className="w-5 h-5 text-green-600" />
-                    <div>
-                      <p className="text-sm font-medium">All systems operational</p>
-                      <p className="text-xs text-gray-600">No critical issues</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-        
-      case 'five9':
-        return (
-          <div className="space-y-6">
-            <div className="bg-white rounded-lg p-6 shadow-sm border">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Five9 Integration Status</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <div className="text-center p-4 bg-green-50 rounded-lg">
-                  <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                    <CheckCircle className="w-6 h-6 text-green-600" />
-                  </div>
-                  <p className="font-semibold text-green-900">Connected</p>
-                  <p className="text-sm text-green-600">API Status</p>
-                </div>
-                
-                <div className="text-center p-4 bg-blue-50 rounded-lg">
-                  <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                    <PhoneCall className="w-6 h-6 text-blue-600" />
-                  </div>
-                  <p className="font-semibold text-blue-900">1,247</p>
-                  <p className="text-sm text-blue-600">Total Calls Today</p>
-                </div>
-                
-                <div className="text-center p-4 bg-purple-50 rounded-lg">
-                  <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                    <Timer className="w-6 h-6 text-purple-600" />
-                  </div>
-                  <p className="font-semibold text-purple-900">4:32</p>
-                  <p className="text-sm text-purple-600">Avg Call Time</p>
-                </div>
-                
-                <div className="text-center p-4 bg-orange-50 rounded-lg">
-                  <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                    <Activity className="w-6 h-6 text-orange-600" />
-                  </div>
-                  <p className="font-semibold text-orange-900">94.2%</p>
-                  <p className="text-sm text-orange-600">Adherence Rate</p>
-                </div>
-              </div>
-            </div>
-            
-            <div className="bg-white rounded-lg p-6 shadow-sm border">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Agent Adherence</h3>
-              <div className="space-y-3">
-                {mockAgents.slice(0, 6).map(agent => (
-                  <div key={agent.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div className="flex items-center space-x-3">
-                      <div className={`w-8 h-8 rounded-full bg-gradient-to-r ${themes[currentTheme].gradient} flex items-center justify-center`}>
-                        <User className="w-4 h-4 text-white" />
-                      </div>
-                      <span className="font-medium">{agent.name}</span>
-                    </div>
-                    <div className="flex items-center space-x-4">
-                      <span className="text-sm text-gray-600">{85 + Math.floor(Math.random() * 15)}% adherence</span>
-                      <div className={`w-3 h-3 rounded-full ${Math.random() > 0.3 ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        );
-        
-      case 'settings':
-        return (
-          <div className="space-y-6">
-            <div className="bg-white rounded-lg p-6 shadow-sm border">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">System Settings</h3>
-              <div className="space-y-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Theme Selection</label>
-                  <ThemeSelector currentTheme={currentTheme} onThemeChange={handleThemeChange} />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Time Zone</label>
-                  <div className="p-3 bg-gray-50 rounded-lg">
-                    <p className="text-sm text-gray-900">Mountain Time (Denver, Colorado)</p>
-                    <p className="text-xs text-gray-600">Current time: {getMountainTime()}</p>
-                  </div>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Data Management</label>
-                  <div className="space-y-3">
-                    <button className="w-full p-3 text-left bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-medium text-blue-900">Export Data</p>
-                          <p className="text-sm text-blue-600">Download all leads and analytics</p>
-                        </div>
-                        <ExternalLink className="w-5 h-5 text-blue-600" />
-                      </div>
-                    </button>
-                    
-                    <button className="w-full p-3 text-left bg-green-50 hover:bg-green-100 rounded-lg transition-colors">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-medium text-green-900">Backup Settings</p>
-                          <p className="text-sm text-green-600">Configure automatic backups</p>
-                        </div>
-                        <Save className="w-5 h-5 text-green-600" />
-                      </div>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-        
-      default:
-        return <div>Tab content not found</div>;
-    }
-  };
-
-  return (
-    <div className={`min-h-screen bg-gradient-to-br ${themes[currentTheme].gradient}`}>
-      {/* Header */}
-      <div className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-4">
-              <div className={`w-10 h-10 bg-gradient-to-r ${themes[currentTheme].gradient} rounded-lg flex items-center justify-center`}>
-                <Shield className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-gray-900">Administrator Dashboard</h1>
-                <p className="text-sm text-gray-600">{getMountainTime()}</p>
-              </div>
-            </div>
-            
-            <div className="flex items-center space-x-4">
-              <ThemeSelector currentTheme={currentTheme} onThemeChange={handleThemeChange} />
-              
-              <div className="flex items-center space-x-2 text-gray-700">
-                <Shield className="w-5 h-5" />
-                <span className="font-medium">{user.name}</span>
-                <span className="text-sm text-gray-500">(Administrator)</span>
-              </div>
-              
-              <button
-                onClick={onSignOut}
-                className="p-2 text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100"
-              >
-                <LogOut className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      {/* Tab Navigation */}
-      <div className="bg-white border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex space-x-8">
-            {tabs.map((tab) => {
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center space-x-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                    activeTab === tab.id
-                      ? `border-${themes[currentTheme].primary} text-${themes[currentTheme].primary}`
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  <Icon className="w-5 h-5" />
-                  <span>{tab.name}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-      
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {renderTabContent()}
-      </div>
-    </div>
-  );
-};
-
-// Error Boundary Component
-class ErrorBoundary extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
-
-  static getDerivedStateFromError(error) {
-    return { hasError: true, error };
-  }
-
-  componentDidCatch(error, errorInfo) {
-    console.error('LeadTracker Error:', error, errorInfo);
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-          <div className="text-center max-w-md mx-4">
-            <div className="inline-flex p-4 rounded-full bg-red-500/20 mb-4">
-              <AlertTriangle className="w-8 h-8 text-red-400" />
-            </div>
-            <h2 className="text-xl font-semibold text-white mb-2">System Error Fixed</h2>
-            <p className="text-slate-400 mb-4">Runtime error caught and handled</p>
-            <button 
-              onClick={() => {
-                this.setState({ hasError: false, error: null });
-                window.location.reload();
-              }}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg"
-            >
-              Reload Application
-            </button>
-          </div>
-        </div>
-      );
-    }
-
-    return this.props.children;
-  }
-}
-
-// Main App Component with comprehensive error handling
+// Main App Component
 export default function LeadTracker() {
-  try {
-    const { user, loading, logout } = useAuth();
+  const { user, loading, logout } = useAuth();
 
-    // Show loading screen while checking authentication
-    if (loading) {
-      return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-          <div className="text-center">
-            <div className="inline-flex p-4 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 mb-4">
-              <Loader className="w-8 h-8 text-white animate-spin" />
-            </div>
-            <h2 className="text-xl font-semibold text-white mb-2">Loading...</h2>
-            <p className="text-slate-400">Setting up your dashboard</p>
-          </div>
-        </div>
-      );
-    }
-
-    // Show auth component if no user is logged in
-    if (!user) {
-      return (
-        <ErrorBoundary>
-          <AuthComponent />
-        </ErrorBoundary>
-      );
-    }
-
-    // Show appropriate dashboard based on user role with null safety
-    if (user?.role === "administrator") {
-      return (
-        <ErrorBoundary>
-          <AdministratorDashboard user={user} onSignOut={logout} />
-        </ErrorBoundary>
-      );
-    }
-    
-    if (user?.role === "manager") {
-      return (
-        <ErrorBoundary>
-          <ManagerDashboard user={user} onSignOut={logout} />
-        </ErrorBoundary>
-      );
-    }
-
-    return (
-      <ErrorBoundary>
-        <AgentDashboard user={user} onSignOut={logout} />
-      </ErrorBoundary>
-    );
-  } catch (error) {
-    console.error('LeadTracker main component error:', error);
+  // Show loading screen while checking authentication
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-        <div className="text-center max-w-md mx-4">
-          <div className="inline-flex p-4 rounded-full bg-red-500/20 mb-4">
-            <AlertTriangle className="w-8 h-8 text-red-400" />
+        <div className="text-center">
+          <div className="inline-flex p-4 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 mb-4">
+            <Loader className="w-8 h-8 text-white animate-spin" />
           </div>
-          <h2 className="text-xl font-semibold text-white mb-2">Application Error</h2>
-          <p className="text-slate-400 mb-4">Runtime error caught and handled</p>
-          <button 
-            onClick={() => window.location.reload()}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg"
-          >
-            Reload Application
-          </button>
+          <h2 className="text-xl font-semibold text-white mb-2">Loading...</h2>
+          <p className="text-slate-400">Setting up your dashboard</p>
         </div>
       </div>
     );
   }
+
+  // Show auth component if no user is logged in
+  if (!user) {
+    return <AuthComponent />;
+  }
+
+  // Show appropriate dashboard based on user role
+  if (user.role === "manager") {
+    return <ManagerDashboard user={user} onSignOut={logout} />;
+  }
+
+  return <AgentDashboard user={user} onSignOut={logout} />;
 }
