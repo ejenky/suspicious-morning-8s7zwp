@@ -3206,6 +3206,11 @@ const ManagerDashboard = ({ user, onSignOut }) => {
     return `${year}-${month}-${day}`;
   });
   const [currentTheme, setCurrentTheme] = useState(() => loadFromStorage('theme', 'forest'));
+  const currentThemeStyles = themes[currentTheme] || themes.forest || {
+    primary: 'from-green-600 to-emerald-600',
+    accent: 'from-green-500 to-emerald-500',
+    card: 'bg-white/10'
+  };
   const [userAvatar, setUserAvatar] = useState(null);
   const [teamName, setTeamName] = useState("Sales Team Alpha");
   const [isEditingTeamName, setIsEditingTeamName] = useState(false);
@@ -3409,7 +3414,6 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   const strugglingAgents = getStrugglingAgents();
   const worstAdherenceAgents = getWorstAdherenceAgents();
   const rankedTeams = getAllTeamsData();
-  const currentThemeStyles = themes[currentTheme];
 
   // Get overall company stats
   const getCompanyStats = () => {
@@ -4121,7 +4125,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                   Team Performance Ranking
                 </h3>
                 <div className="space-y-3">
-                  {rankedTeams.slice(0, 9).map((team, index) => (
+                  {(rankedTeams && rankedTeams.length > 0) ? rankedTeams.slice(0, 9).map((team, index) => (
                     <div
                       key={team.id}
                       className="flex items-center justify-between p-3 bg-white/5 rounded-lg"
@@ -4162,7 +4166,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                       </div>
                     </div>
                   ))}
-                  {rankedTeams.length === 0 && (
+                  {(rankedTeams || []).length === 0 && (
                     <p className="text-gray-300 text-center py-8">
                       No teams configured yet
                     </p>
@@ -4178,12 +4182,12 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                   Most Struggling Agents
                 </h3>
                 <div className="space-y-3 max-h-96 overflow-y-auto">
-                  {strugglingAgents.length === 0 ? (
+                  {(strugglingAgents || []).length === 0 ? (
                     <p className="text-gray-300 text-center py-8">
                       No agent data available yet
                     </p>
                   ) : (
-                    strugglingAgents.map((agent, index) => (
+                    (strugglingAgents || []).map((agent, index) => (
                       <div
                         key={agent.id}
                         className="flex items-center justify-between p-3 bg-red-500/10 rounded-lg border border-red-500/20"
@@ -4289,12 +4293,12 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                   Worst Five9 Adherence
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {worstAdherenceAgents.length === 0 ? (
+                {(worstAdherenceAgents || []).length === 0 ? (
                   <p className="text-gray-300 text-center py-8 col-span-2">
                     No Five9 data available yet
                   </p>
                 ) : (
-                  worstAdherenceAgents.map((agent, index) => (
+                  (worstAdherenceAgents || []).map((agent, index) => (
                     <div
                       key={agent.id}
                       className="flex items-center justify-between p-3 bg-orange-500/10 rounded-lg border border-orange-500/20"
@@ -4312,10 +4316,10 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                       </div>
                       <div className="text-right">
                         <p className="font-bold text-orange-400">
-                          Talk: {agent.five9Data.talkTime}h
+                          Talk: {agent.five9Data?.talkTime || 0}h
                         </p>
                         <p className="text-xs text-red-400">
-                          NRT: {agent.five9Data.nrt}%
+                          NRT: {agent.five9Data?.nrt || 0}%
                         </p>
                       </div>
                     </div>
@@ -6052,7 +6056,11 @@ const AgentDashboard = ({ user, onSignOut }) => {
   const thermostat = getThermostatProgress();
   const selectedDateLeads = getSelectedDateLeads();
   const allTimeBests = getAllTimeBests();
-  const currentThemeStyles = themes[currentTheme];
+  const currentThemeStyles = themes[currentTheme] || themes.default || {
+    primary: 'from-blue-600 to-purple-600',
+    accent: 'from-blue-500 to-purple-500',
+    card: 'bg-white/10'
+  };
   const goals = globalAgentGoals[user.email] || {
     dailySales: 10,
     weeklySales: 50,
