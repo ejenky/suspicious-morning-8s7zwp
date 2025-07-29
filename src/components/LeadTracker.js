@@ -4162,17 +4162,16 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                             theme={currentTheme}
                             type="number"
                           />
-      </div>
-    </div>
-    <div>
-      {(rankedTeams || []).length === 0 && (
-{(rankedTeams || []).length === 0 && (
-  <p className="text-gray-300 text-center py-8">
-    No teams configured yet
-  </p>
-)}
-</div>
-</div>
+                        </div>
+                      </div>
+                    </div>
+                  )) : (
+                    <p className="text-gray-300 text-center py-8">
+                      No teams configured yet
+                    </p>
+                  )}
+                </div>
+              </div>
 
               {/* Top 10 Struggling Agents */}
               <div
