@@ -2716,6 +2716,91 @@ const loadFromStorage = (key, defaultValue = null) => {
   }
 };
 
+// Real agent stats function - gets actual data from global leads data
+const getRealAgentStats = (agentEmail, dateFilter) => {
+  if (!agentEmail || !globalLeadsData) {
+    return {
+      sales: 0,
+      leads: 0,
+      conversionRate: '0.0',
+      referrals: 0,
+      revenue: 0,
+      leadsList: []
+    };
+  }
+
+  // Filter leads for this agent and date
+  const agentLeads = globalLeadsData.filter(lead => {
+    if (lead.agentEmail !== agentEmail) return false;
+    if (dateFilter) {
+      const leadDate = new Date(lead.timestamp || lead.date);
+      const filterDate = new Date(dateFilter);
+      return leadDate.toDateString() === filterDate.toDateString();
+    }
+    return true;
+  });
+
+  const sales = agentLeads.filter(lead => lead.sale).length;
+  const leads = agentLeads.length;
+  const conversionRate = leads > 0 ? ((sales / leads) * 100).toFixed(1) : '0.0';
+  const referrals = agentLeads.filter(lead => lead.leadType === 'Referral Sale').length;
+  const revenue = agentLeads.reduce((sum, lead) => {
+    if (lead.sale) {
+      return sum + (lead.commission || 115) + (lead.hra ? (lead.hraValue || 15) : 0);
+    }
+    return sum;
+  }, 0);
+
+  return {
+    sales,
+    leads,
+    conversionRate,
+    referrals,
+    revenue,
+    leadsList: agentLeads
+  };
+};
+
+// Real team stats function
+const getRealTeamStats = (teamName, dateFilter) => {
+  const teamAgents = mockAgents.filter(agent => agent.team === teamName);
+  const teamStats = teamAgents.map(agent => getRealAgentStats(agent.email, dateFilter));
+  
+  const totalSales = teamStats.reduce((sum, stats) => sum + stats.sales, 0);
+  const totalLeads = teamStats.reduce((sum, stats) => sum + stats.leads, 0);
+  const avgConversion = totalLeads > 0 ? ((totalSales / totalLeads) * 100).toFixed(1) : '0.0';
+  const totalRevenue = teamStats.reduce((sum, stats) => sum + stats.revenue, 0);
+  const totalReferrals = teamStats.reduce((sum, stats) => sum + stats.referrals, 0);
+
+  return {
+    totalSales,
+    totalLeads,
+    avgConversion,
+    totalRevenue,
+    totalReferrals,
+    agentCount: teamAgents.length
+  };
+};
+
+// Get top non-sale lead types for a team
+const getTopNonSaleLeadTypes = (teamName, dateFilter) => {
+  const teamAgents = mockAgents.filter(agent => agent.team === teamName);
+  const allLeads = teamAgents.flatMap(agent => {
+    const stats = getRealAgentStats(agent.email, dateFilter);
+    return stats.leadsList.filter(lead => !lead.sale);
+  });
+  
+  const leadTypeCounts = {};
+  allLeads.forEach(lead => {
+    leadTypeCounts[lead.leadType] = (leadTypeCounts[lead.leadType] || 0) + 1;
+  });
+  
+  return Object.entries(leadTypeCounts)
+    .sort(([,a], [,b]) => b - a)
+    .slice(0, 5)
+    .map(([type, count]) => ({ type, count }));
+};
+
 
 
 // Enhanced Manager Dashboard with real data integration
@@ -3044,12 +3129,14 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   };
 
   const getAllTeamsData = () => {
+    // Only return user-created teams, no mock data
     return teams
+      .filter(team => team && team.name && team.id) // Filter out any invalid teams
       .map((team) => ({
         ...team,
         ...getEnhancedTeamStats(team.name),
       }))
-      .sort((a, b) => b.totalSales - a.totalSales);
+      .sort((a, b) => (b.totalSales || 0) - (a.totalSales || 0));
   };
 
   // Get struggling agents based on real data with location and performance filters
@@ -6395,6 +6482,356 @@ const AuthComponent = () => {
 };
 
 // Main App Component
+// Team Creation Modal Component
+const TeamCreationModal = ({ isOpen, onClose, onCreateTeam, theme, availableAgents }) => {
+  const [teamName, setTeamName] = useState('');
+  const [teamPicture, setTeamPicture] = useState('');
+  const [selectedAgents, setSelectedAgents] = useState([]);
+  const [supervisor, setSupervisor] = useState('');
+  const [errors, setErrors] = useState({});
+
+  const handleAgentToggle = (agentEmail) => {
+    setSelectedAgents(prev => 
+      prev.includes(agentEmail) 
+        ? prev.filter(email => email !== agentEmail)
+        : [...prev, agentEmail]
+    );
+  };
+
+  const validateForm = () => {
+    const newErrors = {};
+    if (!teamName.trim()) newErrors.teamName = 'Team name is required';
+    if (!supervisor.trim()) newErrors.supervisor = 'Supervisor name is required';
+    if (selectedAgents.length === 0) newErrors.agents = 'At least one agent must be selected';
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (validateForm()) {
+      const teamData = {
+        id: `team_${Date.now()}`,
+        name: teamName,
+        picture: teamPicture,
+        supervisor: supervisor,
+        agents: selectedAgents,
+        createdAt: new Date().toISOString()
+      };
+      onCreateTeam(teamData);
+      // Reset form
+      setTeamName('');
+      setTeamPicture('');
+      setSelectedAgents([]);
+      setSupervisor('');
+      setErrors({});
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-slate-900 rounded-xl p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold text-white">Create New Team</h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-white"
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Team Name *
+            </label>
+            <input
+              type="text"
+              value={teamName}
+              onChange={(e) => setTeamName(e.target.value)}
+              className="w-full bg-slate-800 border border-white/20 rounded-lg px-3 py-2 text-white"
+              placeholder="Enter team name"
+            />
+            {errors.teamName && <p className="text-red-400 text-sm mt-1">{errors.teamName}</p>}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Team Picture URL (Optional)
+            </label>
+            <input
+              type="url"
+              value={teamPicture}
+              onChange={(e) => setTeamPicture(e.target.value)}
+              className="w-full bg-slate-800 border border-white/20 rounded-lg px-3 py-2 text-white"
+              placeholder="https://example.com/team-picture.jpg"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Supervisor *
+            </label>
+            <input
+              type="text"
+              value={supervisor}
+              onChange={(e) => setSupervisor(e.target.value)}
+              className="w-full bg-slate-800 border border-white/20 rounded-lg px-3 py-2 text-white"
+              placeholder="Enter supervisor name"
+            />
+            {errors.supervisor && <p className="text-red-400 text-sm mt-1">{errors.supervisor}</p>}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Select Team Members * ({selectedAgents.length} selected)
+            </label>
+            <div className="max-h-60 overflow-y-auto bg-slate-800 rounded-lg border border-white/20 p-3">
+              {availableAgents && availableAgents.length > 0 ? (
+                availableAgents.map((agent) => (
+                  <div
+                    key={agent.email}
+                    className="flex items-center justify-between p-2 hover:bg-white/5 rounded"
+                  >
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedAgents.includes(agent.email)}
+                        onChange={() => handleAgentToggle(agent.email)}
+                        className="rounded"
+                      />
+                      <div>
+                        <p className="text-white font-medium">{agent.name}</p>
+                        <p className="text-gray-400 text-sm">{agent.center?.toUpperCase()} • {agent.email}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-gray-400 text-center py-4">No agents available</p>
+              )}
+            </div>
+            {errors.agents && <p className="text-red-400 text-sm mt-1">{errors.agents}</p>}
+          </div>
+
+          <div className="flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              Create Team
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// Goal Setting Modal Component
+const GoalSettingModal = ({ isOpen, onClose, onSaveGoals, theme }) => {
+  const [goals, setGoals] = useState({
+    dailySales: 10,
+    weeklySales: 50,
+    monthlyGoal: 120,
+    conversionRate: 25,
+    referralRate: 15
+  });
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSaveGoals(goals);
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-slate-900 rounded-xl p-6 max-w-lg w-full mx-4">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold text-white">Set Team Goals</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-white">
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Daily Sales Goal</label>
+            <input
+              type="number"
+              value={goals.dailySales}
+              onChange={(e) => setGoals(prev => ({ ...prev, dailySales: parseInt(e.target.value) }))}
+              className="w-full bg-slate-800 border border-white/20 rounded-lg px-3 py-2 text-white"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Weekly Sales Goal</label>
+            <input
+              type="number"
+              value={goals.weeklySales}
+              onChange={(e) => setGoals(prev => ({ ...prev, weeklySales: parseInt(e.target.value) }))}
+              className="w-full bg-slate-800 border border-white/20 rounded-lg px-3 py-2 text-white"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Monthly Sales Goal</label>
+            <input
+              type="number"
+              value={goals.monthlyGoal}
+              onChange={(e) => setGoals(prev => ({ ...prev, monthlyGoal: parseInt(e.target.value) }))}
+              className="w-full bg-slate-800 border border-white/20 rounded-lg px-3 py-2 text-white"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Conversion Rate Goal (%)</label>
+            <input
+              type="number"
+              value={goals.conversionRate}
+              onChange={(e) => setGoals(prev => ({ ...prev, conversionRate: parseInt(e.target.value) }))}
+              className="w-full bg-slate-800 border border-white/20 rounded-lg px-3 py-2 text-white"
+            />
+          </div>
+
+          <div className="flex justify-end gap-3 mt-6">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg"
+            >
+              Save Goals
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// Lead Edit Modal Component
+const LeadEditModal = ({ isOpen, lead, onClose, onSave, theme }) => {
+  const [editedLead, setEditedLead] = useState(lead || {});
+
+  useEffect(() => {
+    if (lead) {
+      setEditedLead(lead);
+    }
+  }, [lead]);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSave(editedLead);
+  };
+
+  if (!isOpen || !lead) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-slate-900 rounded-xl p-6 max-w-lg w-full mx-4">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold text-white">Edit Lead</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-white">
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Lead Type</label>
+            <input
+              type="text"
+              value={editedLead.leadType || ''}
+              onChange={(e) => setEditedLead(prev => ({ ...prev, leadType: e.target.value }))}
+              className="w-full bg-slate-800 border border-white/20 rounded-lg px-3 py-2 text-white"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Notes</label>
+            <textarea
+              value={editedLead.notes || ''}
+              onChange={(e) => setEditedLead(prev => ({ ...prev, notes: e.target.value }))}
+              className="w-full bg-slate-800 border border-white/20 rounded-lg px-3 py-2 text-white h-24"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">CRM Link</label>
+            <input
+              type="url"
+              value={editedLead.crmLink || ''}
+              onChange={(e) => setEditedLead(prev => ({ ...prev, crmLink: e.target.value }))}
+              className="w-full bg-slate-800 border border-white/20 rounded-lg px-3 py-2 text-white"
+            />
+          </div>
+
+          <div className="flex justify-end gap-3 mt-6">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+            >
+              Save Changes
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// Toast Notification Component
+const Toast = ({ message, type, isVisible, onClose }) => {
+  useEffect(() => {
+    if (isVisible) {
+      const timer = setTimeout(() => {
+        onClose();
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [isVisible, onClose]);
+
+  if (!isVisible) return null;
+
+  return (
+    <div className="fixed top-4 right-4 z-50">
+      <div className={`px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 ${
+        type === 'success' ? 'bg-green-600' : 
+        type === 'error' ? 'bg-red-600' : 
+        'bg-blue-600'
+      } text-white`}>
+        {type === 'success' && <CheckCircle className="w-5 h-5" />}
+        {type === 'error' && <AlertCircle className="w-5 h-5" />}
+        <span>{message}</span>
+        <button onClick={onClose} className="ml-2 hover:opacity-70">
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
+};
+
 export default function LeadTracker() {
   const { user, loading, logout } = useAuth();
 
