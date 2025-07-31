@@ -2681,43 +2681,86 @@ const ManagerSupervisorHelp = ({ user }) => {
 
 // Enhanced Manager Dashboard with real data integration
 const ManagerDashboard = ({ user, onSignOut }) => {
-  console.log("=== DATE DEBUG ===");
-  const testDate = (() => {
-    const today = new Date();
-    console.log("Current Date object:", today);
-    console.log("getFullYear():", today.getFullYear());
-    console.log("getMonth():", today.getMonth()); // 0-indexed
-    console.log("getDate():", today.getDate());
+  // Fix 4: Mountain Time date initialization
+  const getMountainDateString = () => {
+    const mountainTime = getMountainTime();
+    const year = mountainTime.getFullYear();
+    const month = String(mountainTime.getMonth() + 1).padStart(2, "0");
+    const day = String(mountainTime.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
 
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, "0");
-    const day = String(today.getDate()).padStart(2, "0");
-    const result = `${year}-${month}-${day}`;
-    console.log("Final formatted date:", result);
-    return result;
-  })();
   const [activeTab, setActiveTab] = useState("overview");
   const [selectedAgent, setSelectedAgent] = useState(null);
   const [viewingAgentDashboard, setViewingAgentDashboard] = useState(null);
   const [selectedTeam, setSelectedTeam] = useState("all");
   const [selectedCenter, setSelectedCenter] = useState("all");
-  const [dateFilter, setDateFilter] = useState(() => {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, "0");
-    const day = String(today.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
-  });
-  const [currentTheme, setCurrentTheme] = useState("forest");
-  const [isDarkMode, setIsDarkMode] = useState(true);
-  const [userAvatar, setUserAvatar] = useState(null);
-  const [teamName, setTeamName] = useState("Sales Team Alpha");
+  // Fix 4: Use Mountain Time for date filter
+  const [dateFilter, setDateFilter] = useState(() => getMountainDateString());
+  
+  // Fix 2: Enhanced data persistence with user-specific keys
+  const [currentTheme, setCurrentTheme] = useState(() => loadFromStorage(`theme_${user.email}`, 'forest'));
+  const currentThemeStyles = themes[currentTheme] || themes.forest || {
+    primary: 'from-green-600 to-emerald-600',
+    accent: 'from-green-500 to-emerald-500',
+    card: 'bg-white/10'
+  };
+  const [userAvatar, setUserAvatar] = useState(() => loadFromStorage(`avatar_${user.email}`, null));
+  const [teamName, setTeamName] = useState(() => loadFromStorage(`teamName_${user.email}`, "Sales Team Alpha"));
   const [isEditingTeamName, setIsEditingTeamName] = useState(false);
-  const [myTeamAgents, setMyTeamAgents] = useState([]);
-
-  const [teams] = useState([]);
+  const [myTeamAgents, setMyTeamAgents] = useState(() => loadFromStorage(`myTeamAgents_${user.email}`, []));
+  const [showCreateTeamModal, setShowCreateTeamModal] = useState(false);
+  const [showGoalSettingModal, setShowGoalSettingModal] = useState(false);
+  const [showLeadEditModal, setShowLeadEditModal] = useState(false);
+  const [selectedLead, setSelectedLead] = useState(null);
+  const [toast, setToast] = useState({ message: '', type: 'success', isVisible: false });
+  
+  // Fix 2: Enhanced teams state with persistence
+  const [teams, setTeams] = useState(() => {
+    const savedTeams = loadFromStorage(`teams_${user.email}`, [
+      { id: 1, name: "Team Alpha", agents: ["john@company.com", "mike@company.com"], supervisor: user.name, created: new Date(), picture: null },
+      { id: 2, name: "Team Beta", agents: ["sarah@company.com", "david@company.com"], supervisor: user.name, created: new Date(), picture: null }
+    ]);
+    return savedTeams;
+  });
+  
+  // Fix 1: Available agents list for team creation
+  const [availableAgents, setAvailableAgents] = useState(() => {
+    const allAgents = mockAgents.map(agent => ({
+      ...agent,
+      id: agent.id || agent.email,
+      isAssigned: false
+    }));
+    return allAgents;
+  });
+  
+  // Fix 3: Real-time data refresh state
+  const [lastDataRefresh, setLastDataRefresh] = useState(Date.now());
 
   const [notifications] = useState([]);
+
+  // Fix 2: Enhanced data persistence - save data whenever state changes
+  useEffect(() => {
+    saveToStorage(`theme_${user.email}`, currentTheme);
+  }, [currentTheme, user.email]);
+
+  useEffect(() => {
+    saveToStorage(`teamName_${user.email}`, teamName);
+  }, [teamName, user.email]);
+
+  useEffect(() => {
+    saveToStorage(`myTeamAgents_${user.email}`, myTeamAgents);
+  }, [myTeamAgents, user.email]);
+
+  useEffect(() => {
+    saveToStorage(`teams_${user.email}`, teams);
+  }, [teams, user.email]);
+
+  useEffect(() => {
+    if (userAvatar) {
+      saveToStorage(`avatar_${user.email}`, userAvatar);
+    }
+  }, [userAvatar, user.email]);
 
   useEffect(() => {
     // Initialize team assignments
@@ -2735,16 +2778,30 @@ const ManagerDashboard = ({ user, onSignOut }) => {
     );
   }, [user.email, user.name]);
 
+  // Fix 3: Real-time data refresh every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setLastDataRefresh(Date.now());
+    }, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
   const handleAvatarUpload = (event) => {
     const file = event.target.files[0];
     if (file) {
       const reader = new FileReader();
-      reader.onload = (e) => setUserAvatar(e.target.result);
+      reader.onload = (e) => {
+        setUserAvatar(e.target.result);
+        saveToStorage(`avatar_${user.email}`, e.target.result);
+      };
       reader.readAsDataURL(file);
     }
   };
 
-  const handleTeamNameEdit = () => setIsEditingTeamName(false);
+  const handleTeamNameEdit = () => {
+    setIsEditingTeamName(false);
+    saveToStorage(`teamName_${user.email}`, teamName);
+  };
 
   const addAgentToTeam = (agentId) => {
     if (!globalTeamAssignments[user.email]) {
@@ -2778,6 +2835,158 @@ const ManagerDashboard = ({ user, onSignOut }) => {
       globalAgentGoals[agentEmail] = {};
     }
     globalAgentGoals[agentEmail][goalType] = value;
+    saveToStorage('agentGoals', globalAgentGoals);
+  };
+
+  // Fix 1: Enhanced Create Team functionality with proper agent management
+  const handleCreateTeam = (teamData) => {
+    const newTeam = {
+      id: Date.now(),
+      name: teamData.name,
+      agents: teamData.agents || [],
+      supervisor: teamData.supervisor || user.name,
+      created: new Date(),
+      picture: teamData.picture || null,
+      createdBy: user.email
+    };
+    
+    // Update teams state
+    const updatedTeams = [...teams, newTeam];
+    setTeams(updatedTeams);
+    
+    // Update available agents - mark selected agents as assigned
+    const updatedAvailableAgents = availableAgents.map(agent => ({
+      ...agent,
+      isAssigned: teamData.agents.includes(agent.email) ? true : agent.isAssigned
+    }));
+    setAvailableAgents(updatedAvailableAgents);
+    
+    // Update global team assignments
+    if (!globalTeamAssignments[user.email]) {
+      globalTeamAssignments[user.email] = [];
+    }
+    teamData.agents.forEach(agentEmail => {
+      const agent = mockAgents.find(a => a.email === agentEmail);
+      if (agent && !globalTeamAssignments[user.email].includes(agent.id)) {
+        globalTeamAssignments[user.email].push(agent.id);
+      }
+    });
+    
+    // Update myTeamAgents if this is the user's team
+    if (teamData.supervisor === user.name) {
+      const newTeamAgents = mockAgents.filter(agent => 
+        teamData.agents.includes(agent.email)
+      );
+      setMyTeamAgents(prev => [...prev, ...newTeamAgents]);
+    }
+    
+    // Persist data
+    saveToStorage(`teams_${user.email}`, updatedTeams);
+    saveToStorage(`availableAgents_${user.email}`, updatedAvailableAgents);
+    saveToStorage('teamAssignments', globalTeamAssignments);
+    
+    setShowCreateTeamModal(false);
+    setToast({ message: `Team "${teamData.name}" created successfully with ${teamData.agents.length} agents!`, type: 'success', isVisible: true });
+    setTimeout(() => setToast(prev => ({ ...prev, isVisible: false })), 3000);
+    
+    // Fix 3: Trigger data refresh
+    setLastDataRefresh(Date.now());
+  };
+  
+  // Fix 1: Enhanced agent management functions
+  const handleAddAgentToTeam = (teamId, agentEmail) => {
+    const updatedTeams = teams.map(team => {
+      if (team.id === teamId) {
+        const updatedAgents = [...team.agents];
+        if (!updatedAgents.includes(agentEmail)) {
+          updatedAgents.push(agentEmail);
+        }
+        return { ...team, agents: updatedAgents };
+      }
+      return team;
+    });
+    setTeams(updatedTeams);
+    
+    // Update available agents
+    const updatedAvailableAgents = availableAgents.map(agent => 
+      agent.email === agentEmail ? { ...agent, isAssigned: true } : agent
+    );
+    setAvailableAgents(updatedAvailableAgents);
+    
+    setToast({ message: 'Agent added to team successfully!', type: 'success', isVisible: true });
+    setTimeout(() => setToast(prev => ({ ...prev, isVisible: false })), 3000);
+  };
+  
+  const handleRemoveAgentFromTeam = (teamId, agentEmail) => {
+    const updatedTeams = teams.map(team => {
+      if (team.id === teamId) {
+        const updatedAgents = team.agents.filter(email => email !== agentEmail);
+        return { ...team, agents: updatedAgents };
+      }
+      return team;
+    });
+    setTeams(updatedTeams);
+    
+    // Update available agents
+    const updatedAvailableAgents = availableAgents.map(agent => 
+      agent.email === agentEmail ? { ...agent, isAssigned: false } : agent
+    );
+    setAvailableAgents(updatedAvailableAgents);
+    
+    setToast({ message: 'Agent removed from team successfully!', type: 'success', isVisible: true });
+    setTimeout(() => setToast(prev => ({ ...prev, isVisible: false })), 3000);
+  };
+  
+  const handleUpdateTeamName = (teamId, newName) => {
+    const updatedTeams = teams.map(team => 
+      team.id === teamId ? { ...team, name: newName } : team
+    );
+    setTeams(updatedTeams);
+    setToast({ message: 'Team name updated successfully!', type: 'success', isVisible: true });
+    setTimeout(() => setToast(prev => ({ ...prev, isVisible: false })), 3000);
+  };
+  
+  const handleUpdateTeamPicture = (teamId, picture) => {
+    const updatedTeams = teams.map(team => 
+      team.id === teamId ? { ...team, picture } : team
+    );
+    setTeams(updatedTeams);
+    setToast({ message: 'Team picture updated successfully!', type: 'success', isVisible: true });
+    setTimeout(() => setToast(prev => ({ ...prev, isVisible: false })), 3000);
+  };
+
+  const handleThemeChange = (newTheme) => {
+    setCurrentTheme(newTheme);
+    saveToStorage(`theme_${user.email}`, newTheme);
+  };
+
+  const handleEditLead = (lead) => {
+    setSelectedLead(lead);
+    setShowLeadEditModal(true);
+  };
+
+  const handleSaveLead = (updatedLead) => {
+    // Update global leads data
+    const leadIndex = globalLeadsData.findIndex(l => l.id === updatedLead.id);
+    if (leadIndex !== -1) {
+      globalLeadsData[leadIndex] = {
+        ...globalLeadsData[leadIndex],
+        ...updatedLead,
+        editHistory: [
+          ...(globalLeadsData[leadIndex].editHistory || []),
+          {
+            timestamp: getMountainTime(),
+            editedBy: user.email,
+            changes: updatedLead
+          }
+        ]
+      };
+      saveToStorage('leadsData', globalLeadsData);
+      setShowLeadEditModal(false);
+      setSelectedLead(null);
+      setToast({ message: 'Lead updated successfully!', type: 'success', isVisible: true });
+      setTimeout(() => setToast(prev => ({ ...prev, isVisible: false })), 3000);
+    }
   };
 
   // Get real team stats using global data
@@ -3391,58 +3600,14 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                       className="bg-slate-800"
                     >
                       {center === "all"
-                        ? "All Centers"
-                        : center.charAt(0).toUpperCase() + center.slice(1)}
-                    </option>
-                  ))}
-                </select>
-                <span className="text-sm text-gray-300 ml-4">
-                  Showing data for {new Date(dateFilter).toLocaleDateString()}
-                </span>
-              </div>
-            </div>
-
-            {/* Main metrics */}
-            <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
-              <div
-                className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-4 border border-white/20 text-center`}
               >
-                <Users className="w-6 h-6 text-blue-400 mx-auto mb-2" />
-                <p className="text-gray-300 text-sm">Total Agents</p>
-                <p className="text-xl font-bold text-white">
-                  {companyStats.totalAgents}
-                </p>
-                <p className="text-xs text-gray-400">
-                  Active: {companyStats.totalAgents}
-                </p>
-              </div>
-              <div
-                className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-4 border border-white/20 text-center`}
-              >
-                <Target className="w-6 h-6 text-green-400 mx-auto mb-2" />
-                <p className="text-gray-300 text-sm">Total Sales</p>
-                <p className="text-xl font-bold text-white">
-                  {companyStats.totalSales}
-                </p>
-                <p className="text-xs text-green-400">
-                  For {new Date(dateFilter).toLocaleDateString()}
-                </p>
-              </div>
-              <div
-                className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-4 border border-white/20 text-center`}
-              >
-                <Users className="w-6 h-6 text-cyan-400 mx-auto mb-2" />
-                <p className="text-gray-300 text-sm">Total Leads</p>
-                <p className="text-xl font-bold text-white">
-                  {companyStats.totalLeads}
-                </p>
-                <p className="text-xs text-cyan-400">
-                  For {new Date(dateFilter).toLocaleDateString()}
-                </p>
-              </div>
-              <div
-                className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-4 border border-white/20 text-center`}
-              >
+                {teamName}
+              </h1>
+            )}
+            <Edit
+              className="w-4 h-4 cursor-pointer hover:text-gray-300"
+              onClick={() => setIsEditingTeamName(!isEditingTeamName)}
+            />
                 <TrendingUp className="w-6 h-6 text-purple-400 mx-auto mb-2" />
                 <p className="text-gray-300 text-sm">Avg Conversion</p>
                 <p className="text-xl font-bold text-white">
