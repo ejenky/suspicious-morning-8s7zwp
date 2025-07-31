@@ -2679,7 +2679,69 @@ const ManagerSupervisorHelp = ({ user }) => {
   );
 };
 
-
+// Theme definitions for Manager Dashboard
+const themes = {
+  ocean: {
+    primary: 'from-blue-600 to-cyan-600',
+    accent: 'from-blue-500 to-cyan-500',
+    card: 'bg-white/10',
+    gradient: 'from-blue-500 to-cyan-500'
+  },
+  forest: {
+    primary: 'from-green-600 to-emerald-600',
+    accent: 'from-green-500 to-emerald-500',
+    card: 'bg-white/10',
+    gradient: 'from-green-500 to-emerald-500'
+  },
+  sunset: {
+    primary: 'from-orange-600 to-red-600',
+    accent: 'from-orange-500 to-red-500',
+    card: 'bg-white/10',
+    gradient: 'from-orange-500 to-red-500'
+  },
+  rose: {
+    primary: 'from-rose-600 to-pink-600',
+    accent: 'from-rose-500 to-pink-500',
+    card: 'bg-white/10',
+    gradient: 'from-rose-500 to-pink-500'
+  },
+  teal: {
+    primary: 'from-teal-600 to-cyan-600',
+    accent: 'from-teal-500 to-cyan-500',
+    card: 'bg-white/10',
+    gradient: 'from-teal-500 to-cyan-500'
+  },
+  purple: {
+    primary: 'from-purple-600 to-indigo-600',
+    accent: 'from-purple-500 to-indigo-500',
+    card: 'bg-white/10',
+    gradient: 'from-purple-500 to-indigo-500'
+  },
+  emerald: {
+    primary: 'from-emerald-600 to-green-600',
+    accent: 'from-emerald-500 to-green-500',
+    card: 'bg-white/10',
+    gradient: 'from-emerald-500 to-green-500'
+  },
+  amber: {
+    primary: 'from-amber-600 to-yellow-600',
+    accent: 'from-amber-500 to-yellow-500',
+    card: 'bg-white/10',
+    gradient: 'from-amber-500 to-yellow-500'
+  },
+  slate: {
+    primary: 'from-slate-600 to-gray-600',
+    accent: 'from-slate-500 to-gray-500',
+    card: 'bg-white/10',
+    gradient: 'from-slate-500 to-gray-500'
+  },
+  pink: {
+    primary: 'from-pink-600 to-rose-600',
+    accent: 'from-pink-500 to-rose-500',
+    card: 'bg-white/10',
+    gradient: 'from-pink-500 to-rose-500'
+  }
+};
 
 // Enhanced Manager Dashboard with real data integration
 const ManagerDashboard = ({ user, onSignOut }) => {
