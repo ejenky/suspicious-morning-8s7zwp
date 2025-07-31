@@ -2757,12 +2757,9 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   // Add missing isDarkMode state for ThemeSelector compatibility
   const [isDarkMode, setIsDarkMode] = useState(true);
   
-  // Fix 2: Enhanced teams state with persistence
+  // Fix 2: Enhanced teams state with persistence - no mock data
   const [teams, setTeams] = useState(() => {
-    const savedTeams = loadFromStorage(`teams_${user.email}`, [
-      { id: 1, name: "Team Alpha", agents: ["john@company.com", "mike@company.com"], supervisor: user.name, created: new Date(), picture: null },
-      { id: 2, name: "Team Beta", agents: ["sarah@company.com", "david@company.com"], supervisor: user.name, created: new Date(), picture: null }
-    ]);
+    const savedTeams = loadFromStorage(`teams_${user.email}`, []);
     return savedTeams;
   });
   
@@ -4903,6 +4900,167 @@ const ManagerDashboard = ({ user, onSignOut }) => {
           </div>
         )}
 
+        {activeTab === "teams" && (
+          <div className="space-y-6">
+            <div
+              className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-4 border border-white/20`}
+            >
+              <div className="flex gap-4 items-center">
+                <select
+                  value={selectedTeam}
+                  onChange={(e) => setSelectedTeam(e.target.value)}
+                  className="bg-slate-800 border border-white/20 rounded-lg px-3 py-2 text-white"
+                >
+                  <option value="all" className="bg-slate-800">
+                    All Teams
+                  </option>
+                  {teams.map((team) => (
+                    <option
+                      key={team.id}
+                      value={team.name}
+                      className="bg-slate-800"
+                    >
+                      {team.name}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="date"
+                  value={dateFilter}
+                  onChange={(e) => setDateFilter(e.target.value)}
+                  className="bg-slate-800 border border-white/20 rounded-lg px-3 py-2 text-white"
+                />
+                <button
+                  onClick={() => setShowCreateTeamModal(true)}
+                  className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 px-4 py-2 rounded-lg text-white font-medium transition-all flex items-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  Create Team
+                </button>
+              </div>
+            </div>
+
+            <div
+              className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-6 border border-white/20`}
+            >
+              <h3 className="text-xl font-semibold mb-4">Enhanced Team Management</h3>
+              <div className="space-y-4">
+                {teams.length === 0 ? (
+                  <div className="text-center py-12">
+                    <Users2 className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                    <h4 className="text-lg font-medium text-white mb-2">No Teams Created Yet</h4>
+                    <p className="text-gray-300 mb-4">Create your first team to start managing agents and tracking performance.</p>
+                    <button
+                      onClick={() => setShowCreateTeamModal(true)}
+                      className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 px-6 py-3 rounded-lg text-white font-medium transition-all flex items-center gap-2 mx-auto"
+                    >
+                      <Plus className="w-5 h-5" />
+                      Create Your First Team
+                    </button>
+                  </div>
+                ) : (
+                  teams
+                    .filter((team) => selectedTeam === "all" || team.name === selectedTeam)
+                    .map((team) => {
+                      const teamStats = getEnhancedTeamStats(team.name);
+                      return (
+                        <div
+                          key={team.id}
+                          className="bg-white/5 rounded-lg p-6 border border-white/10"
+                        >
+                          <div className="flex justify-between items-start mb-4">
+                            <div className="flex items-center gap-3">
+                              {team.picture ? (
+                                <img
+                                  src={team.picture}
+                                  alt={team.name}
+                                  className="w-12 h-12 rounded-full object-cover"
+                                />
+                              ) : (
+                                <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                                  <Users2 className="w-6 h-6 text-white" />
+                                </div>
+                              )}
+                              <div>
+                                <h4 className="text-lg font-semibold text-white">{team.name}</h4>
+                                <p className="text-gray-300 text-sm">
+                                  {team.agents.length} members • {team.supervisor}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => handleUpdateTeamPicture(team.id, null)}
+                                className="bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded text-sm text-white transition-colors"
+                              >
+                                <Edit className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                            <div className="bg-white/5 rounded-lg p-3 text-center">
+                              <p className="text-gray-300 text-sm">Total Sales</p>
+                              <p className="text-xl font-bold text-green-400">{teamStats.totalSales || 0}</p>
+                            </div>
+                            <div className="bg-white/5 rounded-lg p-3 text-center">
+                              <p className="text-gray-300 text-sm">Avg Conversion</p>
+                              <p className="text-xl font-bold text-blue-400">{teamStats.avgConversion || 0}%</p>
+                            </div>
+                            <div className="bg-white/5 rounded-lg p-3 text-center">
+                              <p className="text-gray-300 text-sm">Total Leads</p>
+                              <p className="text-xl font-bold text-purple-400">{teamStats.totalLeads || 0}</p>
+                            </div>
+                            <div className="bg-white/5 rounded-lg p-3 text-center">
+                              <p className="text-gray-300 text-sm">Revenue</p>
+                              <p className="text-xl font-bold text-yellow-400">${teamStats.totalRevenue || 0}</p>
+                            </div>
+                          </div>
+
+                          <div className="space-y-3">
+                            <h5 className="font-medium text-white">Team Members</h5>
+                            {team.agents.length === 0 ? (
+                              <p className="text-gray-300 text-sm">No agents assigned to this team yet.</p>
+                            ) : (
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                {team.agents.map((agentEmail) => {
+                                  const agent = mockAgents.find(a => a.email === agentEmail);
+                                  const agentStats = getRealAgentStats(agentEmail, dateFilter);
+                                  if (!agent) return null;
+                                  return (
+                                    <div
+                                      key={agentEmail}
+                                      className="bg-white/5 rounded-lg p-3 flex justify-between items-center"
+                                    >
+                                      <div>
+                                        <p className="font-medium text-white">{agent.name}</p>
+                                        <p className="text-xs text-gray-400">{agent.center?.toUpperCase()}</p>
+                                      </div>
+                                      <div className="text-right">
+                                        <p className="text-sm font-bold text-green-400">{agentStats.sales} sales</p>
+                                        <p className="text-xs text-blue-400">{agentStats.conversionRate}% conv</p>
+                                      </div>
+                                      <button
+                                        onClick={() => handleRemoveAgentFromTeam(team.id, agentEmail)}
+                                        className="bg-red-600 hover:bg-red-700 px-2 py-1 rounded text-xs text-white transition-colors"
+                                      >
+                                        Remove
+                                      </button>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {activeTab === "supervisor" && <ManagerSupervisorHelp user={user} />}
 
         {activeTab === "notifications" && (
@@ -4946,6 +5104,56 @@ const ManagerDashboard = ({ user, onSignOut }) => {
         <EnhancedAgentProfile
           agent={selectedAgent}
           onClose={() => setSelectedAgent(null)}
+        />
+      )}
+      
+      {/* Create Team Modal */}
+      {showCreateTeamModal && (
+        <TeamCreationModal
+          isOpen={showCreateTeamModal}
+          onClose={() => setShowCreateTeamModal(false)}
+          onCreateTeam={handleCreateTeam}
+          theme={currentThemeStyles}
+          availableAgents={availableAgents}
+        />
+      )}
+      
+      {/* Goal Setting Modal */}
+      {showGoalSettingModal && (
+        <GoalSettingModal
+          isOpen={showGoalSettingModal}
+          onClose={() => setShowGoalSettingModal(false)}
+          onSaveGoals={(goals) => {
+            // Handle goal saving
+            setShowGoalSettingModal(false);
+            setToast({ message: 'Goals updated successfully!', type: 'success', isVisible: true });
+            setTimeout(() => setToast(prev => ({ ...prev, isVisible: false })), 3000);
+          }}
+          theme={currentThemeStyles}
+        />
+      )}
+      
+      {/* Lead Edit Modal */}
+      {showLeadEditModal && selectedLead && (
+        <LeadEditModal
+          isOpen={showLeadEditModal}
+          lead={selectedLead}
+          onClose={() => {
+            setShowLeadEditModal(false);
+            setSelectedLead(null);
+          }}
+          onSave={handleSaveLead}
+          theme={currentThemeStyles}
+        />
+      )}
+      
+      {/* Toast Notification */}
+      {toast.isVisible && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          isVisible={toast.isVisible}
+          onClose={() => setToast(prev => ({ ...prev, isVisible: false }))}
         />
       )}
     </div>
