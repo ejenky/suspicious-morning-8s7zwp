@@ -2716,10 +2716,7 @@ const loadFromStorage = (key, defaultValue = null) => {
   }
 };
 
-// Global variables for team assignments and agent goals
-let globalTeamAssignments = {};
-let globalAgentGoals = {};
-let globalSupervisorRequests = [];
+
 
 // Enhanced Manager Dashboard with real data integration
 const ManagerDashboard = ({ user, onSignOut }) => {
