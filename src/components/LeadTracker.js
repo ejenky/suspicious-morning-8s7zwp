@@ -3063,7 +3063,6 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   const strugglingAgents = getStrugglingAgents();
   const worstAdherenceAgents = getWorstAdherenceAgents();
   const rankedTeams = getAllTeamsData();
-  const currentThemeStyles = themes[currentTheme];
 
   // Get overall company stats
   const getCompanyStats = () => {
