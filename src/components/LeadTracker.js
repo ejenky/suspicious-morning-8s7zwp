@@ -3650,6 +3650,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
               </div>
               <div
                 className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-4 border border-white/20 text-center`}
+              >
                 <TrendingUp className="w-6 h-6 text-purple-400 mx-auto mb-2" />
                 <p className="text-gray-300 text-sm">Avg Conversion</p>
                 <p className="text-xl font-bold text-white">
