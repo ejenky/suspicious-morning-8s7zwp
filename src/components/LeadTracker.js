@@ -2716,90 +2716,7 @@ const loadFromStorage = (key, defaultValue = null) => {
   }
 };
 
-// Real agent stats function - gets actual data from global leads data
-const getRealAgentStats = (agentEmail, dateFilter) => {
-  if (!agentEmail || !globalLeadsData) {
-    return {
-      sales: 0,
-      leads: 0,
-      conversionRate: '0.0',
-      referrals: 0,
-      revenue: 0,
-      leadsList: []
-    };
-  }
-
-  // Filter leads for this agent and date
-  const agentLeads = globalLeadsData.filter(lead => {
-    if (lead.agentEmail !== agentEmail) return false;
-    if (dateFilter) {
-      const leadDate = new Date(lead.timestamp || lead.date);
-      const filterDate = new Date(dateFilter);
-      return leadDate.toDateString() === filterDate.toDateString();
-    }
-    return true;
-  });
-
-  const sales = agentLeads.filter(lead => lead.sale).length;
-  const leads = agentLeads.length;
-  const conversionRate = leads > 0 ? ((sales / leads) * 100).toFixed(1) : '0.0';
-  const referrals = agentLeads.filter(lead => lead.leadType === 'Referral Sale').length;
-  const revenue = agentLeads.reduce((sum, lead) => {
-    if (lead.sale) {
-      return sum + (lead.commission || 115) + (lead.hra ? (lead.hraValue || 15) : 0);
-    }
-    return sum;
-  }, 0);
-
-  return {
-    sales,
-    leads,
-    conversionRate,
-    referrals,
-    revenue,
-    leadsList: agentLeads
-  };
-};
-
-// Real team stats function
-const getRealTeamStats = (teamName, dateFilter) => {
-  const teamAgents = mockAgents.filter(agent => agent.team === teamName);
-  const teamStats = teamAgents.map(agent => getRealAgentStats(agent.email, dateFilter));
-  
-  const totalSales = teamStats.reduce((sum, stats) => sum + stats.sales, 0);
-  const totalLeads = teamStats.reduce((sum, stats) => sum + stats.leads, 0);
-  const avgConversion = totalLeads > 0 ? ((totalSales / totalLeads) * 100).toFixed(1) : '0.0';
-  const totalRevenue = teamStats.reduce((sum, stats) => sum + stats.revenue, 0);
-  const totalReferrals = teamStats.reduce((sum, stats) => sum + stats.referrals, 0);
-
-  return {
-    totalSales,
-    totalLeads,
-    avgConversion,
-    totalRevenue,
-    totalReferrals,
-    agentCount: teamAgents.length
-  };
-};
-
-// Get top non-sale lead types for a team
-const getTopNonSaleLeadTypes = (teamName, dateFilter) => {
-  const teamAgents = mockAgents.filter(agent => agent.team === teamName);
-  const allLeads = teamAgents.flatMap(agent => {
-    const stats = getRealAgentStats(agent.email, dateFilter);
-    return stats.leadsList.filter(lead => !lead.sale);
-  });
-  
-  const leadTypeCounts = {};
-  allLeads.forEach(lead => {
-    leadTypeCounts[lead.leadType] = (leadTypeCounts[lead.leadType] || 0) + 1;
-  });
-  
-  return Object.entries(leadTypeCounts)
-    .sort(([,a], [,b]) => b - a)
-    .slice(0, 5)
-    .map(([type, count]) => ({ type, count }));
-};
+// Duplicate function declarations removed - using the ones at the top of the file
 
 
 
@@ -6801,36 +6718,7 @@ const LeadEditModal = ({ isOpen, lead, onClose, onSave, theme }) => {
   );
 };
 
-// Toast Notification Component
-const Toast = ({ message, type, isVisible, onClose }) => {
-  useEffect(() => {
-    if (isVisible) {
-      const timer = setTimeout(() => {
-        onClose();
-      }, 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [isVisible, onClose]);
-
-  if (!isVisible) return null;
-
-  return (
-    <div className="fixed top-4 right-4 z-50">
-      <div className={`px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 ${
-        type === 'success' ? 'bg-green-600' : 
-        type === 'error' ? 'bg-red-600' : 
-        'bg-blue-600'
-      } text-white`}>
-        {type === 'success' && <CheckCircle className="w-5 h-5" />}
-        {type === 'error' && <AlertCircle className="w-5 h-5" />}
-        <span>{message}</span>
-        <button onClick={onClose} className="ml-2 hover:opacity-70">
-          <X className="w-4 h-4" />
-        </button>
-      </div>
-    </div>
-  );
-};
+// Duplicate Toast component removed - using the one at the top of the file
 
 export default function LeadTracker() {
   const { user, loading, logout } = useAuth();
