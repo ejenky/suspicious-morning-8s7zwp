@@ -3599,14 +3599,57 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                       className="bg-slate-800"
                     >
                       {center === "all"
+                        ? "All Centers"
+                        : center.charAt(0).toUpperCase() + center.slice(1)}
+                    </option>
+                  ))}
+                </select>
+                <span className="text-sm text-gray-300 ml-4">
+                  Showing data for {formatMountainTime(new Date(dateFilter))}
+                </span>
+              </div>
+            </div>
+
+            {/* Main metrics */}
+            <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+              <div
+                className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-4 border border-white/20 text-center`}
               >
-                {teamName}
-              </h1>
-            )}
-            <Edit
-              className="w-4 h-4 cursor-pointer hover:text-gray-300"
-              onClick={() => setIsEditingTeamName(!isEditingTeamName)}
-            />
+                <Users className="w-6 h-6 text-blue-400 mx-auto mb-2" />
+                <p className="text-gray-300 text-sm">Total Agents</p>
+                <p className="text-xl font-bold text-white">
+                  {companyStats.totalAgents}
+                </p>
+                <p className="text-xs text-gray-400">
+                  Active: {companyStats.totalAgents}
+                </p>
+              </div>
+              <div
+                className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-4 border border-white/20 text-center`}
+              >
+                <Target className="w-6 h-6 text-green-400 mx-auto mb-2" />
+                <p className="text-gray-300 text-sm">Total Sales</p>
+                <p className="text-xl font-bold text-white">
+                  {companyStats.totalSales}
+                </p>
+                <p className="text-xs text-green-400">
+                  For {formatMountainTime(new Date(dateFilter))}
+                </p>
+              </div>
+              <div
+                className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-4 border border-white/20 text-center`}
+              >
+                <Users className="w-6 h-6 text-cyan-400 mx-auto mb-2" />
+                <p className="text-gray-300 text-sm">Total Leads</p>
+                <p className="text-xl font-bold text-white">
+                  {companyStats.totalLeads}
+                </p>
+                <p className="text-xs text-cyan-400">
+                  For {formatMountainTime(new Date(dateFilter))}
+                </p>
+              </div>
+              <div
+                className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-4 border border-white/20 text-center`}
                 <TrendingUp className="w-6 h-6 text-purple-400 mx-auto mb-2" />
                 <p className="text-gray-300 text-sm">Avg Conversion</p>
                 <p className="text-xl font-bold text-white">
