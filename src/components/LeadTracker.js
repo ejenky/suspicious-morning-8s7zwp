@@ -2679,7 +2679,47 @@ const ManagerSupervisorHelp = ({ user }) => {
   );
 };
 
+// Utility functions for Manager Dashboard
+const getMountainTime = () => {
+  const now = new Date();
+  const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+  const mountainTime = new Date(utc + (-6 * 3600000)); // Mountain Time is UTC-6 (or UTC-7 during DST)
+  return mountainTime;
+};
 
+const formatMountainTime = (date) => {
+  if (!date) return '';
+  const mountainDate = new Date(date.getTime() - (6 * 3600000)); // Convert to Mountain Time
+  return mountainDate.toLocaleDateString('en-US', {
+    timeZone: 'America/Denver',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  });
+};
+
+const saveToStorage = (key, value) => {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (error) {
+    console.warn('Failed to save to localStorage:', error);
+  }
+};
+
+const loadFromStorage = (key, defaultValue = null) => {
+  try {
+    const item = localStorage.getItem(key);
+    return item ? JSON.parse(item) : defaultValue;
+  } catch (error) {
+    console.warn('Failed to load from localStorage:', error);
+    return defaultValue;
+  }
+};
+
+// Global variables for team assignments and agent goals
+let globalTeamAssignments = {};
+let globalAgentGoals = {};
+let globalSupervisorRequests = [];
 
 // Enhanced Manager Dashboard with real data integration
 const ManagerDashboard = ({ user, onSignOut }) => {
