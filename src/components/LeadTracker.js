@@ -2679,129 +2679,45 @@ const ManagerSupervisorHelp = ({ user }) => {
   );
 };
 
-// Utility functions for Manager Dashboard
-const getMountainTime = () => {
-  const now = new Date();
-  const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
-  const mountainTime = new Date(utc + (-6 * 3600000)); // Mountain Time is UTC-6 (or UTC-7 during DST)
-  return mountainTime;
-};
-
-const formatMountainTime = (date) => {
-  if (!date) return '';
-  const mountainDate = new Date(date.getTime() - (6 * 3600000)); // Convert to Mountain Time
-  return mountainDate.toLocaleDateString('en-US', {
-    timeZone: 'America/Denver',
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  });
-};
-
-const saveToStorage = (key, value) => {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch (error) {
-    console.warn('Failed to save to localStorage:', error);
-  }
-};
-
-const loadFromStorage = (key, defaultValue = null) => {
-  try {
-    const item = localStorage.getItem(key);
-    return item ? JSON.parse(item) : defaultValue;
-  } catch (error) {
-    console.warn('Failed to load from localStorage:', error);
-    return defaultValue;
-  }
-};
-
-// Duplicate function declarations removed - using the ones at the top of the file
-
-
-
 // Enhanced Manager Dashboard with real data integration
 const ManagerDashboard = ({ user, onSignOut }) => {
-  // Fix 4: Mountain Time date initialization
-  const getMountainDateString = () => {
-    const mountainTime = getMountainTime();
-    const year = mountainTime.getFullYear();
-    const month = String(mountainTime.getMonth() + 1).padStart(2, "0");
-    const day = String(mountainTime.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
-  };
+  console.log("=== DATE DEBUG ===");
+  const testDate = (() => {
+    const today = new Date();
+    console.log("Current Date object:", today);
+    console.log("getFullYear():", today.getFullYear());
+    console.log("getMonth():", today.getMonth()); // 0-indexed
+    console.log("getDate():", today.getDate());
 
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, "0");
+    const day = String(today.getDate()).padStart(2, "0");
+    const result = `${year}-${month}-${day}`;
+    console.log("Final formatted date:", result);
+    return result;
+  })();
   const [activeTab, setActiveTab] = useState("overview");
   const [selectedAgent, setSelectedAgent] = useState(null);
   const [viewingAgentDashboard, setViewingAgentDashboard] = useState(null);
   const [selectedTeam, setSelectedTeam] = useState("all");
   const [selectedCenter, setSelectedCenter] = useState("all");
-  // Fix 4: Use Mountain Time for date filter
-  const [dateFilter, setDateFilter] = useState(() => getMountainDateString());
-  
-  // Fix 2: Enhanced data persistence with user-specific keys
-  const [currentTheme, setCurrentTheme] = useState(() => loadFromStorage(`theme_${user.email}`, 'forest'));
-  const currentThemeStyles = themes[currentTheme] || themes.forest || {
-    primary: 'from-green-600 to-emerald-600',
-    accent: 'from-green-500 to-emerald-500',
-    card: 'bg-white/10'
-  };
-  const [userAvatar, setUserAvatar] = useState(() => loadFromStorage(`avatar_${user.email}`, null));
-  const [teamName, setTeamName] = useState(() => loadFromStorage(`teamName_${user.email}`, "Sales Team Alpha"));
-  const [isEditingTeamName, setIsEditingTeamName] = useState(false);
-  const [myTeamAgents, setMyTeamAgents] = useState(() => loadFromStorage(`myTeamAgents_${user.email}`, []));
-  const [showCreateTeamModal, setShowCreateTeamModal] = useState(false);
-  const [showGoalSettingModal, setShowGoalSettingModal] = useState(false);
-  const [showLeadEditModal, setShowLeadEditModal] = useState(false);
-  const [selectedLead, setSelectedLead] = useState(null);
-  const [toast, setToast] = useState({ message: '', type: 'success', isVisible: false });
-  
-  // Add missing isDarkMode state for ThemeSelector compatibility
+  const [dateFilter, setDateFilter] = useState(() => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, "0");
+    const day = String(today.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  });
+  const [currentTheme, setCurrentTheme] = useState("forest");
   const [isDarkMode, setIsDarkMode] = useState(true);
-  
-  // Fix 2: Enhanced teams state with persistence - no mock data
-  const [teams, setTeams] = useState(() => {
-    const savedTeams = loadFromStorage(`teams_${user.email}`, []);
-    return savedTeams;
-  });
-  
-  // Fix 1: Available agents list for team creation
-  const [availableAgents, setAvailableAgents] = useState(() => {
-    const allAgents = mockAgents.map(agent => ({
-      ...agent,
-      id: agent.id || agent.email,
-      isAssigned: false
-    }));
-    return allAgents;
-  });
-  
-  // Fix 3: Real-time data refresh state
-  const [lastDataRefresh, setLastDataRefresh] = useState(Date.now());
+  const [userAvatar, setUserAvatar] = useState(null);
+  const [teamName, setTeamName] = useState("Sales Team Alpha");
+  const [isEditingTeamName, setIsEditingTeamName] = useState(false);
+  const [myTeamAgents, setMyTeamAgents] = useState([]);
+
+  const [teams] = useState([]);
 
   const [notifications] = useState([]);
-
-  // Fix 2: Enhanced data persistence - save data whenever state changes
-  useEffect(() => {
-    saveToStorage(`theme_${user.email}`, currentTheme);
-  }, [currentTheme, user.email]);
-
-  useEffect(() => {
-    saveToStorage(`teamName_${user.email}`, teamName);
-  }, [teamName, user.email]);
-
-  useEffect(() => {
-    saveToStorage(`myTeamAgents_${user.email}`, myTeamAgents);
-  }, [myTeamAgents, user.email]);
-
-  useEffect(() => {
-    saveToStorage(`teams_${user.email}`, teams);
-  }, [teams, user.email]);
-
-  useEffect(() => {
-    if (userAvatar) {
-      saveToStorage(`avatar_${user.email}`, userAvatar);
-    }
-  }, [userAvatar, user.email]);
 
   useEffect(() => {
     // Initialize team assignments
@@ -2819,30 +2735,16 @@ const ManagerDashboard = ({ user, onSignOut }) => {
     );
   }, [user.email, user.name]);
 
-  // Fix 3: Real-time data refresh every 30 seconds
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setLastDataRefresh(Date.now());
-    }, 30000);
-    return () => clearInterval(interval);
-  }, []);
-
   const handleAvatarUpload = (event) => {
     const file = event.target.files[0];
     if (file) {
       const reader = new FileReader();
-      reader.onload = (e) => {
-        setUserAvatar(e.target.result);
-        saveToStorage(`avatar_${user.email}`, e.target.result);
-      };
+      reader.onload = (e) => setUserAvatar(e.target.result);
       reader.readAsDataURL(file);
     }
   };
 
-  const handleTeamNameEdit = () => {
-    setIsEditingTeamName(false);
-    saveToStorage(`teamName_${user.email}`, teamName);
-  };
+  const handleTeamNameEdit = () => setIsEditingTeamName(false);
 
   const addAgentToTeam = (agentId) => {
     if (!globalTeamAssignments[user.email]) {
@@ -2876,158 +2778,6 @@ const ManagerDashboard = ({ user, onSignOut }) => {
       globalAgentGoals[agentEmail] = {};
     }
     globalAgentGoals[agentEmail][goalType] = value;
-    saveToStorage('agentGoals', globalAgentGoals);
-  };
-
-  // Fix 1: Enhanced Create Team functionality with proper agent management
-  const handleCreateTeam = (teamData) => {
-    const newTeam = {
-      id: Date.now(),
-      name: teamData.name,
-      agents: teamData.agents || [],
-      supervisor: teamData.supervisor || user.name,
-      created: new Date(),
-      picture: teamData.picture || null,
-      createdBy: user.email
-    };
-    
-    // Update teams state
-    const updatedTeams = [...teams, newTeam];
-    setTeams(updatedTeams);
-    
-    // Update available agents - mark selected agents as assigned
-    const updatedAvailableAgents = availableAgents.map(agent => ({
-      ...agent,
-      isAssigned: teamData.agents.includes(agent.email) ? true : agent.isAssigned
-    }));
-    setAvailableAgents(updatedAvailableAgents);
-    
-    // Update global team assignments
-    if (!globalTeamAssignments[user.email]) {
-      globalTeamAssignments[user.email] = [];
-    }
-    teamData.agents.forEach(agentEmail => {
-      const agent = mockAgents.find(a => a.email === agentEmail);
-      if (agent && !globalTeamAssignments[user.email].includes(agent.id)) {
-        globalTeamAssignments[user.email].push(agent.id);
-      }
-    });
-    
-    // Update myTeamAgents if this is the user's team
-    if (teamData.supervisor === user.name) {
-      const newTeamAgents = mockAgents.filter(agent => 
-        teamData.agents.includes(agent.email)
-      );
-      setMyTeamAgents(prev => [...prev, ...newTeamAgents]);
-    }
-    
-    // Persist data
-    saveToStorage(`teams_${user.email}`, updatedTeams);
-    saveToStorage(`availableAgents_${user.email}`, updatedAvailableAgents);
-    saveToStorage('teamAssignments', globalTeamAssignments);
-    
-    setShowCreateTeamModal(false);
-    setToast({ message: `Team "${teamData.name}" created successfully with ${teamData.agents.length} agents!`, type: 'success', isVisible: true });
-    setTimeout(() => setToast(prev => ({ ...prev, isVisible: false })), 3000);
-    
-    // Fix 3: Trigger data refresh
-    setLastDataRefresh(Date.now());
-  };
-  
-  // Fix 1: Enhanced agent management functions
-  const handleAddAgentToTeam = (teamId, agentEmail) => {
-    const updatedTeams = teams.map(team => {
-      if (team.id === teamId) {
-        const updatedAgents = [...team.agents];
-        if (!updatedAgents.includes(agentEmail)) {
-          updatedAgents.push(agentEmail);
-        }
-        return { ...team, agents: updatedAgents };
-      }
-      return team;
-    });
-    setTeams(updatedTeams);
-    
-    // Update available agents
-    const updatedAvailableAgents = availableAgents.map(agent => 
-      agent.email === agentEmail ? { ...agent, isAssigned: true } : agent
-    );
-    setAvailableAgents(updatedAvailableAgents);
-    
-    setToast({ message: 'Agent added to team successfully!', type: 'success', isVisible: true });
-    setTimeout(() => setToast(prev => ({ ...prev, isVisible: false })), 3000);
-  };
-  
-  const handleRemoveAgentFromTeam = (teamId, agentEmail) => {
-    const updatedTeams = teams.map(team => {
-      if (team.id === teamId) {
-        const updatedAgents = team.agents.filter(email => email !== agentEmail);
-        return { ...team, agents: updatedAgents };
-      }
-      return team;
-    });
-    setTeams(updatedTeams);
-    
-    // Update available agents
-    const updatedAvailableAgents = availableAgents.map(agent => 
-      agent.email === agentEmail ? { ...agent, isAssigned: false } : agent
-    );
-    setAvailableAgents(updatedAvailableAgents);
-    
-    setToast({ message: 'Agent removed from team successfully!', type: 'success', isVisible: true });
-    setTimeout(() => setToast(prev => ({ ...prev, isVisible: false })), 3000);
-  };
-  
-  const handleUpdateTeamName = (teamId, newName) => {
-    const updatedTeams = teams.map(team => 
-      team.id === teamId ? { ...team, name: newName } : team
-    );
-    setTeams(updatedTeams);
-    setToast({ message: 'Team name updated successfully!', type: 'success', isVisible: true });
-    setTimeout(() => setToast(prev => ({ ...prev, isVisible: false })), 3000);
-  };
-  
-  const handleUpdateTeamPicture = (teamId, picture) => {
-    const updatedTeams = teams.map(team => 
-      team.id === teamId ? { ...team, picture } : team
-    );
-    setTeams(updatedTeams);
-    setToast({ message: 'Team picture updated successfully!', type: 'success', isVisible: true });
-    setTimeout(() => setToast(prev => ({ ...prev, isVisible: false })), 3000);
-  };
-
-  const handleThemeChange = (newTheme) => {
-    setCurrentTheme(newTheme);
-    saveToStorage(`theme_${user.email}`, newTheme);
-  };
-
-  const handleEditLead = (lead) => {
-    setSelectedLead(lead);
-    setShowLeadEditModal(true);
-  };
-
-  const handleSaveLead = (updatedLead) => {
-    // Update global leads data
-    const leadIndex = globalLeadsData.findIndex(l => l.id === updatedLead.id);
-    if (leadIndex !== -1) {
-      globalLeadsData[leadIndex] = {
-        ...globalLeadsData[leadIndex],
-        ...updatedLead,
-        editHistory: [
-          ...(globalLeadsData[leadIndex].editHistory || []),
-          {
-            timestamp: getMountainTime(),
-            editedBy: user.email,
-            changes: updatedLead
-          }
-        ]
-      };
-      saveToStorage('leadsData', globalLeadsData);
-      setShowLeadEditModal(false);
-      setSelectedLead(null);
-      setToast({ message: 'Lead updated successfully!', type: 'success', isVisible: true });
-      setTimeout(() => setToast(prev => ({ ...prev, isVisible: false })), 3000);
-    }
   };
 
   // Get real team stats using global data
@@ -3046,14 +2796,12 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   };
 
   const getAllTeamsData = () => {
-    // Only return user-created teams, no mock data
     return teams
-      .filter(team => team && team.name && team.id) // Filter out any invalid teams
       .map((team) => ({
         ...team,
         ...getEnhancedTeamStats(team.name),
       }))
-      .sort((a, b) => (b.totalSales || 0) - (a.totalSales || 0));
+      .sort((a, b) => b.totalSales - a.totalSales);
   };
 
   // Get struggling agents based on real data with location and performance filters
@@ -3106,6 +2854,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   const strugglingAgents = getStrugglingAgents();
   const worstAdherenceAgents = getWorstAdherenceAgents();
   const rankedTeams = getAllTeamsData();
+  const currentThemeStyles = themes[currentTheme];
 
   // Get overall company stats
   const getCompanyStats = () => {
@@ -3546,7 +3295,9 @@ const ManagerDashboard = ({ user, onSignOut }) => {
             <div className="flex items-center gap-4">
               <ThemeSelector
                 currentTheme={currentTheme}
-                onThemeChange={handleThemeChange}
+                onThemeChange={setCurrentTheme}
+                isDarkMode={isDarkMode}
+                onToggleDarkMode={() => setIsDarkMode(!isDarkMode)}
               />
               <div className="relative">
                 <div className="w-10 h-10 rounded-full bg-slate-600 flex items-center justify-center overflow-hidden">
@@ -3646,7 +3397,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                   ))}
                 </select>
                 <span className="text-sm text-gray-300 ml-4">
-                  Showing data for {formatMountainTime(new Date(dateFilter))}
+                  Showing data for {new Date(dateFilter).toLocaleDateString()}
                 </span>
               </div>
             </div>
@@ -3674,7 +3425,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                   {companyStats.totalSales}
                 </p>
                 <p className="text-xs text-green-400">
-                  For {formatMountainTime(new Date(dateFilter))}
+                  For {new Date(dateFilter).toLocaleDateString()}
                 </p>
               </div>
               <div
@@ -3686,7 +3437,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                   {companyStats.totalLeads}
                 </p>
                 <p className="text-xs text-cyan-400">
-                  For {formatMountainTime(new Date(dateFilter))}
+                  For {new Date(dateFilter).toLocaleDateString()}
                 </p>
               </div>
               <div
@@ -4904,167 +4655,6 @@ const ManagerDashboard = ({ user, onSignOut }) => {
           </div>
         )}
 
-        {activeTab === "teams" && (
-          <div className="space-y-6">
-            <div
-              className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-4 border border-white/20`}
-            >
-              <div className="flex gap-4 items-center">
-                <select
-                  value={selectedTeam}
-                  onChange={(e) => setSelectedTeam(e.target.value)}
-                  className="bg-slate-800 border border-white/20 rounded-lg px-3 py-2 text-white"
-                >
-                  <option value="all" className="bg-slate-800">
-                    All Teams
-                  </option>
-                  {teams.map((team) => (
-                    <option
-                      key={team.id}
-                      value={team.name}
-                      className="bg-slate-800"
-                    >
-                      {team.name}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  type="date"
-                  value={dateFilter}
-                  onChange={(e) => setDateFilter(e.target.value)}
-                  className="bg-slate-800 border border-white/20 rounded-lg px-3 py-2 text-white"
-                />
-                <button
-                  onClick={() => setShowCreateTeamModal(true)}
-                  className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 px-4 py-2 rounded-lg text-white font-medium transition-all flex items-center gap-2"
-                >
-                  <Plus className="w-4 h-4" />
-                  Create Team
-                </button>
-              </div>
-            </div>
-
-            <div
-              className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-6 border border-white/20`}
-            >
-              <h3 className="text-xl font-semibold mb-4">Enhanced Team Management</h3>
-              <div className="space-y-4">
-                {teams.length === 0 ? (
-                  <div className="text-center py-12">
-                    <Users2 className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                    <h4 className="text-lg font-medium text-white mb-2">No Teams Created Yet</h4>
-                    <p className="text-gray-300 mb-4">Create your first team to start managing agents and tracking performance.</p>
-                    <button
-                      onClick={() => setShowCreateTeamModal(true)}
-                      className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 px-6 py-3 rounded-lg text-white font-medium transition-all flex items-center gap-2 mx-auto"
-                    >
-                      <Plus className="w-5 h-5" />
-                      Create Your First Team
-                    </button>
-                  </div>
-                ) : (
-                  teams
-                    .filter((team) => selectedTeam === "all" || team.name === selectedTeam)
-                    .map((team) => {
-                      const teamStats = getEnhancedTeamStats(team.name);
-                      return (
-                        <div
-                          key={team.id}
-                          className="bg-white/5 rounded-lg p-6 border border-white/10"
-                        >
-                          <div className="flex justify-between items-start mb-4">
-                            <div className="flex items-center gap-3">
-                              {team.picture ? (
-                                <img
-                                  src={team.picture}
-                                  alt={team.name}
-                                  className="w-12 h-12 rounded-full object-cover"
-                                />
-                              ) : (
-                                <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-                                  <Users2 className="w-6 h-6 text-white" />
-                                </div>
-                              )}
-                              <div>
-                                <h4 className="text-lg font-semibold text-white">{team.name}</h4>
-                                <p className="text-gray-300 text-sm">
-                                  {team.agents.length} members • {team.supervisor}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <button
-                                onClick={() => handleUpdateTeamPicture(team.id, null)}
-                                className="bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded text-sm text-white transition-colors"
-                              >
-                                <Edit className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </div>
-
-                          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                            <div className="bg-white/5 rounded-lg p-3 text-center">
-                              <p className="text-gray-300 text-sm">Total Sales</p>
-                              <p className="text-xl font-bold text-green-400">{teamStats.totalSales || 0}</p>
-                            </div>
-                            <div className="bg-white/5 rounded-lg p-3 text-center">
-                              <p className="text-gray-300 text-sm">Avg Conversion</p>
-                              <p className="text-xl font-bold text-blue-400">{teamStats.avgConversion || 0}%</p>
-                            </div>
-                            <div className="bg-white/5 rounded-lg p-3 text-center">
-                              <p className="text-gray-300 text-sm">Total Leads</p>
-                              <p className="text-xl font-bold text-purple-400">{teamStats.totalLeads || 0}</p>
-                            </div>
-                            <div className="bg-white/5 rounded-lg p-3 text-center">
-                              <p className="text-gray-300 text-sm">Revenue</p>
-                              <p className="text-xl font-bold text-yellow-400">${teamStats.totalRevenue || 0}</p>
-                            </div>
-                          </div>
-
-                          <div className="space-y-3">
-                            <h5 className="font-medium text-white">Team Members</h5>
-                            {team.agents.length === 0 ? (
-                              <p className="text-gray-300 text-sm">No agents assigned to this team yet.</p>
-                            ) : (
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                {team.agents.map((agentEmail) => {
-                                  const agent = mockAgents.find(a => a.email === agentEmail);
-                                  const agentStats = getRealAgentStats(agentEmail, dateFilter);
-                                  if (!agent) return null;
-                                  return (
-                                    <div
-                                      key={agentEmail}
-                                      className="bg-white/5 rounded-lg p-3 flex justify-between items-center"
-                                    >
-                                      <div>
-                                        <p className="font-medium text-white">{agent.name}</p>
-                                        <p className="text-xs text-gray-400">{agent.center?.toUpperCase()}</p>
-                                      </div>
-                                      <div className="text-right">
-                                        <p className="text-sm font-bold text-green-400">{agentStats.sales} sales</p>
-                                        <p className="text-xs text-blue-400">{agentStats.conversionRate}% conv</p>
-                                      </div>
-                                      <button
-                                        onClick={() => handleRemoveAgentFromTeam(team.id, agentEmail)}
-                                        className="bg-red-600 hover:bg-red-700 px-2 py-1 rounded text-xs text-white transition-colors"
-                                      >
-                                        Remove
-                                      </button>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
         {activeTab === "supervisor" && <ManagerSupervisorHelp user={user} />}
 
         {activeTab === "notifications" && (
@@ -5108,56 +4698,6 @@ const ManagerDashboard = ({ user, onSignOut }) => {
         <EnhancedAgentProfile
           agent={selectedAgent}
           onClose={() => setSelectedAgent(null)}
-        />
-      )}
-      
-      {/* Create Team Modal */}
-      {showCreateTeamModal && (
-        <TeamCreationModal
-          isOpen={showCreateTeamModal}
-          onClose={() => setShowCreateTeamModal(false)}
-          onCreateTeam={handleCreateTeam}
-          theme={currentThemeStyles}
-          availableAgents={availableAgents}
-        />
-      )}
-      
-      {/* Goal Setting Modal */}
-      {showGoalSettingModal && (
-        <GoalSettingModal
-          isOpen={showGoalSettingModal}
-          onClose={() => setShowGoalSettingModal(false)}
-          onSaveGoals={(goals) => {
-            // Handle goal saving
-            setShowGoalSettingModal(false);
-            setToast({ message: 'Goals updated successfully!', type: 'success', isVisible: true });
-            setTimeout(() => setToast(prev => ({ ...prev, isVisible: false })), 3000);
-          }}
-          theme={currentThemeStyles}
-        />
-      )}
-      
-      {/* Lead Edit Modal */}
-      {showLeadEditModal && selectedLead && (
-        <LeadEditModal
-          isOpen={showLeadEditModal}
-          lead={selectedLead}
-          onClose={() => {
-            setShowLeadEditModal(false);
-            setSelectedLead(null);
-          }}
-          onSave={handleSaveLead}
-          theme={currentThemeStyles}
-        />
-      )}
-      
-      {/* Toast Notification */}
-      {toast.isVisible && (
-        <Toast
-          message={toast.message}
-          type={toast.type}
-          isVisible={toast.isVisible}
-          onClose={() => setToast(prev => ({ ...prev, isVisible: false }))}
         />
       )}
     </div>
@@ -6399,327 +5939,6 @@ const AuthComponent = () => {
 };
 
 // Main App Component
-// Team Creation Modal Component
-const TeamCreationModal = ({ isOpen, onClose, onCreateTeam, theme, availableAgents }) => {
-  const [teamName, setTeamName] = useState('');
-  const [teamPicture, setTeamPicture] = useState('');
-  const [selectedAgents, setSelectedAgents] = useState([]);
-  const [supervisor, setSupervisor] = useState('');
-  const [errors, setErrors] = useState({});
-
-  const handleAgentToggle = (agentEmail) => {
-    setSelectedAgents(prev => 
-      prev.includes(agentEmail) 
-        ? prev.filter(email => email !== agentEmail)
-        : [...prev, agentEmail]
-    );
-  };
-
-  const validateForm = () => {
-    const newErrors = {};
-    if (!teamName.trim()) newErrors.teamName = 'Team name is required';
-    if (!supervisor.trim()) newErrors.supervisor = 'Supervisor name is required';
-    if (selectedAgents.length === 0) newErrors.agents = 'At least one agent must be selected';
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (validateForm()) {
-      const teamData = {
-        id: `team_${Date.now()}`,
-        name: teamName,
-        picture: teamPicture,
-        supervisor: supervisor,
-        agents: selectedAgents,
-        createdAt: new Date().toISOString()
-      };
-      onCreateTeam(teamData);
-      // Reset form
-      setTeamName('');
-      setTeamPicture('');
-      setSelectedAgents([]);
-      setSupervisor('');
-      setErrors({});
-    }
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-slate-900 rounded-xl p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-white">Create New Team</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-white"
-          >
-            <X className="w-6 h-6" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Team Name *
-            </label>
-            <input
-              type="text"
-              value={teamName}
-              onChange={(e) => setTeamName(e.target.value)}
-              className="w-full bg-slate-800 border border-white/20 rounded-lg px-3 py-2 text-white"
-              placeholder="Enter team name"
-            />
-            {errors.teamName && <p className="text-red-400 text-sm mt-1">{errors.teamName}</p>}
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Team Picture URL (Optional)
-            </label>
-            <input
-              type="url"
-              value={teamPicture}
-              onChange={(e) => setTeamPicture(e.target.value)}
-              className="w-full bg-slate-800 border border-white/20 rounded-lg px-3 py-2 text-white"
-              placeholder="https://example.com/team-picture.jpg"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Supervisor *
-            </label>
-            <input
-              type="text"
-              value={supervisor}
-              onChange={(e) => setSupervisor(e.target.value)}
-              className="w-full bg-slate-800 border border-white/20 rounded-lg px-3 py-2 text-white"
-              placeholder="Enter supervisor name"
-            />
-            {errors.supervisor && <p className="text-red-400 text-sm mt-1">{errors.supervisor}</p>}
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Select Team Members * ({selectedAgents.length} selected)
-            </label>
-            <div className="max-h-60 overflow-y-auto bg-slate-800 rounded-lg border border-white/20 p-3">
-              {availableAgents && availableAgents.length > 0 ? (
-                availableAgents.map((agent) => (
-                  <div
-                    key={agent.email}
-                    className="flex items-center justify-between p-2 hover:bg-white/5 rounded"
-                  >
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="checkbox"
-                        checked={selectedAgents.includes(agent.email)}
-                        onChange={() => handleAgentToggle(agent.email)}
-                        className="rounded"
-                      />
-                      <div>
-                        <p className="text-white font-medium">{agent.name}</p>
-                        <p className="text-gray-400 text-sm">{agent.center?.toUpperCase()} • {agent.email}</p>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <p className="text-gray-400 text-center py-4">No agents available</p>
-              )}
-            </div>
-            {errors.agents && <p className="text-red-400 text-sm mt-1">{errors.agents}</p>}
-          </div>
-
-          <div className="flex justify-end gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors flex items-center gap-2"
-            >
-              <Plus className="w-4 h-4" />
-              Create Team
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-};
-
-// Goal Setting Modal Component
-const GoalSettingModal = ({ isOpen, onClose, onSaveGoals, theme }) => {
-  const [goals, setGoals] = useState({
-    dailySales: 10,
-    weeklySales: 50,
-    monthlyGoal: 120,
-    conversionRate: 25,
-    referralRate: 15
-  });
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    onSaveGoals(goals);
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-slate-900 rounded-xl p-6 max-w-lg w-full mx-4">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-white">Set Team Goals</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-white">
-            <X className="w-6 h-6" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Daily Sales Goal</label>
-            <input
-              type="number"
-              value={goals.dailySales}
-              onChange={(e) => setGoals(prev => ({ ...prev, dailySales: parseInt(e.target.value) }))}
-              className="w-full bg-slate-800 border border-white/20 rounded-lg px-3 py-2 text-white"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Weekly Sales Goal</label>
-            <input
-              type="number"
-              value={goals.weeklySales}
-              onChange={(e) => setGoals(prev => ({ ...prev, weeklySales: parseInt(e.target.value) }))}
-              className="w-full bg-slate-800 border border-white/20 rounded-lg px-3 py-2 text-white"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Monthly Sales Goal</label>
-            <input
-              type="number"
-              value={goals.monthlyGoal}
-              onChange={(e) => setGoals(prev => ({ ...prev, monthlyGoal: parseInt(e.target.value) }))}
-              className="w-full bg-slate-800 border border-white/20 rounded-lg px-3 py-2 text-white"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Conversion Rate Goal (%)</label>
-            <input
-              type="number"
-              value={goals.conversionRate}
-              onChange={(e) => setGoals(prev => ({ ...prev, conversionRate: parseInt(e.target.value) }))}
-              className="w-full bg-slate-800 border border-white/20 rounded-lg px-3 py-2 text-white"
-            />
-          </div>
-
-          <div className="flex justify-end gap-3 mt-6">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg"
-            >
-              Save Goals
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-};
-
-// Lead Edit Modal Component
-const LeadEditModal = ({ isOpen, lead, onClose, onSave, theme }) => {
-  const [editedLead, setEditedLead] = useState(lead || {});
-
-  useEffect(() => {
-    if (lead) {
-      setEditedLead(lead);
-    }
-  }, [lead]);
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    onSave(editedLead);
-  };
-
-  if (!isOpen || !lead) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-slate-900 rounded-xl p-6 max-w-lg w-full mx-4">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-white">Edit Lead</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-white">
-            <X className="w-6 h-6" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Lead Type</label>
-            <input
-              type="text"
-              value={editedLead.leadType || ''}
-              onChange={(e) => setEditedLead(prev => ({ ...prev, leadType: e.target.value }))}
-              className="w-full bg-slate-800 border border-white/20 rounded-lg px-3 py-2 text-white"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Notes</label>
-            <textarea
-              value={editedLead.notes || ''}
-              onChange={(e) => setEditedLead(prev => ({ ...prev, notes: e.target.value }))}
-              className="w-full bg-slate-800 border border-white/20 rounded-lg px-3 py-2 text-white h-24"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">CRM Link</label>
-            <input
-              type="url"
-              value={editedLead.crmLink || ''}
-              onChange={(e) => setEditedLead(prev => ({ ...prev, crmLink: e.target.value }))}
-              className="w-full bg-slate-800 border border-white/20 rounded-lg px-3 py-2 text-white"
-            />
-          </div>
-
-          <div className="flex justify-end gap-3 mt-6">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
-            >
-              Save Changes
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-};
-
-// Duplicate Toast component removed - using the one at the top of the file
-
 export default function LeadTracker() {
   const { user, loading, logout } = useAuth();
 
@@ -6750,3 +5969,4 @@ export default function LeadTracker() {
 
   return <AgentDashboard user={user} onSignOut={logout} />;
 }
+
