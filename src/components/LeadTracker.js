@@ -62,10 +62,182 @@ import { useLeads } from "../hooks/useLeads";
 // Global state for leads data
 let globalLeadsData = [];
 
-// Agent and team data will be populated from real data
-const mockAgents = [];
+// Storage utility functions
+const loadFromStorage = (key, defaultValue = null) => {
+  try {
+    const item = localStorage.getItem(key);
+    return item ? JSON.parse(item) : defaultValue;
+  } catch (error) {
+    console.error('Error loading from storage:', error);
+    return defaultValue;
+  }
+};
 
-const mockFive9Data = {};
+const saveToStorage = (key, value) => {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (error) {
+    console.error('Error saving to storage:', error);
+  }
+};
+
+// useLeads hook
+const useLeads = (userId) => {
+  const [leads, setLeads] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Load leads from global state
+    setLeads(globalLeadsData.filter(lead => lead.agent === userId));
+    setLoading(false);
+  }, [userId]);
+
+  const addLead = async (leadData) => {
+    try {
+      const newLead = {
+        ...leadData,
+        id: Date.now(),
+        agent: userId,
+        timestamp: leadData.timestamp || new Date(),
+      };
+      
+      globalLeadsData.push(newLead);
+      setLeads(globalLeadsData.filter(lead => lead.agent === userId));
+      
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  };
+
+  const calculateMetrics = (selectedDate) => {
+    const userLeads = leads.filter(lead => {
+      if (!selectedDate) return true;
+      const leadDate = new Date(lead.timestamp);
+      const filterDate = new Date(selectedDate);
+      return leadDate.toDateString() === filterDate.toDateString();
+    });
+
+    const sales = userLeads.filter(lead => lead.sale);
+    const referrals = userLeads.filter(lead => lead.leadType === "Referral Sale");
+    
+    return {
+      totalLeads: userLeads.length,
+      totalSales: sales.length,
+      totalReferrals: referrals.length,
+      conversionRate: userLeads.length > 0 ? ((sales.length / userLeads.length) * 100).toFixed(1) : 0,
+      referralRate: userLeads.length > 0 ? ((referrals.length / userLeads.length) * 100).toFixed(1) : 0,
+      totalRevenue: sales.reduce((sum, lead) => sum + (lead.commission || 115) + (lead.hra ? lead.hraValue || 15 : 0), 0),
+    };
+  };
+
+  return { leads, loading, addLead, calculateMetrics };
+};
+
+// useAuth hook
+const useAuth = () => {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Check for stored user
+    const storedUser = loadFromStorage('currentUser');
+    if (storedUser) {
+      setUser(storedUser);
+    }
+    setLoading(false);
+  }, []);
+
+  const login = async (email, password) => {
+    try {
+      // Mock authentication - replace with real auth later
+      const mockUser = {
+        uid: Date.now().toString(),
+        email: email,
+        name: email.split('@')[0],
+        role: email.includes('manager') ? 'manager' : 'agent',
+      };
+      
+      setUser(mockUser);
+      saveToStorage('currentUser', mockUser);
+      
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  };
+
+  const signup = async (email, password, userData) => {
+    try {
+      const newUser = {
+        uid: Date.now().toString(),
+        email: email,
+        ...userData,
+      };
+      
+      setUser(newUser);
+      saveToStorage('currentUser', newUser);
+      
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  };
+
+  const logout = async () => {
+    setUser(null);
+    localStorage.removeItem('currentUser');
+  };
+
+  return { user, loading, login, signup, logout };
+};
+
+// Agent and team data will be populated from real data
+const mockAgents = [
+  {
+    id: 1,
+    name: "John Smith",
+    email: "john@example.com",
+    team: "Alpha Team",
+    center: "denver",
+    supervisor: "Eric"
+  },
+  {
+    id: 2,
+    name: "Jane Doe", 
+    email: "jane@example.com",
+    team: "Beta Team",
+    center: "tampa",
+    supervisor: "Drew"
+  }
+];
+
+const mockFive9Data = {
+  "john@example.com": {
+    acw: 2,
+    pers: 5,
+    ie: 60,
+    ob: 30,
+    forced: 0,
+    absences: 0,
+    nrt: 85,
+    calls: 45,
+    sma: 12,
+    talkTime: 6.5,
+  },
+  "jane@example.com": {
+    acw: 3,
+    pers: 4,
+    ie: 55,
+    ob: 35,
+    forced: 0,
+    absences: 0,
+    nrt: 82,
+    calls: 38,
+    sma: 15,
+    talkTime: 5.8,
+  }
+};
 
 // Theme system
 const themes = {
@@ -139,8 +311,10 @@ let globalCallReviewForms = [];
 
 // Utility function to get real agent stats from global leads data
 const getRealAgentStats = (agentEmail, dateFilter = null) => {
-  const agentLeads = globalLeadsData.filter(
-    (lead) => lead.agentEmail === agentEmail
+  if (!agentEmail) return { leads: 0, sales: 0, referrals: 0, conversionRate: 0, revenue: 0, leadsList: [] };
+  
+  const agentLeads = (globalLeadsData || []).filter(
+    (lead) => lead && lead.agentEmail === agentEmail
   );
   let filteredLeads = agentLeads;
 
@@ -2715,11 +2889,15 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   const [selectedTeam, setSelectedTeam] = useState("all");
   const [selectedCenter, setSelectedCenter] = useState("all");
   const [dateFilter, setDateFilter] = useState(() => {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, "0");
-    const day = String(today.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
+    try {
+      const today = new Date();
+      const year = today.getFullYear();
+      const month = String(today.getMonth() + 1).padStart(2, "0");
+      const day = String(today.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    } catch (error) {
+      return '2025-08-02';
+    }
   });
   const [currentTheme, setCurrentTheme] = useState("forest");
   const [isDarkMode, setIsDarkMode] = useState(true);
