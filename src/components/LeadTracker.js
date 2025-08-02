@@ -99,6 +99,36 @@ const themes = {
     accent: "from-violet-500 to-fuchsia-600",
     card: "bg-violet-500/10",
   },
+  pink: {
+    primary: "from-pink-900 via-rose-900 to-fuchsia-900",
+    accent: "from-pink-500 to-rose-600",
+    card: "bg-pink-500/10",
+  },
+  crimson: {
+    primary: "from-red-900 via-crimson-900 to-rose-900",
+    accent: "from-red-500 to-crimson-600",
+    card: "bg-red-500/10",
+  },
+  golden: {
+    primary: "from-yellow-900 via-orange-900 to-amber-900",
+    accent: "from-yellow-500 to-orange-600",
+    card: "bg-yellow-500/10",
+  },
+  royal: {
+    primary: "from-purple-900 via-indigo-900 to-blue-900",
+    accent: "from-purple-500 to-indigo-600",
+    card: "bg-purple-500/10",
+  },
+  emerald: {
+    primary: "from-emerald-900 via-green-900 to-teal-900",
+    accent: "from-emerald-500 to-green-600",
+    card: "bg-emerald-500/10",
+  },
+  neon: {
+    primary: "from-cyan-900 via-blue-900 to-purple-900",
+    accent: "from-cyan-400 to-blue-500",
+    card: "bg-cyan-500/10",
+  },
 };
 
 // Global state for supervisor help requests and goals
@@ -361,8 +391,6 @@ const Toast = ({ message, type = "success", isVisible, onClose }) => {
 const ThemeSelector = ({
   currentTheme,
   onThemeChange,
-  isDarkMode,
-  onToggleDarkMode,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [buttonRect, setButtonRect] = useState(null);
@@ -395,21 +423,6 @@ const ThemeSelector = ({
       }}
     >
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <span className="text-white text-sm">Dark Mode</span>
-          <button
-            onClick={() => onToggleDarkMode()}
-            className={`w-10 h-6 rounded-full p-1 transition-colors ${
-              isDarkMode ? "bg-blue-600" : "bg-gray-400"
-            }`}
-          >
-            <div
-              className={`w-4 h-4 rounded-full bg-white transition-transform ${
-                isDarkMode ? "translate-x-4" : "translate-x-0"
-              }`}
-            />
-          </button>
-        </div>
         <div className="space-y-2">
           <span className="text-white text-sm">Color Themes</span>
           <div className="grid grid-cols-2 gap-2">
@@ -2715,9 +2728,36 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   const [isEditingTeamName, setIsEditingTeamName] = useState(false);
   const [myTeamAgents, setMyTeamAgents] = useState([]);
 
-  const [teams] = useState([]);
+  const [teams, setTeams] = useState(() => {
+    const savedTeams = loadFromStorage(`teams_${user.email}`, []);
+    return savedTeams;
+  });
 
   const [notifications] = useState([]);
+
+  // Modal states
+  const [showCreateTeamModal, setShowCreateTeamModal] = useState(false);
+  const [showGoalSettingModal, setShowGoalSettingModal] = useState(false);
+  const [showLeadEditModal, setShowLeadEditModal] = useState(false);
+  const [selectedLead, setSelectedLead] = useState(null);
+  const [toast, setToast] = useState({
+    isVisible: false,
+    message: "",
+    type: "success",
+  });
+
+  // Toast functions
+  const showToast = (message, type = "success") => {
+    setToast({
+      isVisible: true,
+      message,
+      type,
+    });
+  };
+
+  const hideToast = () => {
+    setToast((prev) => ({ ...prev, isVisible: false }));
+  };
 
   useEffect(() => {
     // Initialize team assignments
@@ -2778,6 +2818,48 @@ const ManagerDashboard = ({ user, onSignOut }) => {
       globalAgentGoals[agentEmail] = {};
     }
     globalAgentGoals[agentEmail][goalType] = value;
+  };
+
+  // Modal handler functions
+  const handleCreateTeam = (teamData) => {
+    const newTeam = {
+      id: Date.now().toString(),
+      name: teamData.name,
+      picture: teamData.picture || '',
+      supervisor: teamData.supervisor || user.name,
+      agents: teamData.agents || [],
+      createdAt: new Date().toISOString(),
+    };
+    
+    const updatedTeams = [...teams, newTeam];
+    setTeams(updatedTeams);
+    saveToStorage(`teams_${user.email}`, updatedTeams);
+    setShowCreateTeamModal(false);
+    showToast(`Team "${teamData.name}" created successfully!`, "success");
+  };
+
+  const handleSaveGoals = (goals) => {
+    // Save goals for the current user or selected agent
+    const targetEmail = selectedAgent?.email || user.email;
+    globalAgentGoals[targetEmail] = goals;
+    setShowGoalSettingModal(false);
+    showToast("Goals updated successfully!", "success");
+  };
+
+  const handleEditLead = (lead) => {
+    setSelectedLead(lead);
+    setShowLeadEditModal(true);
+  };
+
+  const handleSaveLead = (updatedLead) => {
+    // Update lead in global data
+    const leadIndex = globalLeadsData.findIndex(l => l.id === updatedLead.id);
+    if (leadIndex !== -1) {
+      globalLeadsData[leadIndex] = updatedLead;
+    }
+    setShowLeadEditModal(false);
+    setSelectedLead(null);
+    showToast("Lead updated successfully!", "success");
   };
 
   // Get real team stats using global data
@@ -3321,6 +3403,20 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                   />
                 </label>
               </div>
+              <button
+                onClick={() => setShowCreateTeamModal(true)}
+                className="flex items-center gap-2 bg-green-600 hover:bg-green-700 px-3 py-2 rounded-lg text-sm transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Create Team
+              </button>
+              <button
+                onClick={() => setShowGoalSettingModal(true)}
+                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 px-3 py-2 rounded-lg text-sm transition-colors"
+              >
+                <Target className="w-4 h-4" />
+                Update Goals
+              </button>
               <button
                 onClick={onSignOut}
                 className="flex items-center gap-2 bg-red-600 hover:bg-red-700 px-3 py-2 rounded-lg text-sm transition-colors"
@@ -4700,6 +4796,45 @@ const ManagerDashboard = ({ user, onSignOut }) => {
           onClose={() => setSelectedAgent(null)}
         />
       )}
+
+      {/* Modal Components */}
+      {showCreateTeamModal && (
+        <TeamCreationModal
+          isOpen={showCreateTeamModal}
+          onClose={() => setShowCreateTeamModal(false)}
+          onCreateTeam={handleCreateTeam}
+          theme={currentThemeStyles}
+          availableAgents={mockAgents}
+        />
+      )}
+
+      {showGoalSettingModal && (
+        <GoalSettingModal
+          isOpen={showGoalSettingModal}
+          onClose={() => setShowGoalSettingModal(false)}
+          onSaveGoals={handleSaveGoals}
+          theme={currentThemeStyles}
+        />
+      )}
+
+      {showLeadEditModal && selectedLead && (
+        <LeadEditModal
+          isOpen={showLeadEditModal}
+          lead={selectedLead}
+          onClose={() => setShowLeadEditModal(false)}
+          onSave={handleSaveLead}
+          theme={currentThemeStyles}
+        />
+      )}
+
+      {/* Toast Notification */}
+      {toast.isVisible && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={hideToast}
+        />
+      )}
     </div>
   );
 };
@@ -4758,50 +4893,50 @@ const AgentDashboard = ({ user, onSignOut }) => {
   });
 
   const leadTypes = [
+    "Sale",
+    "FU Sale",
+    "Referral Sale",
+    "Rewrite",
+    "Twofer",
+    "2nd Part of Twofer",
     "Immediate DC",
     "Has an Activity",
     "Tier 1",
     "Intro/Soa",
     "RWB",
-    "No Value",
     "Dr Change",
     "Carrier Change",
     "Third Party",
     "Pen & Paper",
     "Inbound",
-    "Sale",
-    "Twofer",
-    "2nd Part of Twofer",
-    "FU Sale",
-    "Referral Sale",
+    "No Value",
     "Not Appointed",
     "Spanish",
     "No Sep",
   ];
   const carriers = [
-    "Zing",
-    "ClearSpring",
     "Aetna",
-    "Wellcare",
-    "Molina",
-    "Florida Blue",
-    "Oscar",
-    "KelseyCare",
-    "Clover",
     "Anthem",
-    "Humana",
     "Cigna",
+    "ClearSpring",
+    "Clover",
+    "Florida Blue",
+    "Humana",
+    "KelseyCare",
+    "Molina",
+    "Oscar",
     "UHC",
-    "Rewrite",
+    "Wellcare",
+    "Zing",
   ];
 
   // Load existing leads from global state
   useEffect(() => {
-    if (["Sale", "FU Sale", "Referral Sale"].includes(newLead.leadType)) {
+    if (["Sale", "FU Sale", "Referral Sale", "Rewrite"].includes(newLead.leadType)) {
       setNewLead((prev) => ({
         ...prev,
         sale: true,
-        commission: newLead.carrier === "Rewrite" ? 50 : 115,
+        commission: newLead.leadType === "Rewrite" ? 50 : 115,
       }));
     } else {
       setNewLead((prev) => ({ ...prev, sale: false, commission: 0 }));
