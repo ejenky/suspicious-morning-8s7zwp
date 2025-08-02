@@ -64,19 +64,21 @@ let globalLeadsData = [];
 // Storage utility functions
 const loadFromStorage = (key, defaultValue = null) => {
   try {
+    if (typeof window === 'undefined') return defaultValue;
     const item = localStorage.getItem(key);
     return item ? JSON.parse(item) : defaultValue;
   } catch (error) {
-    console.error('Error loading from storage:', error);
+    console.warn(`Error loading ${key} from storage:`, error);
     return defaultValue;
   }
 };
 
 const saveToStorage = (key, value) => {
   try {
+    if (typeof window === 'undefined') return;
     localStorage.setItem(key, JSON.stringify(value));
   } catch (error) {
-    console.error('Error saving to storage:', error);
+    console.warn(`Error saving ${key} to storage:`, error);
   }
 };
 
@@ -139,53 +141,84 @@ const useAuth = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check for stored user
-    const storedUser = loadFromStorage('currentUser');
-    if (storedUser) {
-      setUser(storedUser);
+    // Check for stored user on component mount
+    try {
+      const storedUser = loadFromStorage('currentUser');
+      if (storedUser) {
+        setUser(storedUser);
+      }
+    } catch (error) {
+      console.error('Error loading stored user:', error);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   const login = async (email, password) => {
     try {
-      // Mock authentication - replace with real auth later
+      setLoading(true);
+      
+      // Determine role based on email or create mock user
+      const role = email.toLowerCase().includes('manager') || 
+                   email.toLowerCase().includes('admin') || 
+                   email.toLowerCase().includes('supervisor') ? 'manager' : 'agent';
+      
       const mockUser = {
-        uid: Date.now().toString(),
+        uid: `user_${Date.now()}`,
         email: email,
-        name: email.split('@')[0],
-        role: email.includes('manager') ? 'manager' : 'agent',
+        name: email.split('@')[0].replace(/[^a-zA-Z0-9]/g, ' ').trim() || 'User',
+        role: role,
+        company: 'Medicare Insurance',
+        location: 'denver'
       };
       
-      setUser(mockUser);
+      // Save user and update state
       saveToStorage('currentUser', mockUser);
+      setUser(mockUser);
+      setLoading(false);
       
       return { success: true };
     } catch (error) {
-      return { success: false, error: error.message };
+      console.error('Login error:', error);
+      setLoading(false);
+      return { success: false, error: 'Login failed. Please try again.' };
     }
   };
 
   const signup = async (email, password, userData) => {
     try {
+      setLoading(true);
+      
       const newUser = {
-        uid: Date.now().toString(),
+        uid: `user_${Date.now()}`,
         email: email,
-        ...userData,
+        name: userData.name || email.split('@')[0],
+        role: userData.role || 'agent',
+        company: userData.company || 'Medicare Insurance',
+        location: userData.location || 'denver'
       };
       
-      setUser(newUser);
       saveToStorage('currentUser', newUser);
+      setUser(newUser);
+      setLoading(false);
       
       return { success: true };
     } catch (error) {
-      return { success: false, error: error.message };
+      console.error('Signup error:', error);
+      setLoading(false);
+      return { success: false, error: 'Signup failed. Please try again.' };
     }
   };
 
   const logout = async () => {
-    setUser(null);
-    localStorage.removeItem('currentUser');
+    try {
+      setUser(null);
+      localStorage.removeItem('currentUser');
+      // Force page reload to clear any cached state
+      window.location.reload();
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
   };
 
   return { user, loading, login, signup, logout };
@@ -5970,6 +6003,7 @@ const AuthComponent = () => {
     setErrors({});
     setLoading(true);
 
+    // Basic validation
     if (!formData.email || !formData.password) {
       setErrors({ general: "Please fill in all fields" });
       setLoading(false);
@@ -6003,13 +6037,15 @@ const AuthComponent = () => {
       }
 
       if (!result.success) {
-        setErrors({ general: result.error });
+        setErrors({ general: result.error || "Authentication failed" });
       }
+      // If successful, the auth state will update automatically
     } catch (error) {
-      setErrors({ general: "An unexpected error occurred" });
+      console.error('Auth error:', error);
+      setErrors({ general: "An unexpected error occurred. Please try again." });
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   const agentGradient = "from-blue-500 via-purple-500 to-indigo-600";
@@ -6218,13 +6254,55 @@ const AuthComponent = () => {
               )}
               <button
                 onClick={handleSubmit}
+                disabled={loading}
                 className={`w-full bg-gradient-to-r ${
                   userType === "agent" ? agentGradient : managerGradient
-                } hover:shadow-lg text-white font-semibold py-4 px-6 rounded-lg transition-all transform hover:scale-105`}
+                } hover:shadow-lg text-white font-semibold py-4 px-6 rounded-lg transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed`}
               >
-                {isLogin ? "Sign In" : "Create Account"} as{" "}
-                {userType === "agent" ? "Agent" : "Manager"}
+                {loading ? (
+                  <div className="flex items-center justify-center">
+                    <Loader className="w-5 h-5 animate-spin mr-2" />
+                    {isLogin ? "Signing In..." : "Creating Account..."}
+                  </div>
+                ) : (
+                  <>
+                    {isLogin ? "Sign In" : "Create Account"} as{" "}
+                    {userType === "agent" ? "Agent" : "Manager"}
+                  </>
+                )}
               </button>
+              {/* Test Credentials for Development */}
+              {isLogin && (
+                <div className="mt-4 p-3 bg-slate-800/50 rounded-lg border border-slate-600">
+                  <p className="text-xs text-slate-400 mb-2 text-center">Test Credentials:</p>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <button
+                      onClick={() =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          email: "agent@test.com",
+                          password: "test123",
+                        }))
+                      }
+                      className="bg-blue-600/20 text-blue-400 px-2 py-1 rounded hover:bg-blue-600/30 transition-colors"
+                    >
+                      Agent Login
+                    </button>
+                    <button
+                      onClick={() =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          email: "manager@test.com",
+                          password: "test123",
+                        }))
+                      }
+                      className="bg-emerald-600/20 text-emerald-400 px-2 py-1 rounded hover:bg-emerald-600/30 transition-colors"
+                    >
+                      Manager Login
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
             <div className="text-center mt-6">
               <button
