@@ -56,8 +56,7 @@ import {
   Check,
   Loader,
 } from "lucide-react";
-import { useAuth } from "../hooks/useAuth";
-import { useLeads } from "../hooks/useLeads";
+// Hooks will be defined inline below
 
 // Global state for leads data
 let globalLeadsData = [];
