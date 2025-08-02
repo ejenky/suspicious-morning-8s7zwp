@@ -1092,7 +1092,7 @@ const SupervisorHelp = ({ user }) => {
     duration: "30",
     reason: "",
   });
-  const supervisors = [];
+  const supervisors = ["Chandler", "Drew", "Eric", "Ilse", "Jordan", "Justice", "Matt", "Seabass", "Wade"];
 
   const submitCallReview = () => {
     const request = {
@@ -4893,26 +4893,26 @@ const AgentDashboard = ({ user, onSignOut }) => {
   });
 
   const leadTypes = [
-    "Sale",
-    "FU Sale",
-    "Referral Sale",
-    "Rewrite",
-    "Twofer",
     "2nd Part of Twofer",
-    "Immediate DC",
-    "Has an Activity",
-    "Tier 1",
-    "Intro/Soa",
-    "RWB",
-    "Dr Change",
     "Carrier Change",
-    "Third Party",
-    "Pen & Paper",
+    "Dr Change",
+    "FU Sale",
+    "Has an Activity",
+    "Immediate DC",
     "Inbound",
+    "Intro/Soa",
+    "No Sep",
     "No Value",
     "Not Appointed",
+    "Pen & Paper",
+    "Referral Sale",
+    "Rewrite",
+    "RWB",
+    "Sale",
     "Spanish",
-    "No Sep",
+    "Third Party",
+    "Tier 1",
+    "Twofer",
   ];
   const carriers = [
     "Aetna",
