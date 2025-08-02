@@ -56,6 +56,40 @@ import {
   Check,
   Loader,
 } from "lucide-react";
+
+// Firebase imports
+import { initializeApp } from 'firebase/app';
+import { 
+  getAuth, 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  signOut, 
+  onAuthStateChanged 
+} from 'firebase/auth';
+import { 
+  getFirestore, 
+  doc, 
+  getDoc, 
+  setDoc, 
+  addDoc, 
+  collection 
+} from 'firebase/firestore';
+
+// Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyDxWrPoRZDqVu9l1lDvUrolafjuoqiFoo-I",
+  authDomain: "hia-lead-tracker-pro.firebaseapp.com",
+  projectId: "hia-lead-tracker-pro",
+  storageBucket: "hia-lead-tracker-pro.firebasestorage.app",
+  messagingSenderId: "574227864594",
+  appId: "1:574227864594:web:888073d92de94d6a63fe77dcb"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
 // Hooks will be defined inline below
 
 // Global state for leads data
@@ -82,31 +116,47 @@ const saveToStorage = (key, value) => {
   }
 };
 
-// useLeads hook
+// useLeads hook - Firebase version
 const useLeads = (userId) => {
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Load leads from global state
-    setLeads(globalLeadsData.filter(lead => lead.agent === userId));
+    if (!userId) {
+      setLeads([]);
+      setLoading(false);
+      return;
+    }
+
+    // For now, use the global leads data and sync with Firebase later
+    const userLeads = globalLeadsData.filter(lead => lead.agent === userId);
+    setLeads(userLeads);
     setLoading(false);
   }, [userId]);
 
   const addLead = async (leadData) => {
     try {
-      const newLead = {
+      const leadWithId = {
         ...leadData,
-        id: Date.now(),
+        id: `lead_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         agent: userId,
         timestamp: leadData.timestamp || new Date(),
+        createdAt: new Date().toISOString(),
       };
+
+      // Add to global state immediately for real-time updates
+      globalLeadsData.push(leadWithId);
       
-      globalLeadsData.push(newLead);
-      setLeads(globalLeadsData.filter(lead => lead.agent === userId));
-      
-      return { success: true };
+      // Update local state
+      const userLeads = globalLeadsData.filter(lead => lead.agent === userId);
+      setLeads(userLeads);
+
+      // TODO: Add Firebase Firestore integration here
+      // await addDoc(collection(db, 'leads'), leadWithId);
+
+      return { success: true, lead: leadWithId };
     } catch (error) {
+      console.error('Error adding lead:', error);
       return { success: false, error: error.message };
     }
   };
@@ -114,8 +164,10 @@ const useLeads = (userId) => {
   const calculateMetrics = (selectedDate) => {
     const userLeads = leads.filter(lead => {
       if (!selectedDate) return true;
+      
       const leadDate = new Date(lead.timestamp);
       const filterDate = new Date(selectedDate);
+      
       return leadDate.toDateString() === filterDate.toDateString();
     });
 
@@ -126,8 +178,8 @@ const useLeads = (userId) => {
       totalLeads: userLeads.length,
       totalSales: sales.length,
       totalReferrals: referrals.length,
-      conversionRate: userLeads.length > 0 ? ((sales.length / userLeads.length) * 100).toFixed(1) : 0,
-      referralRate: userLeads.length > 0 ? ((referrals.length / userLeads.length) * 100).toFixed(1) : 0,
+      conversionRate: userLeads.length > 0 ? ((sales.length / userLeads.length) * 100).toFixed(1) : "0",
+      referralRate: userLeads.length > 0 ? ((referrals.length / userLeads.length) * 100).toFixed(1) : "0",
       totalRevenue: sales.reduce((sum, lead) => sum + (lead.commission || 115) + (lead.hra ? lead.hraValue || 15 : 0), 0),
     };
   };
@@ -135,87 +187,111 @@ const useLeads = (userId) => {
   return { leads, loading, addLead, calculateMetrics };
 };
 
-// useAuth hook
+// useAuth hook - Restored Firebase version
 const useAuth = () => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check for stored user on component mount
-    try {
-      const storedUser = loadFromStorage('currentUser');
-      if (storedUser) {
-        setUser(storedUser);
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      setLoading(true);
+      if (firebaseUser) {
+        try {
+          // Get user profile from Firestore
+          const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+          let userData = {};
+          
+          if (userDoc.exists()) {
+            userData = userDoc.data();
+          }
+          
+          const user = {
+            uid: firebaseUser.uid,
+            email: firebaseUser.email,
+            name: userData.name || firebaseUser.displayName || firebaseUser.email.split('@')[0],
+            role: userData.role || (firebaseUser.email.includes('manager') || firebaseUser.email.includes('admin') ? 'manager' : 'agent'),
+            company: userData.company || 'Health Insurance',
+            location: userData.location || 'denver'
+          };
+          
+          setUser(user);
+        } catch (error) {
+          console.error('Error fetching user data:', error);
+          // Fallback user object
+          setUser({
+            uid: firebaseUser.uid,
+            email: firebaseUser.email,
+            name: firebaseUser.email.split('@')[0],
+            role: firebaseUser.email.includes('manager') || firebaseUser.email.includes('admin') ? 'manager' : 'agent',
+            company: 'Health Insurance',
+            location: 'denver'
+          });
+        }
+      } else {
+        setUser(null);
       }
-    } catch (error) {
-      console.error('Error loading stored user:', error);
-    } finally {
       setLoading(false);
-    }
+    });
+
+    return () => unsubscribe();
   }, []);
 
   const login = async (email, password) => {
     try {
-      setLoading(true);
-      
-      // Determine role based on email or create mock user
-      const role = email.toLowerCase().includes('manager') || 
-                   email.toLowerCase().includes('admin') || 
-                   email.toLowerCase().includes('supervisor') ? 'manager' : 'agent';
-      
-      const mockUser = {
-        uid: `user_${Date.now()}`,
-        email: email,
-        name: email.split('@')[0].replace(/[^a-zA-Z0-9]/g, ' ').trim() || 'User',
-        role: role,
-        company: 'Medicare Insurance',
-        location: 'denver'
-      };
-      
-      // Save user and update state
-      saveToStorage('currentUser', mockUser);
-      setUser(mockUser);
-      setLoading(false);
-      
+      await signInWithEmailAndPassword(auth, email, password);
       return { success: true };
     } catch (error) {
       console.error('Login error:', error);
-      setLoading(false);
-      return { success: false, error: 'Login failed. Please try again.' };
+      
+      let errorMessage = 'Invalid email or password';
+      if (error.code === 'auth/user-not-found') {
+        errorMessage = 'No account found with this email';
+      } else if (error.code === 'auth/wrong-password') {
+        errorMessage = 'Incorrect password';
+      } else if (error.code === 'auth/invalid-email') {
+        errorMessage = 'Invalid email format';
+      } else if (error.code === 'auth/too-many-requests') {
+        errorMessage = 'Too many failed attempts. Please try again later';
+      }
+      
+      return { success: false, error: errorMessage };
     }
   };
 
   const signup = async (email, password, userData) => {
     try {
-      setLoading(true);
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       
-      const newUser = {
-        uid: `user_${Date.now()}`,
+      // Save user profile to Firestore
+      await setDoc(doc(db, 'users', userCredential.user.uid), {
+        name: userData.name,
+        role: userData.role,
+        company: userData.company,
+        location: userData.location,
         email: email,
-        name: userData.name || email.split('@')[0],
-        role: userData.role || 'agent',
-        company: userData.company || 'Medicare Insurance',
-        location: userData.location || 'denver'
-      };
-      
-      saveToStorage('currentUser', newUser);
-      setUser(newUser);
-      setLoading(false);
+        createdAt: new Date().toISOString(),
+      });
       
       return { success: true };
     } catch (error) {
       console.error('Signup error:', error);
-      setLoading(false);
-      return { success: false, error: 'Signup failed. Please try again.' };
+      
+      let errorMessage = 'Failed to create account';
+      if (error.code === 'auth/email-already-in-use') {
+        errorMessage = 'An account with this email already exists';
+      } else if (error.code === 'auth/weak-password') {
+        errorMessage = 'Password should be at least 6 characters';
+      } else if (error.code === 'auth/invalid-email') {
+        errorMessage = 'Invalid email format';
+      }
+      
+      return { success: false, error: errorMessage };
     }
   };
 
   const logout = async () => {
     try {
-      setUser(null);
-      localStorage.removeItem('currentUser');
-      // Force page reload to clear any cached state
-      window.location.reload();
+      await signOut(auth);
     } catch (error) {
       console.error('Logout error:', error);
     }
