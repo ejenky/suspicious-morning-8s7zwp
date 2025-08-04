@@ -56,296 +56,16 @@ import {
   Check,
   Loader,
 } from "lucide-react";
-
-// Firebase imports
-import { initializeApp } from 'firebase/app';
-import { 
-  getAuth, 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword, 
-  signOut, 
-  onAuthStateChanged 
-} from 'firebase/auth';
-import { 
-  getFirestore, 
-  doc, 
-  getDoc, 
-  setDoc, 
-  addDoc, 
-  collection 
-} from 'firebase/firestore';
-
-// Firebase configuration
-const firebaseConfig = {
-  apiKey: "AIzaSyDxWrPoRZDqVu9l1lDvUrolafjuoqiFoo-I",
-  authDomain: "hia-lead-tracker-pro.firebaseapp.com",
-  projectId: "hia-lead-tracker-pro",
-  storageBucket: "hia-lead-tracker-pro.firebasestorage.app",
-  messagingSenderId: "574227864594",
-  appId: "1:574227864594:web:888073d92de94d6a63fe77dcb"
-};
-
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-
-// Hooks will be defined inline below
+import { useAuth } from "../hooks/useAuth";
+import { useLeads } from "../hooks/useLeads";
 
 // Global state for leads data
 let globalLeadsData = [];
 
-// Storage utility functions
-const loadFromStorage = (key, defaultValue = null) => {
-  try {
-    if (typeof window === 'undefined') return defaultValue;
-    const item = localStorage.getItem(key);
-    return item ? JSON.parse(item) : defaultValue;
-  } catch (error) {
-    console.warn(`Error loading ${key} from storage:`, error);
-    return defaultValue;
-  }
-};
-
-const saveToStorage = (key, value) => {
-  try {
-    if (typeof window === 'undefined') return;
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch (error) {
-    console.warn(`Error saving ${key} to storage:`, error);
-  }
-};
-
-// useLeads hook - Firebase version
-const useLeads = (userId) => {
-  const [leads, setLeads] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!userId) {
-      setLeads([]);
-      setLoading(false);
-      return;
-    }
-
-    // For now, use the global leads data and sync with Firebase later
-    const userLeads = globalLeadsData.filter(lead => lead.agent === userId);
-    setLeads(userLeads);
-    setLoading(false);
-  }, [userId]);
-
-  const addLead = async (leadData) => {
-    try {
-      const leadWithId = {
-        ...leadData,
-        id: `lead_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        agent: userId,
-        timestamp: leadData.timestamp || new Date(),
-        createdAt: new Date().toISOString(),
-      };
-
-      // Add to global state immediately for real-time updates
-      globalLeadsData.push(leadWithId);
-      
-      // Update local state
-      const userLeads = globalLeadsData.filter(lead => lead.agent === userId);
-      setLeads(userLeads);
-
-      // TODO: Add Firebase Firestore integration here
-      // await addDoc(collection(db, 'leads'), leadWithId);
-
-      return { success: true, lead: leadWithId };
-    } catch (error) {
-      console.error('Error adding lead:', error);
-      return { success: false, error: error.message };
-    }
-  };
-
-  const calculateMetrics = (selectedDate) => {
-    const userLeads = leads.filter(lead => {
-      if (!selectedDate) return true;
-      
-      const leadDate = new Date(lead.timestamp);
-      const filterDate = new Date(selectedDate);
-      
-      return leadDate.toDateString() === filterDate.toDateString();
-    });
-
-    const sales = userLeads.filter(lead => lead.sale);
-    const referrals = userLeads.filter(lead => lead.leadType === "Referral Sale");
-    
-    return {
-      totalLeads: userLeads.length,
-      totalSales: sales.length,
-      totalReferrals: referrals.length,
-      conversionRate: userLeads.length > 0 ? ((sales.length / userLeads.length) * 100).toFixed(1) : "0",
-      referralRate: userLeads.length > 0 ? ((referrals.length / userLeads.length) * 100).toFixed(1) : "0",
-      totalRevenue: sales.reduce((sum, lead) => sum + (lead.commission || 115) + (lead.hra ? lead.hraValue || 15 : 0), 0),
-    };
-  };
-
-  return { leads, loading, addLead, calculateMetrics };
-};
-
-// useAuth hook - Restored Firebase version
-const useAuth = () => {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      setLoading(true);
-      if (firebaseUser) {
-        try {
-          // Get user profile from Firestore
-          const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-          let userData = {};
-          
-          if (userDoc.exists()) {
-            userData = userDoc.data();
-          }
-          
-          const user = {
-            uid: firebaseUser.uid,
-            email: firebaseUser.email,
-            name: userData.name || firebaseUser.displayName || firebaseUser.email.split('@')[0],
-            role: userData.role || (firebaseUser.email.includes('manager') || firebaseUser.email.includes('admin') ? 'manager' : 'agent'),
-            company: userData.company || 'Health Insurance',
-            location: userData.location || 'denver'
-          };
-          
-          setUser(user);
-        } catch (error) {
-          console.error('Error fetching user data:', error);
-          // Fallback user object
-          setUser({
-            uid: firebaseUser.uid,
-            email: firebaseUser.email,
-            name: firebaseUser.email.split('@')[0],
-            role: firebaseUser.email.includes('manager') || firebaseUser.email.includes('admin') ? 'manager' : 'agent',
-            company: 'Health Insurance',
-            location: 'denver'
-          });
-        }
-      } else {
-        setUser(null);
-      }
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  const login = async (email, password) => {
-    try {
-      await signInWithEmailAndPassword(auth, email, password);
-      return { success: true };
-    } catch (error) {
-      console.error('Login error:', error);
-      
-      let errorMessage = 'Invalid email or password';
-      if (error.code === 'auth/user-not-found') {
-        errorMessage = 'No account found with this email';
-      } else if (error.code === 'auth/wrong-password') {
-        errorMessage = 'Incorrect password';
-      } else if (error.code === 'auth/invalid-email') {
-        errorMessage = 'Invalid email format';
-      } else if (error.code === 'auth/too-many-requests') {
-        errorMessage = 'Too many failed attempts. Please try again later';
-      }
-      
-      return { success: false, error: errorMessage };
-    }
-  };
-
-  const signup = async (email, password, userData) => {
-    try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      
-      // Save user profile to Firestore
-      await setDoc(doc(db, 'users', userCredential.user.uid), {
-        name: userData.name,
-        role: userData.role,
-        company: userData.company,
-        location: userData.location,
-        email: email,
-        createdAt: new Date().toISOString(),
-      });
-      
-      return { success: true };
-    } catch (error) {
-      console.error('Signup error:', error);
-      
-      let errorMessage = 'Failed to create account';
-      if (error.code === 'auth/email-already-in-use') {
-        errorMessage = 'An account with this email already exists';
-      } else if (error.code === 'auth/weak-password') {
-        errorMessage = 'Password should be at least 6 characters';
-      } else if (error.code === 'auth/invalid-email') {
-        errorMessage = 'Invalid email format';
-      }
-      
-      return { success: false, error: errorMessage };
-    }
-  };
-
-  const logout = async () => {
-    try {
-      await signOut(auth);
-    } catch (error) {
-      console.error('Logout error:', error);
-    }
-  };
-
-  return { user, loading, login, signup, logout };
-};
-
 // Agent and team data will be populated from real data
-const mockAgents = [
-  {
-    id: 1,
-    name: "John Smith",
-    email: "john@example.com",
-    team: "Alpha Team",
-    center: "denver",
-    supervisor: "Eric"
-  },
-  {
-    id: 2,
-    name: "Jane Doe", 
-    email: "jane@example.com",
-    team: "Beta Team",
-    center: "tampa",
-    supervisor: "Drew"
-  }
-];
+const mockAgents = [];
 
-const mockFive9Data = {
-  "john@example.com": {
-    acw: 2,
-    pers: 5,
-    ie: 60,
-    ob: 30,
-    forced: 0,
-    absences: 0,
-    nrt: 85,
-    calls: 45,
-    sma: 12,
-    talkTime: 6.5,
-  },
-  "jane@example.com": {
-    acw: 3,
-    pers: 4,
-    ie: 55,
-    ob: 35,
-    forced: 0,
-    absences: 0,
-    nrt: 82,
-    calls: 38,
-    sma: 15,
-    talkTime: 5.8,
-  }
-};
+const mockFive9Data = {};
 
 // Theme system
 const themes = {
@@ -379,36 +99,6 @@ const themes = {
     accent: "from-violet-500 to-fuchsia-600",
     card: "bg-violet-500/10",
   },
-  pink: {
-    primary: "from-pink-900 via-rose-900 to-fuchsia-900",
-    accent: "from-pink-500 to-rose-600",
-    card: "bg-pink-500/10",
-  },
-  crimson: {
-    primary: "from-red-900 via-crimson-900 to-rose-900",
-    accent: "from-red-500 to-crimson-600",
-    card: "bg-red-500/10",
-  },
-  golden: {
-    primary: "from-yellow-900 via-orange-900 to-amber-900",
-    accent: "from-yellow-500 to-orange-600",
-    card: "bg-yellow-500/10",
-  },
-  royal: {
-    primary: "from-purple-900 via-indigo-900 to-blue-900",
-    accent: "from-purple-500 to-indigo-600",
-    card: "bg-purple-500/10",
-  },
-  emerald: {
-    primary: "from-emerald-900 via-green-900 to-teal-900",
-    accent: "from-emerald-500 to-green-600",
-    card: "bg-emerald-500/10",
-  },
-  neon: {
-    primary: "from-cyan-900 via-blue-900 to-purple-900",
-    accent: "from-cyan-400 to-blue-500",
-    card: "bg-cyan-500/10",
-  },
 };
 
 // Global state for supervisor help requests and goals
@@ -419,10 +109,8 @@ let globalCallReviewForms = [];
 
 // Utility function to get real agent stats from global leads data
 const getRealAgentStats = (agentEmail, dateFilter = null) => {
-  if (!agentEmail) return { leads: 0, sales: 0, referrals: 0, conversionRate: 0, revenue: 0, leadsList: [] };
-  
-  const agentLeads = (globalLeadsData || []).filter(
-    (lead) => lead && lead.agentEmail === agentEmail
+  const agentLeads = globalLeadsData.filter(
+    (lead) => lead.agentEmail === agentEmail
   );
   let filteredLeads = agentLeads;
 
@@ -673,6 +361,8 @@ const Toast = ({ message, type = "success", isVisible, onClose }) => {
 const ThemeSelector = ({
   currentTheme,
   onThemeChange,
+  isDarkMode,
+  onToggleDarkMode,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [buttonRect, setButtonRect] = useState(null);
@@ -705,6 +395,21 @@ const ThemeSelector = ({
       }}
     >
       <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <span className="text-white text-sm">Dark Mode</span>
+          <button
+            onClick={() => onToggleDarkMode()}
+            className={`w-10 h-6 rounded-full p-1 transition-colors ${
+              isDarkMode ? "bg-blue-600" : "bg-gray-400"
+            }`}
+          >
+            <div
+              className={`w-4 h-4 rounded-full bg-white transition-transform ${
+                isDarkMode ? "translate-x-4" : "translate-x-0"
+              }`}
+            />
+          </button>
+        </div>
         <div className="space-y-2">
           <span className="text-white text-sm">Color Themes</span>
           <div className="grid grid-cols-2 gap-2">
@@ -1374,7 +1079,7 @@ const SupervisorHelp = ({ user }) => {
     duration: "30",
     reason: "",
   });
-  const supervisors = ["Chandler", "Drew", "Eric", "Ilse", "Jordan", "Justice", "Matt", "Seabass", "Wade"];
+  const supervisors = [];
 
   const submitCallReview = () => {
     const request = {
@@ -2997,15 +2702,11 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   const [selectedTeam, setSelectedTeam] = useState("all");
   const [selectedCenter, setSelectedCenter] = useState("all");
   const [dateFilter, setDateFilter] = useState(() => {
-    try {
-      const today = new Date();
-      const year = today.getFullYear();
-      const month = String(today.getMonth() + 1).padStart(2, "0");
-      const day = String(today.getDate()).padStart(2, "0");
-      return `${year}-${month}-${day}`;
-    } catch (error) {
-      return '2025-08-02';
-    }
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, "0");
+    const day = String(today.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
   });
   const [currentTheme, setCurrentTheme] = useState("forest");
   const [isDarkMode, setIsDarkMode] = useState(true);
@@ -3014,36 +2715,9 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   const [isEditingTeamName, setIsEditingTeamName] = useState(false);
   const [myTeamAgents, setMyTeamAgents] = useState([]);
 
-  const [teams, setTeams] = useState(() => {
-    const savedTeams = loadFromStorage(`teams_${user.email}`, []);
-    return savedTeams;
-  });
+  const [teams] = useState([]);
 
   const [notifications] = useState([]);
-
-  // Modal states
-  const [showCreateTeamModal, setShowCreateTeamModal] = useState(false);
-  const [showGoalSettingModal, setShowGoalSettingModal] = useState(false);
-  const [showLeadEditModal, setShowLeadEditModal] = useState(false);
-  const [selectedLead, setSelectedLead] = useState(null);
-  const [toast, setToast] = useState({
-    isVisible: false,
-    message: "",
-    type: "success",
-  });
-
-  // Toast functions
-  const showToast = (message, type = "success") => {
-    setToast({
-      isVisible: true,
-      message,
-      type,
-    });
-  };
-
-  const hideToast = () => {
-    setToast((prev) => ({ ...prev, isVisible: false }));
-  };
 
   useEffect(() => {
     // Initialize team assignments
@@ -3104,48 +2778,6 @@ const ManagerDashboard = ({ user, onSignOut }) => {
       globalAgentGoals[agentEmail] = {};
     }
     globalAgentGoals[agentEmail][goalType] = value;
-  };
-
-  // Modal handler functions
-  const handleCreateTeam = (teamData) => {
-    const newTeam = {
-      id: Date.now().toString(),
-      name: teamData.name,
-      picture: teamData.picture || '',
-      supervisor: teamData.supervisor || user.name,
-      agents: teamData.agents || [],
-      createdAt: new Date().toISOString(),
-    };
-    
-    const updatedTeams = [...teams, newTeam];
-    setTeams(updatedTeams);
-    saveToStorage(`teams_${user.email}`, updatedTeams);
-    setShowCreateTeamModal(false);
-    showToast(`Team "${teamData.name}" created successfully!`, "success");
-  };
-
-  const handleSaveGoals = (goals) => {
-    // Save goals for the current user or selected agent
-    const targetEmail = selectedAgent?.email || user.email;
-    globalAgentGoals[targetEmail] = goals;
-    setShowGoalSettingModal(false);
-    showToast("Goals updated successfully!", "success");
-  };
-
-  const handleEditLead = (lead) => {
-    setSelectedLead(lead);
-    setShowLeadEditModal(true);
-  };
-
-  const handleSaveLead = (updatedLead) => {
-    // Update lead in global data
-    const leadIndex = globalLeadsData.findIndex(l => l.id === updatedLead.id);
-    if (leadIndex !== -1) {
-      globalLeadsData[leadIndex] = updatedLead;
-    }
-    setShowLeadEditModal(false);
-    setSelectedLead(null);
-    showToast("Lead updated successfully!", "success");
   };
 
   // Get real team stats using global data
@@ -3689,20 +3321,6 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                   />
                 </label>
               </div>
-              <button
-                onClick={() => setShowCreateTeamModal(true)}
-                className="flex items-center gap-2 bg-green-600 hover:bg-green-700 px-3 py-2 rounded-lg text-sm transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-                Create Team
-              </button>
-              <button
-                onClick={() => setShowGoalSettingModal(true)}
-                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 px-3 py-2 rounded-lg text-sm transition-colors"
-              >
-                <Target className="w-4 h-4" />
-                Update Goals
-              </button>
               <button
                 onClick={onSignOut}
                 className="flex items-center gap-2 bg-red-600 hover:bg-red-700 px-3 py-2 rounded-lg text-sm transition-colors"
@@ -5082,45 +4700,6 @@ const ManagerDashboard = ({ user, onSignOut }) => {
           onClose={() => setSelectedAgent(null)}
         />
       )}
-
-      {/* Modal Components */}
-      {showCreateTeamModal && (
-        <TeamCreationModal
-          isOpen={showCreateTeamModal}
-          onClose={() => setShowCreateTeamModal(false)}
-          onCreateTeam={handleCreateTeam}
-          theme={currentThemeStyles}
-          availableAgents={mockAgents}
-        />
-      )}
-
-      {showGoalSettingModal && (
-        <GoalSettingModal
-          isOpen={showGoalSettingModal}
-          onClose={() => setShowGoalSettingModal(false)}
-          onSaveGoals={handleSaveGoals}
-          theme={currentThemeStyles}
-        />
-      )}
-
-      {showLeadEditModal && selectedLead && (
-        <LeadEditModal
-          isOpen={showLeadEditModal}
-          lead={selectedLead}
-          onClose={() => setShowLeadEditModal(false)}
-          onSave={handleSaveLead}
-          theme={currentThemeStyles}
-        />
-      )}
-
-      {/* Toast Notification */}
-      {toast.isVisible && (
-        <Toast
-          message={toast.message}
-          type={toast.type}
-          onClose={hideToast}
-        />
-      )}
     </div>
   );
 };
@@ -5179,50 +4758,50 @@ const AgentDashboard = ({ user, onSignOut }) => {
   });
 
   const leadTypes = [
-    "2nd Part of Twofer",
-    "Carrier Change",
-    "Dr Change",
-    "FU Sale",
-    "Has an Activity",
     "Immediate DC",
-    "Inbound",
-    "Intro/Soa",
-    "No Sep",
-    "No Value",
-    "Not Appointed",
-    "Pen & Paper",
-    "Referral Sale",
-    "Rewrite",
-    "RWB",
-    "Sale",
-    "Spanish",
-    "Third Party",
+    "Has an Activity",
     "Tier 1",
+    "Intro/Soa",
+    "RWB",
+    "No Value",
+    "Dr Change",
+    "Carrier Change",
+    "Third Party",
+    "Pen & Paper",
+    "Inbound",
+    "Sale",
     "Twofer",
+    "2nd Part of Twofer",
+    "FU Sale",
+    "Referral Sale",
+    "Not Appointed",
+    "Spanish",
+    "No Sep",
   ];
   const carriers = [
-    "Aetna",
-    "Anthem",
-    "Cigna",
-    "ClearSpring",
-    "Clover",
-    "Florida Blue",
-    "Humana",
-    "KelseyCare",
-    "Molina",
-    "Oscar",
-    "UHC",
-    "Wellcare",
     "Zing",
+    "ClearSpring",
+    "Aetna",
+    "Wellcare",
+    "Molina",
+    "Florida Blue",
+    "Oscar",
+    "KelseyCare",
+    "Clover",
+    "Anthem",
+    "Humana",
+    "Cigna",
+    "UHC",
+    "Rewrite",
   ];
 
   // Load existing leads from global state
   useEffect(() => {
-    if (["Sale", "FU Sale", "Referral Sale", "Rewrite"].includes(newLead.leadType)) {
+    if (["Sale", "FU Sale", "Referral Sale"].includes(newLead.leadType)) {
       setNewLead((prev) => ({
         ...prev,
         sale: true,
-        commission: newLead.leadType === "Rewrite" ? 50 : 115,
+        commission: newLead.carrier === "Rewrite" ? 50 : 115,
       }));
     } else {
       setNewLead((prev) => ({ ...prev, sale: false, commission: 0 }));
@@ -6079,7 +5658,6 @@ const AuthComponent = () => {
     setErrors({});
     setLoading(true);
 
-    // Basic validation
     if (!formData.email || !formData.password) {
       setErrors({ general: "Please fill in all fields" });
       setLoading(false);
@@ -6113,15 +5691,13 @@ const AuthComponent = () => {
       }
 
       if (!result.success) {
-        setErrors({ general: result.error || "Authentication failed" });
+        setErrors({ general: result.error });
       }
-      // If successful, the auth state will update automatically
     } catch (error) {
-      console.error('Auth error:', error);
-      setErrors({ general: "An unexpected error occurred. Please try again." });
-    } finally {
-      setLoading(false);
+      setErrors({ general: "An unexpected error occurred" });
     }
+
+    setLoading(false);
   };
 
   const agentGradient = "from-blue-500 via-purple-500 to-indigo-600";
@@ -6330,55 +5906,13 @@ const AuthComponent = () => {
               )}
               <button
                 onClick={handleSubmit}
-                disabled={loading}
                 className={`w-full bg-gradient-to-r ${
                   userType === "agent" ? agentGradient : managerGradient
-                } hover:shadow-lg text-white font-semibold py-4 px-6 rounded-lg transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed`}
+                } hover:shadow-lg text-white font-semibold py-4 px-6 rounded-lg transition-all transform hover:scale-105`}
               >
-                {loading ? (
-                  <div className="flex items-center justify-center">
-                    <Loader className="w-5 h-5 animate-spin mr-2" />
-                    {isLogin ? "Signing In..." : "Creating Account..."}
-                  </div>
-                ) : (
-                  <>
-                    {isLogin ? "Sign In" : "Create Account"} as{" "}
-                    {userType === "agent" ? "Agent" : "Manager"}
-                  </>
-                )}
+                {isLogin ? "Sign In" : "Create Account"} as{" "}
+                {userType === "agent" ? "Agent" : "Manager"}
               </button>
-              {/* Test Credentials for Development */}
-              {isLogin && (
-                <div className="mt-4 p-3 bg-slate-800/50 rounded-lg border border-slate-600">
-                  <p className="text-xs text-slate-400 mb-2 text-center">Test Credentials:</p>
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <button
-                      onClick={() =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          email: "agent@test.com",
-                          password: "test123",
-                        }))
-                      }
-                      className="bg-blue-600/20 text-blue-400 px-2 py-1 rounded hover:bg-blue-600/30 transition-colors"
-                    >
-                      Agent Login
-                    </button>
-                    <button
-                      onClick={() =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          email: "manager@test.com",
-                          password: "test123",
-                        }))
-                      }
-                      className="bg-emerald-600/20 text-emerald-400 px-2 py-1 rounded hover:bg-emerald-600/30 transition-colors"
-                    >
-                      Manager Login
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
             <div className="text-center mt-6">
               <button
