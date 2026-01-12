@@ -115,10 +115,9 @@ const getRealAgentStats = (agentEmail, dateFilter = null) => {
   let filteredLeads = agentLeads;
 
   if (dateFilter) {
-    const filterDate = new Date(dateFilter);
-    filterDate.setHours(0, 0, 0, 0);
-    const nextDay = new Date(filterDate);
-    nextDay.setDate(nextDay.getDate() + 1);
+    const [year, month, day] = dateFilter.split("-").map(Number);
+    const filterDate = new Date(year, month - 1, day, 0, 0, 0, 0);
+    const nextDay = new Date(year, month - 1, day + 1, 0, 0, 0, 0);
 
     filteredLeads = agentLeads.filter((lead) => {
       const leadDate = new Date(lead.timestamp);
@@ -203,10 +202,9 @@ const getTopNonSaleLeadTypes = (teamName, dateFilter = null, limit = 3) => {
 
   let filteredLeads = teamLeads;
   if (dateFilter) {
-    const filterDate = new Date(dateFilter);
-    filterDate.setHours(0, 0, 0, 0);
-    const nextDay = new Date(filterDate);
-    nextDay.setDate(nextDay.getDate() + 1);
+    const [year, month, day] = dateFilter.split("-").map(Number);
+    const filterDate = new Date(year, month - 1, day, 0, 0, 0, 0);
+    const nextDay = new Date(year, month - 1, day + 1, 0, 0, 0, 0);
 
     filteredLeads = teamLeads.filter((lead) => {
       const leadDate = new Date(lead.timestamp);
@@ -1374,10 +1372,14 @@ const AnalyticsDashboard = ({ leads, user, theme }) => {
         break;
       case "custom":
         if (customStartDate && customEndDate) {
-          const start = new Date(customStartDate);
-          start.setHours(0, 0, 0, 0);
-          const end = new Date(customEndDate);
-          end.setHours(23, 59, 59, 999);
+          const [startYear, startMonth, startDay] = customStartDate
+            .split("-")
+            .map(Number);
+          const start = new Date(startYear, startMonth - 1, startDay, 0, 0, 0, 0);
+          const [endYear, endMonth, endDay] = customEndDate
+            .split("-")
+            .map(Number);
+          const end = new Date(endYear, endMonth - 1, endDay, 23, 59, 59, 999);
           filteredByDate = userLeads.filter((lead) => {
             const leadDate = new Date(lead.timestamp);
             return leadDate >= start && leadDate <= end;
@@ -1952,10 +1954,9 @@ const AgentDashboardView = ({ agent, onBack, user }) => {
   );
   const selectedDateLeads = agentLeads.filter((lead) => {
     const leadDate = new Date(lead.timestamp);
-    const selDate = new Date(selectedDate);
-    selDate.setHours(0, 0, 0, 0);
-    const nextDay = new Date(selDate);
-    nextDay.setDate(nextDay.getDate() + 1);
+    const [year, month, day] = selectedDate.split("-").map(Number);
+    const selDate = new Date(year, month - 1, day, 0, 0, 0, 0);
+    const nextDay = new Date(year, month - 1, day + 1, 0, 0, 0, 0);
     return leadDate >= selDate && leadDate < nextDay;
   });
 
@@ -2191,7 +2192,11 @@ const AgentDashboardView = ({ agent, onBack, user }) => {
         {/* Individual Lead Entries */}
         <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
           <h3 className="text-xl font-semibold mb-4 text-white">
-            Lead Entries for {new Date(selectedDate).toLocaleDateString()}
+            Lead Entries for{" "}
+            {(() => {
+              const [year, month, day] = selectedDate.split("-").map(Number);
+              return new Date(year, month - 1, day).toLocaleDateString();
+            })()}
           </h3>
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -5078,28 +5083,46 @@ const AgentDashboard = ({ user, onSignOut }) => {
           <>
             {/* Date Filter */}
             <div
-              className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-4 mb-6 border border-white/20`}
+              className={`${currentThemeStyles.card} backdrop-blur-sm rounded-2xl p-4 mb-6 border border-white/10 shadow-lg`}
             >
-              <div className="flex items-center gap-4">
-                <Calendar className="w-5 h-5 text-blue-400" />
-                <label className="text-sm font-medium text-gray-300">
-                  Date Filter:
-                </label>
-                <input
-                  type="date"
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  className="bg-slate-800 border border-white/20 rounded px-3 py-2 text-white"
-                />
-                <span className="text-sm text-gray-300">
-                  Viewing data for{" "}
-                  {(() => {
-                    const [year, month, day] = selectedDate
-                      .split("-")
-                      .map(Number);
-                    return new Date(year, month - 1, day).toLocaleDateString();
-                  })()}
-                </span>
+              <div className="flex items-center justify-between flex-wrap gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-500/20 rounded-lg">
+                    <Calendar className="w-5 h-5 text-blue-400" />
+                  </div>
+                  <span className="text-sm font-medium text-white">
+                    Date Filter
+                  </span>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="relative">
+                    <input
+                      type="date"
+                      value={selectedDate}
+                      onChange={(e) => setSelectedDate(e.target.value)}
+                      className="bg-slate-700/50 border border-white/10 rounded-lg px-4 py-2.5 text-white text-sm font-medium cursor-pointer hover:bg-slate-700 hover:border-white/20 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
+                    />
+                  </div>
+                  <div className="hidden sm:flex items-center gap-2 bg-slate-700/30 rounded-lg px-4 py-2.5">
+                    <span className="text-xs text-gray-400">Viewing</span>
+                    <span className="text-sm font-semibold text-white">
+                      {(() => {
+                        const [year, month, day] = selectedDate
+                          .split("-")
+                          .map(Number);
+                        return new Date(
+                          year,
+                          month - 1,
+                          day
+                        ).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        });
+                      })()}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -5544,12 +5567,28 @@ const AgentDashboard = ({ user, onSignOut }) => {
                 className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-6 border border-white/20`}
               >
                 <h3 className="text-xl font-semibold mb-4 text-white">
-                  Leads for {new Date(selectedDate).toLocaleDateString()}
+                  Leads for{" "}
+                  {(() => {
+                    const [year, month, day] = selectedDate
+                      .split("-")
+                      .map(Number);
+                    return new Date(year, month - 1, day).toLocaleDateString();
+                  })()}
                 </h3>
                 <div className="space-y-3 max-h-96 overflow-y-auto">
                   {selectedDateLeads.length === 0 ? (
                     <p className="text-gray-300 text-center py-8">
-                      No leads for {new Date(selectedDate).toLocaleDateString()}
+                      No leads for{" "}
+                      {(() => {
+                        const [year, month, day] = selectedDate
+                          .split("-")
+                          .map(Number);
+                        return new Date(
+                          year,
+                          month - 1,
+                          day
+                        ).toLocaleDateString();
+                      })()}
                       . Add your first lead!
                     </p>
                   ) : (
