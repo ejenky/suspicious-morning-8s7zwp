@@ -766,9 +766,6 @@ const PvPChallenges = ({ user }) => {
 
 // Enhanced Leaderboards
 const Leaderboards = () => {
-  const [selectedCenter, setSelectedCenter] = useState("all");
-  const [selectedBoard, setSelectedBoard] = useState("sales");
-  const centers = ["all", "denver", "tampa", "orlando", "daytona"];
   const boards = [
     {
       key: "sales",
@@ -790,186 +787,88 @@ const Leaderboards = () => {
     },
   ];
 
-  const getFilteredAgents = () => {
-    let agentsWithStats = mockAgents.map((agent) => {
+  const getSortedAgents = (boardKey) => {
+    const agentsWithStats = mockAgents.map((agent) => {
       const stats = getRealAgentStats(agent.email);
       return { ...agent, ...stats };
     });
 
-    let filtered =
-      selectedCenter === "all"
-        ? agentsWithStats
-        : agentsWithStats.filter((agent) => agent.center === selectedCenter);
-    switch (selectedBoard) {
+    switch (boardKey) {
       case "sales":
-        return filtered.sort((a, b) => b.sales - a.sales);
+        return agentsWithStats.sort((a, b) => b.sales - a.sales);
       case "conversion":
-        return filtered.sort(
+        return agentsWithStats.sort(
           (a, b) => parseFloat(b.conversionRate) - parseFloat(a.conversionRate)
         );
       case "referrals":
-        return filtered.sort((a, b) => b.referrals - a.referrals);
+        return agentsWithStats.sort((a, b) => b.referrals - a.referrals);
       default:
-        return filtered;
+        return agentsWithStats;
     }
   };
 
-  const currentBoard = boards.find((b) => b.key === selectedBoard);
+  const getStatValue = (agent, boardKey) => {
+    switch (boardKey) {
+      case "sales":
+        return agent.sales;
+      case "conversion":
+        return `${agent.conversionRate}%`;
+      case "referrals":
+        return agent.referrals;
+      default:
+        return "";
+    }
+  };
 
   return (
-    <div className="space-y-6">
-      <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
-        <div className="flex items-center gap-3 mb-4">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {boards.map((board) => {
+        const boardAgents = getSortedAgents(board.key);
+        return (
           <div
-            className={`bg-gradient-to-r ${currentBoard.color} p-3 rounded-xl`}
+            key={board.key}
+            className="bg-white/10 backdrop-blur-sm rounded-xl p-5 border border-white/20"
           >
-            <currentBoard.icon className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <h3 className="text-xl font-semibold text-white">
-              {currentBoard.label}
-            </h3>
-            <p className="text-gray-300">Top performing agents</p>
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <select
-            value={selectedCenter}
-            onChange={(e) => setSelectedCenter(e.target.value)}
-            className="bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white"
-          >
-            {centers.map((center) => (
-              <option key={center} value={center} className="bg-slate-800">
-                {center === "all"
-                  ? "All Centers"
-                  : center.charAt(0).toUpperCase() + center.slice(1)}
-              </option>
-            ))}
-          </select>
-          <select
-            value={selectedBoard}
-            onChange={(e) => setSelectedBoard(e.target.value)}
-            className="bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white"
-          >
-            {boards.map((board) => (
-              <option
-                key={board.key}
-                value={board.key}
-                className="bg-slate-800"
-              >
+            <div className="flex items-center gap-2 mb-4">
+              <div className={`bg-gradient-to-r ${board.color} p-2 rounded-lg`}>
+                <board.icon className="w-4 h-4 text-white" />
+              </div>
+              <h4 className="text-base font-semibold text-white">
                 {board.label}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {boards.map((board) => {
-          const boardAgents = (() => {
-            let agentsWithStats = mockAgents.map((agent) => {
-              const stats = getRealAgentStats(agent.email);
-              return { ...agent, ...stats };
-            });
-            let agents =
-              selectedCenter === "all"
-                ? agentsWithStats
-                : agentsWithStats.filter(
-                    (agent) => agent.center === selectedCenter
-                  );
-            switch (board.key) {
-              case "sales":
-                return agents.sort((a, b) => b.sales - a.sales);
-              case "conversion":
-                return agents.sort(
-                  (a, b) =>
-                    parseFloat(b.conversionRate) - parseFloat(a.conversionRate)
-                );
-              case "referrals":
-                return agents.sort((a, b) => b.referrals - a.referrals);
-              default:
-                return agents;
-            }
-          })();
-          return (
-            <div
-              key={board.key}
-              className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20"
-            >
-              <div className="flex items-center gap-2 mb-4">
-                <board.icon className="w-5 h-5 text-white" />
-                <h4 className="text-lg font-semibold text-white">
-                  {board.label}
-                </h4>
-              </div>
-              <div className="space-y-3">
-                {boardAgents.slice(0, 5).map((agent, index) => {
-                  const profileColors = [
-                    "bg-red-500",
-                    "bg-blue-500",
-                    "bg-green-500",
-                    "bg-purple-500",
-                    "bg-pink-500",
-                  ];
-                  const medalColors = [
-                    "bg-gradient-to-r from-yellow-400 to-yellow-600",
-                    "bg-gradient-to-r from-gray-300 to-gray-500",
-                    "bg-gradient-to-r from-orange-400 to-orange-600",
-                    "bg-slate-600",
-                    "bg-slate-600",
-                  ];
-                  return (
-                    <div
-                      key={agent.id}
-                      className="flex items-center justify-between p-3 bg-white/5 rounded-lg"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold ${medalColors[index]}`}
-                        >
-                          {index + 1}
-                        </div>
-                        <div
-                          className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold ${profileColors[index]}`}
-                        >
-                          {agent.name
-                            .split(" ")
-                            .map((n) => n[0])
-                            .join("")}
-                        </div>
-                        <div>
-                          <span className="font-medium text-white">
-                            {agent.name}
-                          </span>
-                          <div className="text-xs text-gray-400 uppercase">
-                            {agent.center}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        {board.key === "sales" && (
-                          <span className="text-white font-bold">
-                            {agent.sales}
-                          </span>
-                        )}
-                        {board.key === "conversion" && (
-                          <span className="text-white font-bold">
-                            {agent.conversionRate}%
-                          </span>
-                        )}
-                        {board.key === "referrals" && (
-                          <span className="text-white font-bold">
-                            {agent.referrals}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              </h4>
             </div>
-          );
-        })}
-      </div>
+            <div className="space-y-2">
+              {boardAgents.slice(0, 5).map((agent, index) => {
+                const medalColors = [
+                  "bg-gradient-to-r from-yellow-400 to-yellow-600",
+                  "bg-gradient-to-r from-gray-300 to-gray-500",
+                  "bg-gradient-to-r from-amber-600 to-amber-700",
+                  "bg-slate-600",
+                  "bg-slate-600",
+                ];
+                return (
+                  <div
+                    key={agent.id}
+                    className="flex items-center gap-3 py-2 px-3 bg-white/5 rounded-lg"
+                  >
+                    <div
+                      className={`w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 ${medalColors[index]}`}
+                    >
+                      {index + 1}
+                    </div>
+                    <span className="text-sm font-medium text-white truncate flex-1">
+                      {agent.name}
+                    </span>
+                    <span className="text-sm font-bold text-white tabular-nums">
+                      {getStatValue(agent, board.key)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 };
