@@ -58,6 +58,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { useLeads } from "../hooks/useLeads";
+import { useAllLeads } from "../hooks/useAllLeads";
 
 // Global state for leads data
 let globalLeadsData = [];
@@ -762,11 +763,14 @@ const PvPChallenges = ({ user }) => {
   );
 };
 
-// Enhanced Leaderboards
+// Enhanced Leaderboards with Firebase Data
 const Leaderboards = () => {
-  const [selectedCenter, setSelectedCenter] = useState("denver");
+  const { allLeads, loading, error, getAgentStats } = useAllLeads();
   const [selectedBoard, setSelectedBoard] = useState("sales");
-  const centers = ["denver"];
+  const [dateFilter, setDateFilter] = useState("today");
+  const [customStartDate, setCustomStartDate] = useState("");
+  const [customEndDate, setCustomEndDate] = useState("");
+
   const boards = [
     {
       key: "sales",
@@ -788,92 +792,177 @@ const Leaderboards = () => {
     },
   ];
 
-  const getFilteredAgents = () => {
-    let agentsWithStats = mockAgents.map((agent) => {
-      const stats = getRealAgentStats(agent.email);
-      return { ...agent, ...stats };
-    });
+  // Calculate date range based on filter
+  const getDateRange = () => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
-    // All agents are in Denver now
-    let filtered = agentsWithStats.filter((agent) => agent.center === selectedCenter);
-    switch (selectedBoard) {
-      case "sales":
-        return filtered.sort((a, b) => b.sales - a.sales);
-      case "conversion":
-        return filtered.sort(
-          (a, b) => parseFloat(b.conversionRate) - parseFloat(a.conversionRate)
-        );
-      case "referrals":
-        return filtered.sort((a, b) => b.referrals - a.referrals);
+    switch (dateFilter) {
+      case "today":
+        return { start: today, end: todayEnd };
+      case "yesterday": {
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        const yesterdayEnd = new Date(yesterday);
+        yesterdayEnd.setHours(23, 59, 59, 999);
+        return { start: yesterday, end: yesterdayEnd };
+      }
+      case "week": {
+        const weekStart = new Date(today);
+        weekStart.setDate(weekStart.getDate() - 7);
+        return { start: weekStart, end: todayEnd };
+      }
+      case "month": {
+        const monthStart = new Date(today);
+        monthStart.setDate(monthStart.getDate() - 30);
+        return { start: monthStart, end: todayEnd };
+      }
+      case "custom": {
+        if (customStartDate && customEndDate) {
+          const [startYear, startMonth, startDay] = customStartDate.split("-").map(Number);
+          const [endYear, endMonth, endDay] = customEndDate.split("-").map(Number);
+          return {
+            start: new Date(startYear, startMonth - 1, startDay, 0, 0, 0, 0),
+            end: new Date(endYear, endMonth - 1, endDay, 23, 59, 59, 999),
+          };
+        }
+        return { start: today, end: todayEnd };
+      }
       default:
-        return filtered;
+        return { start: today, end: todayEnd };
+    }
+  };
+
+  const { start, end } = getDateRange();
+  const agentStats = getAgentStats(start, end);
+
+  // Sort agents based on selected board
+  const getSortedAgents = (boardKey) => {
+    const agents = [...agentStats];
+    switch (boardKey) {
+      case "sales":
+        return agents.sort((a, b) => b.sales - a.sales);
+      case "conversion":
+        return agents.sort((a, b) => parseFloat(b.conversionRate) - parseFloat(a.conversionRate));
+      case "referrals":
+        return agents.sort((a, b) => b.referrals - a.referrals);
+      default:
+        return agents;
     }
   };
 
   const currentBoard = boards.find((b) => b.key === selectedBoard);
 
+  // Format date range for display
+  const getDateRangeLabel = () => {
+    switch (dateFilter) {
+      case "today":
+        return "Today";
+      case "yesterday":
+        return "Yesterday";
+      case "week":
+        return "Last 7 Days";
+      case "month":
+        return "Last 30 Days";
+      case "custom":
+        if (customStartDate && customEndDate) {
+          return `${new Date(customStartDate + "T00:00:00").toLocaleDateString()} - ${new Date(customEndDate + "T00:00:00").toLocaleDateString()}`;
+        }
+        return "Custom Range";
+      default:
+        return "Today";
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+        <span className="ml-3 text-white">Loading leaderboard data...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-red-500/20 border border-red-500/50 rounded-xl p-6 text-center">
+        <p className="text-red-400">Error loading leaderboard: {error}</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
+      {/* Header with Filters */}
       <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
-        <div className="flex items-center gap-3 mb-4">
-          <div
-            className={`bg-gradient-to-r ${currentBoard.color} p-3 rounded-xl`}
-          >
-            <currentBoard.icon className="w-6 h-6 text-white" />
+        <div className="flex items-center justify-between flex-wrap gap-4 mb-4">
+          <div className="flex items-center gap-3">
+            <div className={`bg-gradient-to-r ${currentBoard.color} p-3 rounded-xl`}>
+              <currentBoard.icon className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h3 className="text-xl font-semibold text-white">{currentBoard.label}</h3>
+              <p className="text-gray-300">Top performing agents • {getDateRangeLabel()}</p>
+            </div>
           </div>
-          <div>
-            <h3 className="text-xl font-semibold text-white">
-              {currentBoard.label}
-            </h3>
-            <p className="text-gray-300">Top performing agents</p>
+          <div className="flex items-center gap-2 bg-slate-700/30 rounded-lg px-3 py-2">
+            <Users className="w-4 h-4 text-gray-400" />
+            <span className="text-sm text-white font-medium">{agentStats.length} Active Agents</span>
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white">
-            Denver
-          </div>
+
+        {/* Date Filter Row */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+          <select
+            value={dateFilter}
+            onChange={(e) => setDateFilter(e.target.value)}
+            className="bg-slate-700/50 border border-white/10 rounded-lg px-4 py-2.5 text-white text-sm font-medium cursor-pointer hover:bg-slate-700 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+          >
+            <option value="today" className="bg-slate-800">Today</option>
+            <option value="yesterday" className="bg-slate-800">Yesterday</option>
+            <option value="week" className="bg-slate-800">Last 7 Days</option>
+            <option value="month" className="bg-slate-800">Last 30 Days</option>
+            <option value="custom" className="bg-slate-800">Custom Range</option>
+          </select>
+
+          {dateFilter === "custom" && (
+            <>
+              <input
+                type="date"
+                value={customStartDate}
+                onChange={(e) => setCustomStartDate(e.target.value)}
+                className="bg-slate-700/50 border border-white/10 rounded-lg px-4 py-2.5 text-white text-sm font-medium cursor-pointer hover:bg-slate-700 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+              />
+              <input
+                type="date"
+                value={customEndDate}
+                onChange={(e) => setCustomEndDate(e.target.value)}
+                className="bg-slate-700/50 border border-white/10 rounded-lg px-4 py-2.5 text-white text-sm font-medium cursor-pointer hover:bg-slate-700 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+              />
+            </>
+          )}
+
           <select
             value={selectedBoard}
             onChange={(e) => setSelectedBoard(e.target.value)}
-            className="bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white"
+            className="bg-slate-700/50 border border-white/10 rounded-lg px-4 py-2.5 text-white text-sm font-medium cursor-pointer hover:bg-slate-700 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500/50"
           >
             {boards.map((board) => (
-              <option
-                key={board.key}
-                value={board.key}
-                className="bg-slate-800"
-              >
+              <option key={board.key} value={board.key} className="bg-slate-800">
                 {board.label}
               </option>
             ))}
           </select>
         </div>
       </div>
+
+      {/* Leaderboard Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {boards.map((board) => {
-          const boardAgents = (() => {
-            let agentsWithStats = mockAgents.map((agent) => {
-              const stats = getRealAgentStats(agent.email);
-              return { ...agent, ...stats };
-            });
-            // All agents are in Denver now
-            let agents = agentsWithStats.filter(
-              (agent) => agent.center === selectedCenter
-            );
-            switch (board.key) {
-              case "sales":
-                return agents.sort((a, b) => b.sales - a.sales);
-              case "conversion":
-                return agents.sort(
-                  (a, b) =>
-                    parseFloat(b.conversionRate) - parseFloat(a.conversionRate)
-                );
-              case "referrals":
-                return agents.sort((a, b) => b.referrals - a.referrals);
-              default:
-                return agents;
-            }
-          })();
+          const boardAgents = getSortedAgents(board.key);
+          const hasAgents = boardAgents.length > 0;
+
           return (
             <div
               key={board.key}
@@ -881,79 +970,138 @@ const Leaderboards = () => {
             >
               <div className="flex items-center gap-2 mb-4">
                 <board.icon className="w-5 h-5 text-white" />
-                <h4 className="text-lg font-semibold text-white">
-                  {board.label}
-                </h4>
+                <h4 className="text-lg font-semibold text-white">{board.label}</h4>
               </div>
-              <div className="space-y-3">
-                {boardAgents.slice(0, 5).map((agent, index) => {
-                  const profileColors = [
-                    "bg-red-500",
-                    "bg-blue-500",
-                    "bg-green-500",
-                    "bg-purple-500",
-                    "bg-pink-500",
-                  ];
-                  const medalColors = [
-                    "bg-gradient-to-r from-yellow-400 to-yellow-600",
-                    "bg-gradient-to-r from-gray-300 to-gray-500",
-                    "bg-gradient-to-r from-orange-400 to-orange-600",
-                    "bg-slate-600",
-                    "bg-slate-600",
-                  ];
-                  return (
-                    <div
-                      key={agent.id}
-                      className="flex items-center justify-between p-3 bg-white/5 rounded-lg"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold ${medalColors[index]}`}
-                        >
-                          {index + 1}
-                        </div>
-                        <div
-                          className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold ${profileColors[index]}`}
-                        >
-                          {agent.name
-                            .split(" ")
-                            .map((n) => n[0])
-                            .join("")}
-                        </div>
-                        <div>
-                          <span className="font-medium text-white">
-                            {agent.name}
-                          </span>
-                          <div className="text-xs text-gray-400 uppercase">
-                            {agent.center}
+
+              {!hasAgents ? (
+                <div className="text-center py-8">
+                  <p className="text-gray-400">No agents with activity</p>
+                  <p className="text-gray-500 text-sm">for {getDateRangeLabel().toLowerCase()}</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {boardAgents.slice(0, 5).map((agent, index) => {
+                    const profileColors = [
+                      "bg-red-500",
+                      "bg-blue-500",
+                      "bg-green-500",
+                      "bg-purple-500",
+                      "bg-pink-500",
+                    ];
+                    const medalColors = [
+                      "bg-gradient-to-r from-yellow-400 to-yellow-600",
+                      "bg-gradient-to-r from-gray-300 to-gray-500",
+                      "bg-gradient-to-r from-orange-400 to-orange-600",
+                      "bg-slate-600",
+                      "bg-slate-600",
+                    ];
+
+                    // Get display name - capitalize first letter of email prefix
+                    const displayName = agent.name
+                      ? agent.name.charAt(0).toUpperCase() + agent.name.slice(1)
+                      : "Unknown";
+                    const initials = displayName
+                      .split(/[\s._-]+/)
+                      .map((n) => n[0]?.toUpperCase() || "")
+                      .join("")
+                      .slice(0, 2);
+
+                    return (
+                      <div
+                        key={agent.id}
+                        className="flex items-center justify-between p-3 bg-white/5 rounded-lg hover:bg-white/10 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold ${medalColors[index] || "bg-slate-600"}`}
+                          >
+                            {index + 1}
+                          </div>
+                          <div
+                            className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold ${profileColors[index % profileColors.length]}`}
+                          >
+                            {initials}
+                          </div>
+                          <div>
+                            <span className="font-medium text-white">{displayName}</span>
+                            <div className="text-xs text-gray-400">{agent.totalLeads} leads</div>
                           </div>
                         </div>
+                        <div className="text-right">
+                          {board.key === "sales" && (
+                            <div>
+                              <span className="text-white font-bold">{agent.sales}</span>
+                              <span className="text-gray-400 text-xs ml-1">sales</span>
+                            </div>
+                          )}
+                          {board.key === "conversion" && (
+                            <div>
+                              <span className="text-white font-bold">{agent.conversionRate}%</span>
+                              <span className="text-gray-400 text-xs ml-1">conv</span>
+                            </div>
+                          )}
+                          {board.key === "referrals" && (
+                            <div>
+                              <span className="text-white font-bold">{agent.referrals}</span>
+                              <span className="text-gray-400 text-xs ml-1">refs</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      <div className="text-right">
-                        {board.key === "sales" && (
-                          <span className="text-white font-bold">
-                            {agent.sales}
-                          </span>
-                        )}
-                        {board.key === "conversion" && (
-                          <span className="text-white font-bold">
-                            {agent.conversionRate}%
-                          </span>
-                        )}
-                        {board.key === "referrals" && (
-                          <span className="text-white font-bold">
-                            {agent.referrals}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           );
         })}
       </div>
+
+      {/* Summary Stats */}
+      {agentStats.length > 0 && (
+        <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
+          <h4 className="text-lg font-semibold text-white mb-4">Period Summary • {getDateRangeLabel()}</h4>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <div className="text-center">
+              <p className="text-2xl font-bold text-white">
+                {agentStats.reduce((sum, a) => sum + a.totalLeads, 0)}
+              </p>
+              <p className="text-gray-400 text-sm">Total Leads</p>
+            </div>
+            <div className="text-center">
+              <p className="text-2xl font-bold text-green-400">
+                {agentStats.reduce((sum, a) => sum + a.sales, 0)}
+              </p>
+              <p className="text-gray-400 text-sm">Total Sales</p>
+            </div>
+            <div className="text-center">
+              <p className="text-2xl font-bold text-purple-400">
+                {agentStats.reduce((sum, a) => sum + a.referrals, 0)}
+              </p>
+              <p className="text-gray-400 text-sm">Total Referrals</p>
+            </div>
+            <div className="text-center">
+              <p className="text-2xl font-bold text-yellow-400">
+                ${agentStats.reduce((sum, a) => sum + a.revenue, 0).toLocaleString()}
+              </p>
+              <p className="text-gray-400 text-sm">Total Revenue</p>
+            </div>
+            <div className="text-center">
+              <p className="text-2xl font-bold text-blue-400">
+                {agentStats.length > 0
+                  ? (
+                      (agentStats.reduce((sum, a) => sum + a.sales, 0) /
+                        agentStats.reduce((sum, a) => sum + a.totalLeads, 0)) *
+                      100
+                    ).toFixed(1)
+                  : 0}
+                %
+              </p>
+              <p className="text-gray-400 text-sm">Avg Conversion</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
