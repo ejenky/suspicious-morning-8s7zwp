@@ -764,9 +764,9 @@ const PvPChallenges = ({ user }) => {
 
 // Enhanced Leaderboards
 const Leaderboards = () => {
-  const [selectedCenter, setSelectedCenter] = useState("all");
+  const [selectedCenter, setSelectedCenter] = useState("denver");
   const [selectedBoard, setSelectedBoard] = useState("sales");
-  const centers = ["all", "denver", "tampa", "orlando", "daytona"];
+  const centers = ["denver"];
   const boards = [
     {
       key: "sales",
@@ -794,10 +794,8 @@ const Leaderboards = () => {
       return { ...agent, ...stats };
     });
 
-    let filtered =
-      selectedCenter === "all"
-        ? agentsWithStats
-        : agentsWithStats.filter((agent) => agent.center === selectedCenter);
+    // All agents are in Denver now
+    let filtered = agentsWithStats.filter((agent) => agent.center === selectedCenter);
     switch (selectedBoard) {
       case "sales":
         return filtered.sort((a, b) => b.sales - a.sales);
@@ -831,19 +829,9 @@ const Leaderboards = () => {
           </div>
         </div>
         <div className="grid grid-cols-2 gap-4">
-          <select
-            value={selectedCenter}
-            onChange={(e) => setSelectedCenter(e.target.value)}
-            className="bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white"
-          >
-            {centers.map((center) => (
-              <option key={center} value={center} className="bg-slate-800">
-                {center === "all"
-                  ? "All Centers"
-                  : center.charAt(0).toUpperCase() + center.slice(1)}
-              </option>
-            ))}
-          </select>
+          <div className="bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white">
+            Denver
+          </div>
           <select
             value={selectedBoard}
             onChange={(e) => setSelectedBoard(e.target.value)}
@@ -868,12 +856,10 @@ const Leaderboards = () => {
               const stats = getRealAgentStats(agent.email);
               return { ...agent, ...stats };
             });
-            let agents =
-              selectedCenter === "all"
-                ? agentsWithStats
-                : agentsWithStats.filter(
-                    (agent) => agent.center === selectedCenter
-                  );
+            // All agents are in Denver now
+            let agents = agentsWithStats.filter(
+              (agent) => agent.center === selectedCenter
+            );
             switch (board.key) {
               case "sales":
                 return agents.sort((a, b) => b.sales - a.sales);
@@ -2705,7 +2691,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   const [selectedAgent, setSelectedAgent] = useState(null);
   const [viewingAgentDashboard, setViewingAgentDashboard] = useState(null);
   const [selectedTeam, setSelectedTeam] = useState("all");
-  const [selectedCenter, setSelectedCenter] = useState("all");
+  const [selectedCenter, setSelectedCenter] = useState("denver");
   const [dateFilter, setDateFilter] = useState(() => {
     const today = new Date();
     const year = today.getFullYear();
@@ -2817,9 +2803,8 @@ const ManagerDashboard = ({ user, onSignOut }) => {
       five9Data: mockFive9Data[agent.email],
     }));
 
-    if (selectedCenter !== "all") {
-      agents = agents.filter((agent) => agent.center === selectedCenter);
-    }
+    // Filter by selected center (Denver only)
+    agents = agents.filter((agent) => agent.center === selectedCenter);
 
     return agents
       .sort((a, b) => {
@@ -2843,9 +2828,8 @@ const ManagerDashboard = ({ user, onSignOut }) => {
       .map((agent) => ({ ...agent, five9Data: mockFive9Data[agent.email] }))
       .filter((agent) => agent.five9Data);
 
-    if (selectedCenter !== "all") {
-      agents = agents.filter((agent) => agent.center === selectedCenter);
-    }
+    // Filter by selected center (Denver only)
+    agents = agents.filter((agent) => agent.center === selectedCenter);
 
     return agents
       .sort((a, b) => {
@@ -2863,10 +2847,8 @@ const ManagerDashboard = ({ user, onSignOut }) => {
 
   // Get overall company stats
   const getCompanyStats = () => {
-    let agents = mockAgents;
-    if (selectedCenter !== "all") {
-      agents = agents.filter((agent) => agent.center === selectedCenter);
-    }
+    // Filter by selected center (Denver only)
+    let agents = mockAgents.filter((agent) => agent.center === selectedCenter);
 
     const allAgentStats = agents.map((agent) =>
       getRealAgentStats(agent.email, dateFilter)
@@ -2913,7 +2895,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   };
 
   const companyStats = getCompanyStats();
-  const centers = ["all", "denver", "tampa", "orlando", "daytona"];
+  const centers = ["denver"];
 
   const EnhancedAgentProfile = ({ agent, onClose }) => {
     const [editingGoals, setEditingGoals] = useState(false);
@@ -3395,9 +3377,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                       value={center}
                       className="bg-slate-800"
                     >
-                      {center === "all"
-                        ? "All Centers"
-                        : center.charAt(0).toUpperCase() + center.slice(1)}
+                      {center.charAt(0).toUpperCase() + center.slice(1)}
                     </option>
                   ))}
                 </select>
@@ -4099,9 +4079,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                       value={center}
                       className="bg-slate-800"
                     >
-                      {center === "all"
-                        ? "All Centers"
-                        : center.charAt(0).toUpperCase() + center.slice(1)}
+                      {center.charAt(0).toUpperCase() + center.slice(1)}
                     </option>
                   ))}
                 </select>
@@ -4330,9 +4308,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                       value={center}
                       className="bg-slate-800"
                     >
-                      {center === "all"
-                        ? "All Centers"
-                        : center.charAt(0).toUpperCase() + center.slice(1)}
+                      {center.charAt(0).toUpperCase() + center.slice(1)}
                     </option>
                   ))}
                 </select>
@@ -4362,11 +4338,9 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                     <span className="text-green-400 font-bold">N/A</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-300">Location Filter:</span>
+                    <span className="text-gray-300">Location:</span>
                     <span className="text-blue-400 font-bold">
-                      {selectedCenter === "all"
-                        ? "All"
-                        : selectedCenter.toUpperCase()}
+                      {selectedCenter.toUpperCase()}
                     </span>
                   </div>
                 </div>
@@ -4396,8 +4370,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                             ...mockAgents
                               .filter(
                                 (a) =>
-                                  selectedCenter === "all" ||
-                                  a.center === selectedCenter
+                                                                    a.center === selectedCenter
                               )
                               .map((a) =>
                                 parseFloat(
@@ -4418,8 +4391,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                             ...mockAgents
                               .filter(
                                 (a) =>
-                                  selectedCenter === "all" ||
-                                  a.center === selectedCenter
+                                                                    a.center === selectedCenter
                               )
                               .map((a) =>
                                 parseFloat(
@@ -4447,8 +4419,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                       {
                         mockAgents.filter(
                           (a) =>
-                            (selectedCenter === "all" ||
-                              a.center === selectedCenter) &&
+                            (                              a.center === selectedCenter) &&
                             parseFloat(
                               getRealAgentStats(a.email, dateFilter)
                                 .conversionRate
@@ -4463,8 +4434,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                       {
                         mockAgents.filter(
                           (a) =>
-                            (selectedCenter === "all" ||
-                              a.center === selectedCenter) &&
+                            (                              a.center === selectedCenter) &&
                             parseFloat(
                               getRealAgentStats(a.email, dateFilter)
                                 .conversionRate
@@ -4483,8 +4453,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                       {
                         mockAgents.filter(
                           (a) =>
-                            (selectedCenter === "all" ||
-                              a.center === selectedCenter) &&
+                            (                              a.center === selectedCenter) &&
                             parseFloat(
                               getRealAgentStats(a.email, dateFilter)
                                 .conversionRate
@@ -4499,8 +4468,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                       {
                         mockAgents.filter(
                           (a) =>
-                            selectedCenter === "all" ||
-                            a.center === selectedCenter
+                                                        a.center === selectedCenter
                         ).length
                       }
                     </span>
@@ -4527,9 +4495,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                       </p>
                       <p className="text-white text-sm">
                         Average 18% improvement potential across{" "}
-                        {selectedCenter === "all"
-                          ? "all centers"
-                          : selectedCenter}
+                        {selectedCenter}
                       </p>
                     </div>
                     <div className="p-3 bg-purple-500/20 border border-purple-500/30 rounded">
@@ -4587,76 +4553,6 @@ const ManagerDashboard = ({ user, onSignOut }) => {
               </div>
             </div>
 
-            {/* Performance by Center */}
-            {selectedCenter === "all" && (
-              <div
-                className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-6 border border-white/20`}
-              >
-                <h3 className="text-xl font-semibold text-white mb-4">
-                  Performance by Center
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {centers
-                    .filter((c) => c !== "all")
-                    .map((center) => {
-                      const centerAgents = mockAgents.filter(
-                        (a) => a.center === center
-                      );
-                      const centerStats = centerAgents.map((a) =>
-                        getRealAgentStats(a.email, dateFilter)
-                      );
-                      const centerTotals = {
-                        agents: centerAgents.length,
-                        sales: centerStats.reduce((sum, s) => sum + s.sales, 0),
-                        leads: centerStats.reduce((sum, s) => sum + s.leads, 0),
-                        conversion:
-                          centerStats.length > 0
-                            ? (
-                                centerStats.reduce(
-                                  (sum, s) =>
-                                    sum + parseFloat(s.conversionRate),
-                                  0
-                                ) / centerStats.length
-                              ).toFixed(1)
-                            : 0,
-                      };
-                      return (
-                        <div key={center} className="bg-white/5 rounded-lg p-4">
-                          <h4 className="font-semibold text-white mb-2">
-                            {center.toUpperCase()}
-                          </h4>
-                          <div className="space-y-2 text-sm">
-                            <div className="flex justify-between">
-                              <span className="text-gray-300">Agents:</span>
-                              <span className="text-white">
-                                {centerTotals.agents}
-                              </span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-300">Sales:</span>
-                              <span className="text-green-400">
-                                {centerTotals.sales}
-                              </span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-300">Leads:</span>
-                              <span className="text-blue-400">
-                                {centerTotals.leads}
-                              </span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-300">Avg Conv:</span>
-                              <span className="text-purple-400">
-                                {centerTotals.conversion}%
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                </div>
-              </div>
-            )}
           </div>
         )}
 
@@ -4969,14 +4865,88 @@ const AgentDashboard = ({ user, onSignOut }) => {
     };
   };
 
+  // Calculate streak based on consecutive days meeting sales goals
+  const calculateStreak = () => {
+    const userLeads = leads.filter((lead) => lead.agent === user.uid);
+    const dailySalesGoal = globalAgentGoals[user.email]?.dailySales || 1;
+
+    // Group leads by date
+    const salesByDate = {};
+    userLeads.forEach((lead) => {
+      if (lead.sale) {
+        const date = new Date(lead.timestamp);
+        const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+        salesByDate[dateKey] = (salesByDate[dateKey] || 0) + 1;
+      }
+    });
+
+    // Check consecutive days starting from yesterday (today might not be complete)
+    let currentStreak = 0;
+    const today = new Date();
+    let checkDate = new Date(today);
+    checkDate.setDate(checkDate.getDate() - 1); // Start from yesterday
+
+    while (true) {
+      const dateKey = `${checkDate.getFullYear()}-${String(checkDate.getMonth() + 1).padStart(2, "0")}-${String(checkDate.getDate()).padStart(2, "0")}`;
+      const salesOnDay = salesByDate[dateKey] || 0;
+
+      if (salesOnDay >= dailySalesGoal) {
+        currentStreak++;
+        checkDate.setDate(checkDate.getDate() - 1);
+      } else {
+        break;
+      }
+
+      // Safety limit to prevent infinite loop
+      if (currentStreak > 365) break;
+    }
+
+    // Also check if today meets the goal (bonus day)
+    const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    if (salesByDate[todayKey] >= dailySalesGoal) {
+      currentStreak++;
+    }
+
+    return currentStreak;
+  };
+
+  // Sync leads to global data for leaderboard
+  useEffect(() => {
+    if (leads && leads.length > 0) {
+      // Add user's leads to global data
+      const userLeadsWithEmail = leads.map((lead) => ({
+        ...lead,
+        agentEmail: user.email,
+      }));
+
+      // Update globalLeadsData with this user's leads
+      globalLeadsData = globalLeadsData.filter((l) => l.agentEmail !== user.email);
+      globalLeadsData = [...globalLeadsData, ...userLeadsWithEmail];
+
+      // Update mockAgents with this user if not already present
+      if (!mockAgents.find((a) => a.email === user.email)) {
+        mockAgents.push({
+          id: user.uid,
+          name: user.name || user.email.split("@")[0],
+          email: user.email,
+          center: "denver",
+          team: "Sales Team",
+        });
+      }
+    }
+
+    // Update streak
+    setStreak(calculateStreak());
+  }, [leads, user.uid, user.email, user.name]);
+
   const thermostat = getThermostatProgress();
   const selectedDateLeads = getSelectedDateLeads();
   const allTimeBests = getAllTimeBests();
   const currentThemeStyles = themes[currentTheme];
   const goals = globalAgentGoals[user.email] || {
-    dailySales: 10,
-    weeklySales: 50,
-    monthlyGoal: 120,
+    dailySales: 1,
+    weeklySales: 5,
+    monthlyGoal: 20,
     conversionRate: 25,
     referralRate: 15,
   };
@@ -5860,9 +5830,6 @@ const AuthComponent = () => {
                         className="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                       >
                         <option value="denver">Denver</option>
-                        <option value="tampa">Tampa</option>
-                        <option value="orlando">Orlando</option>
-                        <option value="daytona">Daytona</option>
                       </select>
                     </div>
                   )}
