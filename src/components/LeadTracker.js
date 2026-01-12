@@ -766,7 +766,6 @@ const PvPChallenges = ({ user }) => {
 // Enhanced Leaderboards with Firebase Data
 const Leaderboards = () => {
   const { allLeads, loading, error, getAgentStats } = useAllLeads();
-  const [selectedBoard, setSelectedBoard] = useState("sales");
   const [dateFilter, setDateFilter] = useState("today");
   const [customStartDate, setCustomStartDate] = useState("");
   const [customEndDate, setCustomEndDate] = useState("");
@@ -852,8 +851,6 @@ const Leaderboards = () => {
     }
   };
 
-  const currentBoard = boards.find((b) => b.key === selectedBoard);
-
   // Format date range for display
   const getDateRangeLabel = () => {
     switch (dateFilter) {
@@ -894,159 +891,115 @@ const Leaderboards = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header with Filters */}
-      <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
-        <div className="flex items-center justify-between flex-wrap gap-4 mb-4">
+      {/* Header with Date Filter */}
+      <div className="bg-white/10 backdrop-blur-sm rounded-xl p-5 border border-white/20">
+        <div className="flex items-center justify-between flex-wrap gap-4">
           <div className="flex items-center gap-3">
-            <div className={`bg-gradient-to-r ${currentBoard.color} p-3 rounded-xl`}>
-              <currentBoard.icon className="w-6 h-6 text-white" />
+            <div className="bg-gradient-to-r from-yellow-500 to-orange-500 p-2.5 rounded-xl">
+              <Trophy className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h3 className="text-xl font-semibold text-white">{currentBoard.label}</h3>
-              <p className="text-gray-300">Top performing agents • {getDateRangeLabel()}</p>
+              <h3 className="text-lg font-semibold text-white">Leaderboard</h3>
+              <p className="text-sm text-gray-400">{getDateRangeLabel()}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2 bg-slate-700/30 rounded-lg px-3 py-2">
-            <Users className="w-4 h-4 text-gray-400" />
-            <span className="text-sm text-white font-medium">{agentStats.length} Active Agents</span>
+
+          <div className="flex items-center gap-3">
+            <select
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value)}
+              className="bg-slate-700/50 border border-white/10 rounded-lg px-3 py-2 text-white text-sm cursor-pointer hover:bg-slate-700 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+            >
+              <option value="today" className="bg-slate-800">Today</option>
+              <option value="yesterday" className="bg-slate-800">Yesterday</option>
+              <option value="week" className="bg-slate-800">Last 7 Days</option>
+              <option value="month" className="bg-slate-800">Last 30 Days</option>
+              <option value="custom" className="bg-slate-800">Custom Range</option>
+            </select>
+
+            {dateFilter === "custom" && (
+              <>
+                <input
+                  type="date"
+                  value={customStartDate}
+                  onChange={(e) => setCustomStartDate(e.target.value)}
+                  className="bg-slate-700/50 border border-white/10 rounded-lg px-3 py-2 text-white text-sm cursor-pointer hover:bg-slate-700 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                />
+                <input
+                  type="date"
+                  value={customEndDate}
+                  onChange={(e) => setCustomEndDate(e.target.value)}
+                  className="bg-slate-700/50 border border-white/10 rounded-lg px-3 py-2 text-white text-sm cursor-pointer hover:bg-slate-700 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                />
+              </>
+            )}
+
+            <div className="flex items-center gap-2 bg-slate-700/30 rounded-lg px-3 py-2">
+              <Users className="w-4 h-4 text-gray-400" />
+              <span className="text-sm text-white">{agentStats.length}</span>
+            </div>
           </div>
-        </div>
-
-        {/* Date Filter Row */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-          <select
-            value={dateFilter}
-            onChange={(e) => setDateFilter(e.target.value)}
-            className="bg-slate-700/50 border border-white/10 rounded-lg px-4 py-2.5 text-white text-sm font-medium cursor-pointer hover:bg-slate-700 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-          >
-            <option value="today" className="bg-slate-800">Today</option>
-            <option value="yesterday" className="bg-slate-800">Yesterday</option>
-            <option value="week" className="bg-slate-800">Last 7 Days</option>
-            <option value="month" className="bg-slate-800">Last 30 Days</option>
-            <option value="custom" className="bg-slate-800">Custom Range</option>
-          </select>
-
-          {dateFilter === "custom" && (
-            <>
-              <input
-                type="date"
-                value={customStartDate}
-                onChange={(e) => setCustomStartDate(e.target.value)}
-                className="bg-slate-700/50 border border-white/10 rounded-lg px-4 py-2.5 text-white text-sm font-medium cursor-pointer hover:bg-slate-700 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-              />
-              <input
-                type="date"
-                value={customEndDate}
-                onChange={(e) => setCustomEndDate(e.target.value)}
-                className="bg-slate-700/50 border border-white/10 rounded-lg px-4 py-2.5 text-white text-sm font-medium cursor-pointer hover:bg-slate-700 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-              />
-            </>
-          )}
-
-          <select
-            value={selectedBoard}
-            onChange={(e) => setSelectedBoard(e.target.value)}
-            className="bg-slate-700/50 border border-white/10 rounded-lg px-4 py-2.5 text-white text-sm font-medium cursor-pointer hover:bg-slate-700 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-          >
-            {boards.map((board) => (
-              <option key={board.key} value={board.key} className="bg-slate-800">
-                {board.label}
-              </option>
-            ))}
-          </select>
         </div>
       </div>
 
       {/* Leaderboard Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {boards.map((board) => {
           const boardAgents = getSortedAgents(board.key);
           const hasAgents = boardAgents.length > 0;
+          const statColors = {
+            sales: "text-green-400",
+            conversion: "text-blue-400",
+            referrals: "text-purple-400",
+          };
 
           return (
             <div
               key={board.key}
-              className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20"
+              className="bg-white/10 backdrop-blur-sm rounded-xl p-5 border border-white/20"
             >
-              <div className="flex items-center gap-2 mb-4">
-                <board.icon className="w-5 h-5 text-white" />
-                <h4 className="text-lg font-semibold text-white">{board.label}</h4>
+              <div className="flex items-center gap-2 mb-4 pb-3 border-b border-white/10">
+                <board.icon className={`w-4 h-4 ${statColors[board.key]}`} />
+                <h4 className="text-sm font-semibold text-white">{board.label}</h4>
               </div>
 
               {!hasAgents ? (
-                <div className="text-center py-8">
-                  <p className="text-gray-400">No agents with activity</p>
-                  <p className="text-gray-500 text-sm">for {getDateRangeLabel().toLowerCase()}</p>
+                <div className="text-center py-6">
+                  <p className="text-gray-500 text-sm">No activity</p>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {boardAgents.slice(0, 5).map((agent, index) => {
-                    const profileColors = [
-                      "bg-red-500",
-                      "bg-blue-500",
-                      "bg-green-500",
-                      "bg-purple-500",
-                      "bg-pink-500",
-                    ];
                     const medalColors = [
-                      "bg-gradient-to-r from-yellow-400 to-yellow-600",
-                      "bg-gradient-to-r from-gray-300 to-gray-500",
-                      "bg-gradient-to-r from-orange-400 to-orange-600",
-                      "bg-slate-600",
-                      "bg-slate-600",
+                      "text-yellow-400",
+                      "text-gray-400",
+                      "text-orange-400",
+                      "text-slate-500",
+                      "text-slate-500",
                     ];
 
-                    // Get display name - capitalize first letter of email prefix
                     const displayName = agent.name
                       ? agent.name.charAt(0).toUpperCase() + agent.name.slice(1)
                       : "Unknown";
-                    const initials = displayName
-                      .split(/[\s._-]+/)
-                      .map((n) => n[0]?.toUpperCase() || "")
-                      .join("")
-                      .slice(0, 2);
 
                     return (
                       <div
                         key={agent.id}
-                        className="flex items-center justify-between p-3 bg-white/5 rounded-lg hover:bg-white/10 transition-colors"
+                        className="flex items-center justify-between py-2 px-1 hover:bg-white/5 rounded transition-colors"
                       >
                         <div className="flex items-center gap-3">
-                          <div
-                            className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold ${medalColors[index] || "bg-slate-600"}`}
-                          >
+                          <span className={`w-5 text-sm font-bold ${medalColors[index]}`}>
                             {index + 1}
-                          </div>
-                          <div
-                            className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold ${profileColors[index % profileColors.length]}`}
-                          >
-                            {initials}
-                          </div>
-                          <div>
-                            <span className="font-medium text-white">{displayName}</span>
-                            <div className="text-xs text-gray-400">{agent.totalLeads} leads</div>
-                          </div>
+                          </span>
+                          <span className="text-white text-sm truncate max-w-[120px]">
+                            {displayName}
+                          </span>
                         </div>
-                        <div className="text-right">
-                          {board.key === "sales" && (
-                            <div>
-                              <span className="text-white font-bold">{agent.sales}</span>
-                              <span className="text-gray-400 text-xs ml-1">sales</span>
-                            </div>
-                          )}
-                          {board.key === "conversion" && (
-                            <div>
-                              <span className="text-white font-bold">{agent.conversionRate}%</span>
-                              <span className="text-gray-400 text-xs ml-1">conv</span>
-                            </div>
-                          )}
-                          {board.key === "referrals" && (
-                            <div>
-                              <span className="text-white font-bold">{agent.referrals}</span>
-                              <span className="text-gray-400 text-xs ml-1">refs</span>
-                            </div>
-                          )}
-                        </div>
+                        <span className={`text-sm font-semibold ${statColors[board.key]}`}>
+                          {board.key === "sales" && agent.sales}
+                          {board.key === "conversion" && `${agent.conversionRate}%`}
+                          {board.key === "referrals" && agent.referrals}
+                        </span>
                       </div>
                     );
                   })}
@@ -1059,45 +1012,43 @@ const Leaderboards = () => {
 
       {/* Summary Stats */}
       {agentStats.length > 0 && (
-        <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
-          <h4 className="text-lg font-semibold text-white mb-4">Period Summary • {getDateRangeLabel()}</h4>
+        <div className="bg-white/10 backdrop-blur-sm rounded-xl p-5 border border-white/20">
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <div className="text-center">
-              <p className="text-2xl font-bold text-white">
+              <p className="text-xl font-bold text-white">
                 {agentStats.reduce((sum, a) => sum + a.totalLeads, 0)}
               </p>
-              <p className="text-gray-400 text-sm">Total Leads</p>
+              <p className="text-gray-500 text-xs">Leads</p>
             </div>
             <div className="text-center">
-              <p className="text-2xl font-bold text-green-400">
+              <p className="text-xl font-bold text-green-400">
                 {agentStats.reduce((sum, a) => sum + a.sales, 0)}
               </p>
-              <p className="text-gray-400 text-sm">Total Sales</p>
+              <p className="text-gray-500 text-xs">Sales</p>
             </div>
             <div className="text-center">
-              <p className="text-2xl font-bold text-purple-400">
+              <p className="text-xl font-bold text-purple-400">
                 {agentStats.reduce((sum, a) => sum + a.referrals, 0)}
               </p>
-              <p className="text-gray-400 text-sm">Total Referrals</p>
+              <p className="text-gray-500 text-xs">Referrals</p>
             </div>
             <div className="text-center">
-              <p className="text-2xl font-bold text-yellow-400">
+              <p className="text-xl font-bold text-yellow-400">
                 ${agentStats.reduce((sum, a) => sum + a.revenue, 0).toLocaleString()}
               </p>
-              <p className="text-gray-400 text-sm">Total Revenue</p>
+              <p className="text-gray-500 text-xs">Revenue</p>
             </div>
             <div className="text-center">
-              <p className="text-2xl font-bold text-blue-400">
-                {agentStats.length > 0
+              <p className="text-xl font-bold text-blue-400">
+                {agentStats.reduce((sum, a) => sum + a.totalLeads, 0) > 0
                   ? (
                       (agentStats.reduce((sum, a) => sum + a.sales, 0) /
                         agentStats.reduce((sum, a) => sum + a.totalLeads, 0)) *
                       100
                     ).toFixed(1)
-                  : 0}
-                %
+                  : 0}%
               </p>
-              <p className="text-gray-400 text-sm">Avg Conversion</p>
+              <p className="text-gray-500 text-xs">Conversion</p>
             </div>
           </div>
         </div>
