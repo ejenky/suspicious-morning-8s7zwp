@@ -3794,10 +3794,10 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                       </div>
                       <div className="text-right">
                         <p className="font-bold text-orange-400">
-                          Talk: {agent.five9Data.talkTime}h
+                          Talk: {agent.five9Data?.talkTime || 0}h
                         </p>
                         <p className="text-xs text-red-400">
-                          NRT: {agent.five9Data.nrt}%
+                          NRT: {agent.five9Data?.nrt || 0}%
                         </p>
                       </div>
                     </div>
