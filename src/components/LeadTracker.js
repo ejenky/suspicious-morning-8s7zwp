@@ -2832,8 +2832,11 @@ const ManagerDashboard = ({ user, onSignOut }) => {
     // Force re-render to update input values
     setAgentGoalsVersion(v => v + 1);
 
-    // Persist to Firebase
-    updateAgentGoals(agentEmail, globalAgentGoals[agentEmail]);
+    // Persist to Firebase (with error handling)
+    updateAgentGoals(agentEmail, globalAgentGoals[agentEmail]).catch(err => {
+      console.log("Could not save goals to Firebase:", err.message);
+      // Goals still work locally, just won't persist across sessions
+    });
   };
 
   // Handle Create Team
@@ -5435,11 +5438,15 @@ const AgentDashboard = ({ user, onSignOut }) => {
   useEffect(() => {
     const loadGoals = async () => {
       if (user.email && !goalsLoaded) {
-        const firebaseGoals = await fetchAgentGoals(user.email);
-        if (firebaseGoals) {
-          globalAgentGoals[user.email] = firebaseGoals;
-          setGoalsLoaded(true);
+        try {
+          const firebaseGoals = await fetchAgentGoals(user.email);
+          if (firebaseGoals) {
+            globalAgentGoals[user.email] = firebaseGoals;
+          }
+        } catch (err) {
+          console.log("Could not load goals from Firebase:", err.message);
         }
+        setGoalsLoaded(true);
       }
     };
     loadGoals();
