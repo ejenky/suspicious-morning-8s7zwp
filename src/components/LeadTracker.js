@@ -58,6 +58,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { useLeads } from "../hooks/useLeads";
+import { useFirestore } from "../hooks/useFirestore";
 
 // Global state for leads data
 let globalLeadsData = [];
@@ -765,7 +766,7 @@ const PvPChallenges = ({ user }) => {
 };
 
 // Enhanced Leaderboards
-const Leaderboards = () => {
+const Leaderboards = ({ agents = [], leads = [] }) => {
   const boards = [
     {
       key: "sales",
@@ -787,9 +788,31 @@ const Leaderboards = () => {
     },
   ];
 
+  // Calculate stats from real leads data for each agent
+  const getAgentStats = (agentEmail) => {
+    const agentLeads = leads.filter(
+      (lead) => lead.agentEmail === agentEmail || lead.agent === agentEmail
+    );
+    const sales = agentLeads.filter((lead) => lead.sale);
+    const nonFUSales = agentLeads.filter((lead) => lead.leadType !== "FU Sale");
+    const referrals = agentLeads.filter(
+      (lead) => lead.leadType === "Referral Sale"
+    );
+
+    return {
+      leads: nonFUSales.length,
+      sales: sales.length,
+      referrals: referrals.length,
+      conversionRate:
+        nonFUSales.length > 0
+          ? ((sales.length / nonFUSales.length) * 100).toFixed(1)
+          : "0",
+    };
+  };
+
   const getSortedAgents = (boardKey) => {
-    const agentsWithStats = mockAgents.map((agent) => {
-      const stats = getRealAgentStats(agent.email);
+    const agentsWithStats = agents.map((agent) => {
+      const stats = getAgentStats(agent.email);
       return { ...agent, ...stats };
     });
 
@@ -819,6 +842,18 @@ const Leaderboards = () => {
         return "";
     }
   };
+
+  if (agents.length === 0) {
+    return (
+      <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20 text-center">
+        <Trophy className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+        <p className="text-white text-lg font-medium">No agents found</p>
+        <p className="text-gray-400 text-sm mt-1">
+          Agent data will appear here once agents are registered in the system.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -857,7 +892,7 @@ const Leaderboards = () => {
                       {index + 1}
                     </div>
                     <span className="text-sm font-medium text-white truncate flex-1">
-                      {agent.name}
+                      {agent.name || agent.email}
                     </span>
                     <span className="text-sm font-bold text-white tabular-nums">
                       {getStatValue(agent, board.key)}
@@ -4611,6 +4646,11 @@ const AgentDashboard = ({ user, onSignOut }) => {
     addLead,
     calculateMetrics,
   } = useLeads(user.uid);
+  const {
+    leads: allLeads,
+    agents: allAgents,
+    loading: firestoreLoading,
+  } = useFirestore(user.email);
   const [activeTab, setActiveTab] = useState("dashboard");
   const [streak, setStreak] = useState(3);
   const [formErrors, setFormErrors] = useState({});
@@ -5514,7 +5554,7 @@ const AgentDashboard = ({ user, onSignOut }) => {
         {activeTab === "analytics" && (
           <AnalyticsDashboard leads={leads} user={user} theme={currentTheme} />
         )}
-        {activeTab === "leaderboards" && <Leaderboards />}
+        {activeTab === "leaderboards" && <Leaderboards agents={allAgents} leads={allLeads} />}
         {activeTab === "notifications" && (
           <div
             className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-6 border border-white/20`}
