@@ -3005,6 +3005,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
 
     const sales = agentLeads.filter(lead => lead.sale);
     const referrals = agentLeads.filter(lead => lead.leadType?.startsWith("Referral Sale") || lead.leadType === "Referral");
+    const dashSales = agentLeads.filter(lead => lead.leadType?.startsWith("Dash Sale"));
     const newSales = agentLeads.filter(lead => lead.sale && !lead.leadType?.startsWith("Referral Sale"));
     const unassigned = agentLeads.filter(lead => !lead.sale && lead.leadType === "Unassigned");
     const openActivities = agentLeads.filter(lead => !lead.sale && lead.status === "open");
@@ -3033,6 +3034,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
       conversionRate,
       referrals: referrals.length,
       referralRate,
+      dashSales: dashSales.length,
       spd: parseFloat(spd),
       newSalePercent: parseFloat(newSalePercent),
       effectiveness: parseFloat(effectiveness),
@@ -3088,6 +3090,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
       leads: acc.leads + member.leads,
       sales: acc.sales + member.sales,
       referrals: acc.referrals + member.referrals,
+      dashSales: acc.dashSales + member.dashSales,
       unassigned: acc.unassigned + member.unassigned,
       openActivities: acc.openActivities + member.openActivities,
       pd15Plus: acc.pd15Plus + member.pd15Plus,
@@ -3098,6 +3101,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
       leads: 0,
       sales: 0,
       referrals: 0,
+      dashSales: 0,
       unassigned: 0,
       openActivities: 0,
       pd15Plus: 0,
@@ -3135,10 +3139,16 @@ const ManagerDashboard = ({ user, onSignOut }) => {
       ? ((totals.hraSubmitted / totals.hraEligible) * 100).toFixed(2)
       : "0.00";
 
+    // Sort members from worst to best by conversion rate
+    const sortedMembers = [...teamMemberStats].sort((a, b) =>
+      parseFloat(a.conversionRate) - parseFloat(b.conversionRate)
+    );
+
     return {
       totalLeads: totals.leads,
       totalSales: totals.sales,
       totalReferrals: totals.referrals,
+      totalDashSales: totals.dashSales,
       totalRevenue: totals.revenue,
       avgConversion: teamConversion,
       avgRefRate,
@@ -3151,7 +3161,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
       totalHraEligible: totals.hraEligible,
       totalHraSubmitted: totals.hraSubmitted,
       avgHraPercent,
-      members: teamMemberStats,
+      members: sortedMembers,
       memberCount: teamMembers.length,
     };
   };
@@ -4315,26 +4325,19 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                               <thead>
                                 <tr className="bg-slate-700/50">
                                   <th className="text-left px-3 py-2 text-gray-300 font-medium sticky left-0 bg-slate-700/50">Agent</th>
-                                  <th className="text-center px-2 py-2 text-gray-300 font-medium">Leads</th>
-                                  <th className="text-center px-2 py-2 text-gray-300 font-medium">Sales</th>
-                                  <th className="text-center px-2 py-2 text-gray-300 font-medium">Conv.%</th>
-                                  <th className="text-center px-2 py-2 text-gray-300 font-medium">% Ref</th>
-                                  <th className="text-center px-2 py-2 text-gray-300 font-medium">SPD</th>
-                                  <th className="text-center px-2 py-2 text-gray-300 font-medium">New Sale%</th>
-                                  <th className="text-center px-2 py-2 text-gray-300 font-medium">Effect.%</th>
-                                  <th className="text-center px-2 py-2 text-gray-300 font-medium">% Unassign</th>
-                                  <th className="text-center px-2 py-2 text-gray-300 font-medium">Open Act</th>
-                                  <th className="text-center px-2 py-2 text-gray-300 font-medium">PD 15+</th>
-                                  <th className="text-center px-2 py-2 text-gray-300 font-medium">PD %</th>
-                                  <th className="text-center px-2 py-2 text-gray-300 font-medium">HRA Elig.</th>
-                                  <th className="text-center px-2 py-2 text-gray-300 font-medium">HRA Sub</th>
-                                  <th className="text-center px-2 py-2 text-gray-300 font-medium">HRA %</th>
+                                  <th className="text-center px-3 py-2 text-gray-300 font-medium">Leads</th>
+                                  <th className="text-center px-3 py-2 text-gray-300 font-medium">Sales</th>
+                                  <th className="text-center px-3 py-2 text-gray-300 font-medium">Conv %</th>
+                                  <th className="text-center px-3 py-2 text-gray-300 font-medium">Ref %</th>
+                                  <th className="text-center px-3 py-2 text-gray-300 font-medium">Ref Sales</th>
+                                  <th className="text-center px-3 py-2 text-gray-300 font-medium">Dash Sales</th>
+                                  <th className="text-center px-3 py-2 text-gray-300 font-medium">Revenue</th>
                                 </tr>
                               </thead>
                               <tbody>
                                 {enhancedStats.members.length === 0 ? (
                                   <tr>
-                                    <td colSpan="15" className="text-center py-4 text-gray-400">
+                                    <td colSpan="8" className="text-center py-4 text-gray-400">
                                       No agents assigned to this team yet
                                     </td>
                                   </tr>
@@ -4345,30 +4348,17 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                                         <td className="px-3 py-2 text-white font-medium sticky left-0 bg-slate-800/80">
                                           {member.name || member.email?.split('@')[0] || 'Unknown'}
                                         </td>
-                                        <td className="text-center px-2 py-2 text-white">{member.leads}</td>
-                                        <td className="text-center px-2 py-2 text-white font-semibold">{member.sales}</td>
-                                        <td className={`text-center px-2 py-2 text-white ${getConversionColor(member.conversionRate)}`}>
+                                        <td className="text-center px-3 py-2 text-white">{member.leads}</td>
+                                        <td className="text-center px-3 py-2 text-white font-semibold">{member.sales}</td>
+                                        <td className={`text-center px-3 py-2 text-white ${getConversionColor(member.conversionRate)}`}>
                                           {member.conversionRate}%
                                         </td>
-                                        <td className={`text-center px-2 py-2 text-white ${getRefColor(member.referralRate)}`}>
+                                        <td className={`text-center px-3 py-2 text-white ${getRefColor(member.referralRate)}`}>
                                           {member.referralRate}%
                                         </td>
-                                        <td className="text-center px-2 py-2 text-white">{member.spd}</td>
-                                        <td className="text-center px-2 py-2 text-white">{member.newSalePercent}%</td>
-                                        <td className={`text-center px-2 py-2 text-white ${getEffectivenessColor(member.effectiveness)}`}>
-                                          {member.effectiveness}%
-                                        </td>
-                                        <td className="text-center px-2 py-2 text-white">{member.unassignedPercent}%</td>
-                                        <td className="text-center px-2 py-2 text-white">{member.openActivities}</td>
-                                        <td className={`text-center px-2 py-2 text-white ${member.pd15Plus > 0 ? 'bg-red-500' : ''}`}>
-                                          {member.pd15Plus}
-                                        </td>
-                                        <td className="text-center px-2 py-2 text-white">{member.pdPercent}%</td>
-                                        <td className="text-center px-2 py-2 text-white">{member.hraEligible}</td>
-                                        <td className="text-center px-2 py-2 text-white">{member.hraSubmitted}</td>
-                                        <td className={`text-center px-2 py-2 text-white ${getHraColor(member.hraPercent)}`}>
-                                          {member.hraPercent}%
-                                        </td>
+                                        <td className="text-center px-3 py-2 text-white">{member.referrals}</td>
+                                        <td className="text-center px-3 py-2 text-white">{member.dashSales}</td>
+                                        <td className="text-center px-3 py-2 text-green-400 font-semibold">${member.revenue}</td>
                                       </tr>
                                     ))}
                                     {/* Team Totals Row */}
@@ -4376,30 +4366,17 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                                       <td className="px-3 py-2 text-white sticky left-0 bg-blue-600/50">
                                         Team {team.name} Totals
                                       </td>
-                                      <td className="text-center px-2 py-2 text-white">{enhancedStats.totalLeads}</td>
-                                      <td className="text-center px-2 py-2 text-white">{enhancedStats.totalSales}</td>
-                                      <td className={`text-center px-2 py-2 text-white ${getConversionColor(enhancedStats.avgConversion)}`}>
+                                      <td className="text-center px-3 py-2 text-white">{enhancedStats.totalLeads}</td>
+                                      <td className="text-center px-3 py-2 text-white">{enhancedStats.totalSales}</td>
+                                      <td className={`text-center px-3 py-2 text-white ${getConversionColor(enhancedStats.avgConversion)}`}>
                                         {enhancedStats.avgConversion}%
                                       </td>
-                                      <td className={`text-center px-2 py-2 text-white ${getRefColor(enhancedStats.avgRefRate)}`}>
+                                      <td className={`text-center px-3 py-2 text-white ${getRefColor(enhancedStats.avgRefRate)}`}>
                                         {enhancedStats.avgRefRate}%
                                       </td>
-                                      <td className="text-center px-2 py-2 text-white">{enhancedStats.avgSpd}</td>
-                                      <td className="text-center px-2 py-2 text-white">-</td>
-                                      <td className={`text-center px-2 py-2 text-white ${getEffectivenessColor(enhancedStats.avgEffectiveness)}`}>
-                                        {enhancedStats.avgEffectiveness}%
-                                      </td>
-                                      <td className="text-center px-2 py-2 text-white">{enhancedStats.avgUnassignedPercent}%</td>
-                                      <td className="text-center px-2 py-2 text-white">{enhancedStats.totalOpenActivities}</td>
-                                      <td className={`text-center px-2 py-2 text-white ${enhancedStats.totalPd15Plus > 0 ? 'bg-red-500' : ''}`}>
-                                        {enhancedStats.totalPd15Plus}
-                                      </td>
-                                      <td className="text-center px-2 py-2 text-white">{enhancedStats.avgPdPercent}%</td>
-                                      <td className="text-center px-2 py-2 text-white">{enhancedStats.totalHraEligible}</td>
-                                      <td className="text-center px-2 py-2 text-white">{enhancedStats.totalHraSubmitted}</td>
-                                      <td className={`text-center px-2 py-2 text-white ${getHraColor(enhancedStats.avgHraPercent)}`}>
-                                        {enhancedStats.avgHraPercent}%
-                                      </td>
+                                      <td className="text-center px-3 py-2 text-white">{enhancedStats.totalReferrals}</td>
+                                      <td className="text-center px-3 py-2 text-white">{enhancedStats.totalDashSales}</td>
+                                      <td className="text-center px-3 py-2 text-green-400 font-semibold">${enhancedStats.totalRevenue}</td>
                                     </tr>
                                   </>
                                 )}
