@@ -60,6 +60,8 @@ import {
 import { useAuth } from "../hooks/useAuth";
 import { useLeads } from "../hooks/useLeads";
 import { useFirestore } from "../hooks/useFirestore";
+import { doc, updateDoc } from "firebase/firestore";
+import { db } from "../firebase";
 
 // Global state for leads data
 let globalLeadsData = [];
@@ -2735,6 +2737,13 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   const [selectedAgentsForTeam, setSelectedAgentsForTeam] = useState([]);
   const [isCreatingTeam, setIsCreatingTeam] = useState(false);
 
+  // Edit Team Modal state
+  const [showEditTeamModal, setShowEditTeamModal] = useState(false);
+  const [editingTeam, setEditingTeam] = useState(null);
+  const [editTeamName, setEditTeamName] = useState("");
+  const [editTeamSupervisor, setEditTeamSupervisor] = useState("");
+  const [editSelectedAgents, setEditSelectedAgents] = useState([]);
+
   const [notifications] = useState([]);
 
   // Update myTeamAgents when Firebase data changes
@@ -2831,6 +2840,64 @@ const ManagerDashboard = ({ user, onSignOut }) => {
     );
   };
 
+  // Open edit team modal
+  const openEditTeamModal = (team) => {
+    setEditingTeam(team);
+    setEditTeamName(team.name || "");
+    setEditTeamSupervisor(team.supervisor || "");
+    setEditSelectedAgents(team.memberIds || team.members?.map(m => m.id) || []);
+    setShowEditTeamModal(true);
+  };
+
+  // Toggle agent selection for editing team
+  const toggleAgentForEdit = (agentId) => {
+    setEditSelectedAgents(prev =>
+      prev.includes(agentId)
+        ? prev.filter(id => id !== agentId)
+        : [...prev, agentId]
+    );
+  };
+
+  // Handle Update Team
+  const handleUpdateTeam = async () => {
+    if (!editingTeam || !editTeamName.trim()) return;
+
+    try {
+      // Get selected agent details to store with team
+      const selectedAgentDetails = firebaseAgents
+        .filter(agent => editSelectedAgents.includes(agent.id))
+        .map(agent => ({
+          id: agent.id,
+          name: agent.name,
+          email: agent.email,
+        }));
+
+      const teamDocRef = doc(db, "teams", editingTeam.id);
+      await updateDoc(teamDocRef, {
+        name: editTeamName.trim(),
+        supervisor: editTeamSupervisor.trim() || user.name,
+        members: selectedAgentDetails,
+        memberIds: editSelectedAgents,
+        updatedAt: new Date(),
+      });
+
+      console.log("Team updated successfully:", editingTeam.id);
+
+      // Refresh teams data
+      await refreshData();
+
+      // Reset form and close modal
+      setEditingTeam(null);
+      setEditTeamName("");
+      setEditTeamSupervisor("");
+      setEditSelectedAgents([]);
+      setShowEditTeamModal(false);
+    } catch (error) {
+      console.error("Error updating team:", error);
+      alert("Error updating team: " + error.message);
+    }
+  };
+
   // Calculate agent stats from Firebase leads
   const getAgentStatsFromFirebase = (agentIdOrEmail, dateFilterValue = null) => {
     // Filter by agent ID or email (leads use 'agent' field which is the userId)
@@ -2904,9 +2971,24 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   };
 
   // Get real team stats using Firebase data
-  const getEnhancedTeamStats = (teamId, teamName) => {
-    // Get team members from Firebase
-    const teamMembers = firebaseAgents.filter(agent => agent.teamId === teamId);
+  const getEnhancedTeamStats = (team) => {
+    // Get team members - first check if team has stored members, then fall back to teamId matching
+    let teamMembers = [];
+
+    if (team.members && team.members.length > 0) {
+      // Use members stored directly in team document
+      teamMembers = team.members.map(member => {
+        // Find full agent data from firebaseAgents if available
+        const fullAgent = firebaseAgents.find(a => a.id === member.id) || member;
+        return { ...member, ...fullAgent };
+      });
+    } else if (team.memberIds && team.memberIds.length > 0) {
+      // Use memberIds to find agents
+      teamMembers = firebaseAgents.filter(agent => team.memberIds.includes(agent.id));
+    } else {
+      // Fall back to matching by teamId on agent
+      teamMembers = firebaseAgents.filter(agent => agent.teamId === team.id);
+    }
 
     // Calculate stats for each member
     const teamMemberStats = teamMembers.map(member => ({
@@ -2991,7 +3073,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
     return teams
       .map((team) => ({
         ...team,
-        ...getEnhancedTeamStats(team.id, team.name),
+        ...getEnhancedTeamStats(team),
       }))
       .sort((a, b) => b.totalSales - a.totalSales);
   };
@@ -3903,6 +3985,91 @@ const ManagerDashboard = ({ user, onSignOut }) => {
               document.body
             )}
 
+            {/* Edit Team Modal */}
+            {showEditTeamModal && createPortal(
+              <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+                <div className="bg-slate-800 rounded-xl p-6 w-full max-w-lg border border-white/20 max-h-[90vh] overflow-y-auto">
+                  <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-xl font-semibold text-white">Edit Team</h3>
+                    <button
+                      onClick={() => setShowEditTeamModal(false)}
+                      className="text-gray-400 hover:text-white"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm text-gray-300 mb-2">Team Name</label>
+                      <input
+                        type="text"
+                        value={editTeamName}
+                        onChange={(e) => setEditTeamName(e.target.value)}
+                        placeholder="Enter team name..."
+                        className="w-full bg-slate-700 border border-white/20 rounded-lg px-4 py-2 text-white placeholder-gray-400"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm text-gray-300 mb-2">Supervisor Name</label>
+                      <input
+                        type="text"
+                        value={editTeamSupervisor}
+                        onChange={(e) => setEditTeamSupervisor(e.target.value)}
+                        placeholder="Enter supervisor name..."
+                        className="w-full bg-slate-700 border border-white/20 rounded-lg px-4 py-2 text-white placeholder-gray-400"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm text-gray-300 mb-2">
+                        Select Agents ({editSelectedAgents.length} selected)
+                      </label>
+                      <div className="bg-slate-700 rounded-lg p-3 max-h-48 overflow-y-auto">
+                        {firebaseAgents.length === 0 ? (
+                          <p className="text-gray-400 text-sm">No agents available</p>
+                        ) : (
+                          firebaseAgents.map((agent) => (
+                            <label
+                              key={agent.id}
+                              className="flex items-center gap-3 p-2 hover:bg-slate-600 rounded-lg cursor-pointer"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={editSelectedAgents.includes(agent.id)}
+                                onChange={() => toggleAgentForEdit(agent.id)}
+                                className="w-4 h-4 rounded border-gray-400"
+                              />
+                              <span className="text-white">{agent.name || agent.email}</span>
+                            </label>
+                          ))
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex gap-3 pt-4">
+                      <button
+                        onClick={() => setShowEditTeamModal(false)}
+                        className="flex-1 bg-slate-600 hover:bg-slate-500 px-4 py-2 rounded-lg text-white"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleUpdateTeam}
+                        disabled={!editTeamName.trim()}
+                        className={`flex-1 bg-gradient-to-r ${currentThemeStyles.accent} hover:shadow-lg px-4 py-2 rounded-lg text-white flex items-center justify-center gap-2 disabled:opacity-50`}
+                      >
+                        <Save className="w-4 h-4" />
+                        Save Changes
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>,
+              document.body
+            )}
+
             {/* Filter Bar */}
             <div
               className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-4 border border-white/20`}
@@ -3969,7 +4136,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                         selectedTeam === "all" || team.id === selectedTeam
                     )
                     .map((team) => {
-                      const enhancedStats = getEnhancedTeamStats(team.id, team.name);
+                      const enhancedStats = getEnhancedTeamStats(team);
 
                       // Helper function for color-coding metrics
                       const getConversionColor = (rate) => {
@@ -4017,7 +4184,10 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                             </div>
                             <div className="flex items-center gap-2">
                               <span className="text-white/80 text-sm">{team.supervisor}</span>
-                              <button className="text-white/60 hover:text-white">
+                              <button
+                                onClick={() => openEditTeamModal(team)}
+                                className="text-white/60 hover:text-white"
+                              >
                                 <Edit className="w-4 h-4" />
                               </button>
                             </div>
