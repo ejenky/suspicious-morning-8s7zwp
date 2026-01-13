@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import {
   Users,
@@ -62,6 +62,7 @@ import { useLeads } from "../hooks/useLeads";
 import { useFirestore } from "../hooks/useFirestore";
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "../firebase";
+import TeamGoals from "./TeamGoals";
 
 // Global state for leads data
 let globalLeadsData = [];
@@ -2719,10 +2720,6 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   const [isEditingTeamName, setIsEditingTeamName] = useState(false);
   const [myTeamAgents, setMyTeamAgents] = useState([]);
 
-  // Refs for team goals inputs (uncontrolled for reliable editing)
-  const salesGoalRef = useRef(null);
-  const conversionGoalRef = useRef(null);
-
   // Use Firebase for teams and agents data
   const { teams, agents: firebaseAgents, leads: firebaseLeads, createTeam, assignAgentToTeam, addToMyTeam, removeFromMyTeam, myTeamMemberIds, myTeamGoals, updateMyTeamGoals, refreshData, lastRefresh, loading: dataLoading } = useFirestore(user.email);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -2758,18 +2755,6 @@ const ManagerDashboard = ({ user, onSignOut }) => {
     );
     setMyTeamAgents(teamAgents);
   }, [firebaseAgents, myTeamMemberIds]);
-
-  // Set team goals input values when Firebase data loads
-  useEffect(() => {
-    if (myTeamGoals) {
-      if (salesGoalRef.current) {
-        salesGoalRef.current.value = myTeamGoals.salesGoal ?? 50;
-      }
-      if (conversionGoalRef.current) {
-        conversionGoalRef.current.value = myTeamGoals.conversionGoal ?? 25;
-      }
-    }
-  }, [myTeamGoals]);
 
   const handleAvatarUpload = (event) => {
     const file = event.target.files[0];
@@ -4647,58 +4632,11 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                 )}
               </div>
 
-              {/* Team Goals */}
-              <div className="mt-6 bg-white/10 rounded-lg p-4">
-                <h4 className="text-lg font-semibold text-white mb-4">
-                  Team Goals
-                </h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm text-gray-300 mb-2">
-                      Team Sales Goal (Daily)
-                    </label>
-                    <input
-                      ref={salesGoalRef}
-                      type="number"
-                      min="0"
-                      step="1"
-                      defaultValue={myTeamGoals?.salesGoal ?? 50}
-                      className="w-full bg-slate-800 border border-white/20 rounded px-3 py-2 text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-300 mb-2">
-                      Team Conversion Goal (%)
-                    </label>
-                    <input
-                      ref={conversionGoalRef}
-                      type="number"
-                      min="0"
-                      max="100"
-                      step="1"
-                      defaultValue={myTeamGoals?.conversionGoal ?? 25}
-                      className="w-full bg-slate-800 border border-white/20 rounded px-3 py-2 text-white"
-                    />
-                  </div>
-                </div>
-                <button
-                  onClick={async () => {
-                    try {
-                      const goals = {
-                        salesGoal: parseInt(salesGoalRef.current?.value) || 0,
-                        conversionGoal: parseInt(conversionGoalRef.current?.value) || 0,
-                      };
-                      await updateMyTeamGoals(goals);
-                      alert("Team goals updated successfully!");
-                    } catch (error) {
-                      alert("Error updating team goals: " + error.message);
-                    }
-                  }}
-                  className="mt-4 bg-green-600 hover:bg-green-700 px-4 py-2 rounded text-white"
-                >
-                  Update Team Goals
-                </button>
-              </div>
+              {/* Team Goals - Separate component to prevent re-render lag */}
+              <TeamGoals
+                initialGoals={myTeamGoals}
+                onSave={updateMyTeamGoals}
+              />
             </div>
           </div>
         )}
