@@ -19,28 +19,38 @@ export const useFirestore = (userEmail) => {
   const [teams, setTeams] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Fetch leads
+  // Fetch ALL leads for manager view
   useEffect(() => {
     if (!userEmail) {
       setLoading(false);
       return;
     }
 
+    console.log("useFirestore: Setting up leads listener for manager view");
     const leadsCollection = collection(db, "leads");
-    const q = query(leadsCollection, orderBy("timestamp", "desc"));
 
+    // Fetch ALL leads without orderBy (avoids index requirements)
     const unsubscribe = onSnapshot(
-      q,
+      leadsCollection,
       (snapshot) => {
-        const leadsData = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
+        console.log("useFirestore: Received", snapshot.docs.length, "leads from Firebase");
+        const leadsData = snapshot.docs.map((doc) => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            ...data,
+            // Normalize timestamp
+            timestamp: data.timestamp?.toDate?.() || data.timestamp || new Date(data.createdAt || Date.now()),
+          };
+        });
+        // Sort by timestamp client-side
+        leadsData.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        console.log("useFirestore: Processed leads:", leadsData.length);
         setLeads(leadsData);
         setLoading(false);
       },
       (error) => {
-        console.error("Error fetching leads:", error);
+        console.error("useFirestore: Error fetching leads:", error);
         setLoading(false);
       }
     );
@@ -55,16 +65,21 @@ export const useFirestore = (userEmail) => {
       return;
     }
 
+    console.log("useFirestore: Deriving agents from", leads.length, "leads");
+
     // Extract unique agents from leads data
     const agentMap = new Map();
 
     leads.forEach((lead) => {
+      // Use agent (userId) as the primary identifier
+      const agentId = lead.agent;
       const agentEmail = lead.agentEmail || lead.agent;
-      if (agentEmail && !agentMap.has(agentEmail)) {
-        agentMap.set(agentEmail, {
-          id: lead.agent || agentEmail, // Use agent ID if available, otherwise email
+
+      if (agentId && !agentMap.has(agentId)) {
+        agentMap.set(agentId, {
+          id: agentId,
           email: agentEmail,
-          name: lead.agentName || agentEmail.split('@')[0] || 'Unknown Agent',
+          name: lead.agentName || (agentEmail.includes('@') ? agentEmail.split('@')[0] : agentEmail) || 'Unknown Agent',
           teamId: lead.teamId || null,
           team: lead.team || null,
           center: lead.center || null,
@@ -73,6 +88,7 @@ export const useFirestore = (userEmail) => {
     });
 
     const agentsData = Array.from(agentMap.values());
+    console.log("useFirestore: Found", agentsData.length, "unique agents");
     setAgents(agentsData);
   }, [leads]);
 

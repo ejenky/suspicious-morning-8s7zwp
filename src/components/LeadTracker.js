@@ -2827,8 +2827,11 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   };
 
   // Calculate agent stats from Firebase leads
-  const getAgentStatsFromFirebase = (agentEmail, dateFilterValue = null) => {
-    let agentLeads = firebaseLeads.filter(lead => lead.agentEmail === agentEmail);
+  const getAgentStatsFromFirebase = (agentIdOrEmail, dateFilterValue = null) => {
+    // Filter by agent ID or email (leads use 'agent' field which is the userId)
+    let agentLeads = firebaseLeads.filter(lead =>
+      lead.agent === agentIdOrEmail || lead.agentEmail === agentIdOrEmail
+    );
 
     if (dateFilterValue) {
       const [year, month, day] = dateFilterValue.split("-").map(Number);
@@ -2903,7 +2906,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
     // Calculate stats for each member
     const teamMemberStats = teamMembers.map(member => ({
       ...member,
-      ...getAgentStatsFromFirebase(member.email, dateFilter),
+      ...getAgentStatsFromFirebase(member.id || member.email, dateFilter),
     }));
 
     // Calculate team totals
@@ -2992,7 +2995,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   const getStrugglingAgents = () => {
     let agents = firebaseAgents.map((agent) => ({
       ...agent,
-      ...getAgentStatsFromFirebase(agent.email, dateFilter),
+      ...getAgentStatsFromFirebase(agent.id || agent.email, dateFilter),
     }));
 
     if (selectedCenter !== "all") {
@@ -3019,7 +3022,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
     // For now, return agents sorted by lowest performance
     let agents = firebaseAgents.map((agent) => ({
       ...agent,
-      ...getAgentStatsFromFirebase(agent.email, dateFilter),
+      ...getAgentStatsFromFirebase(agent.id || agent.email, dateFilter),
     }));
 
     if (selectedCenter !== "all") {
@@ -3044,7 +3047,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
     }
 
     const allAgentStats = agents.map((agent) =>
-      getAgentStatsFromFirebase(agent.email, dateFilter)
+      getAgentStatsFromFirebase(agent.id || agent.email, dateFilter)
     );
 
     const totalLeads = allAgentStats.reduce((sum, stats) => sum + parseInt(stats.leads || 0), 0);
@@ -4147,7 +4150,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                   <p className="text-2xl font-bold text-white">
                     {myTeamAgents.reduce(
                       (sum, member) =>
-                        sum + getAgentStatsFromFirebase(member.email, dateFilter).sales,
+                        sum + getAgentStatsFromFirebase(member.id || member.email, dateFilter).sales,
                       0
                     )}
                   </p>
@@ -4161,7 +4164,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                             (sum, member) =>
                               sum +
                               parseFloat(
-                                getAgentStatsFromFirebase(member.email, dateFilter)
+                                getAgentStatsFromFirebase(member.id || member.email, dateFilter)
                                   .conversionRate
                               ),
                             0
@@ -4179,7 +4182,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                       .reduce(
                         (sum, member) =>
                           sum +
-                          getAgentStatsFromFirebase(member.email, dateFilter).revenue,
+                          getAgentStatsFromFirebase(member.id || member.email, dateFilter).revenue,
                         0
                       )
                       .toLocaleString()}
