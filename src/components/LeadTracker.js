@@ -2755,6 +2755,15 @@ const ManagerDashboard = ({ user, onSignOut }) => {
 
   const [notifications] = useState([]);
 
+  // Toast notification state
+  const [toast, setToast] = useState(null);
+
+  // Show toast notification
+  const showToast = (message, type = "success") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
   // Update myTeamAgents when Firebase data changes
   useEffect(() => {
     // Filter agents based on persisted myTeamMemberIds from Firebase
@@ -2792,18 +2801,20 @@ const ManagerDashboard = ({ user, onSignOut }) => {
 
     try {
       await addToMyTeam(agentId);
+      showToast("Agent added to team!", "success");
     } catch (error) {
       console.error("Error adding agent to team:", error);
-      alert("Error adding agent to team: " + error.message);
+      showToast("Error adding agent to team: " + error.message, "error");
     }
   };
 
   const removeAgentFromTeam = async (agentId) => {
     try {
       await removeFromMyTeam(agentId);
+      showToast("Agent removed from team", "success");
     } catch (error) {
       console.error("Error removing agent from team:", error);
-      alert("Error removing agent from team: " + error.message);
+      showToast("Error removing agent from team: " + error.message, "error");
     }
   };
 
@@ -2845,9 +2856,10 @@ const ManagerDashboard = ({ user, onSignOut }) => {
       setNewTeamSupervisor("");
       setSelectedAgentsForTeam([]);
       setShowCreateTeamModal(false);
+      showToast("Team created successfully!", "success");
     } catch (error) {
       console.error("Error creating team:", error);
-      alert("Error creating team: " + error.message);
+      showToast("Error creating team: " + error.message, "error");
     } finally {
       setIsCreatingTeam(false);
     }
@@ -2914,9 +2926,10 @@ const ManagerDashboard = ({ user, onSignOut }) => {
       setEditTeamSupervisor("");
       setEditSelectedAgents([]);
       setShowEditTeamModal(false);
+      showToast("Team updated successfully!", "success");
     } catch (error) {
       console.error("Error updating team:", error);
-      alert("Error updating team: " + error.message);
+      showToast("Error updating team: " + error.message, "error");
     }
   };
 
@@ -3532,6 +3545,32 @@ const ManagerDashboard = ({ user, onSignOut }) => {
     <div
       className={`min-h-screen bg-gradient-to-br ${currentThemeStyles.primary} text-white`}
     >
+      {/* Toast Notification */}
+      {toast && (
+        <div className="fixed top-4 right-4 z-50 animate-pulse">
+          <div className={`px-6 py-4 rounded-lg shadow-2xl backdrop-blur-sm border ${
+            toast.type === "success"
+              ? "bg-green-600/90 border-green-400/50"
+              : "bg-red-600/90 border-red-400/50"
+          }`}>
+            <div className="flex items-center gap-3">
+              {toast.type === "success" ? (
+                <CheckCircle className="w-5 h-5 text-white" />
+              ) : (
+                <AlertTriangle className="w-5 h-5 text-white" />
+              )}
+              <span className="text-white font-medium">{toast.message}</span>
+              <button
+                onClick={() => setToast(null)}
+                className="ml-2 text-white/70 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white/10 backdrop-blur-sm border-b border-white/20">
         <div className="container mx-auto px-6 py-4">
           <div className="flex justify-between items-center">
@@ -4698,9 +4737,9 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                     };
                     try {
                       await updateMyTeamGoals(goals);
-                      alert("Team goals updated successfully!");
+                      showToast("Team goals updated successfully!", "success");
                     } catch (error) {
-                      alert("Error updating team goals: " + error.message);
+                      showToast("Error updating team goals: " + error.message, "error");
                     }
                   }}
                   className="mt-4 bg-green-600 hover:bg-green-700 px-4 py-2 rounded text-white"
