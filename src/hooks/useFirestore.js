@@ -1,18 +1,16 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   collection,
   addDoc,
   getDocs,
   doc,
   updateDoc,
-  query,
-  where,
-  orderBy,
-  onSnapshot,
-  setDoc,
   Timestamp,
 } from "firebase/firestore";
 import { db } from "../firebase";
+
+// Polling interval in milliseconds (60 seconds = controlled, predictable reads)
+const POLLING_INTERVAL = 60000;
 
 export const useFirestore = (userEmail) => {
   const [leads, setLeads] = useState([]);
@@ -20,6 +18,8 @@ export const useFirestore = (userEmail) => {
   const [teams, setTeams] = useState([]);
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState(null);
+  const pollingRef = useRef(null);
+  const isVisibleRef = useRef(true);
 
   // One-time fetch for leads (much more efficient than real-time listener)
   const fetchLeads = useCallback(async () => {
@@ -120,6 +120,41 @@ export const useFirestore = (userEmail) => {
   useEffect(() => {
     fetchTeams();
   }, [fetchTeams]);
+
+  // Smart polling - auto-refresh every 60 seconds when tab is visible
+  useEffect(() => {
+    if (!userEmail) return;
+
+    // Start polling
+    const startPolling = () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+      pollingRef.current = setInterval(() => {
+        if (isVisibleRef.current) {
+          console.log("useFirestore: Auto-refresh polling...");
+          fetchLeads();
+          fetchTeams();
+        }
+      }, POLLING_INTERVAL);
+    };
+
+    // Handle visibility change - refresh when tab becomes visible
+    const handleVisibilityChange = () => {
+      isVisibleRef.current = !document.hidden;
+      if (!document.hidden) {
+        console.log("useFirestore: Tab visible, refreshing data...");
+        fetchLeads();
+        fetchTeams();
+      }
+    };
+
+    startPolling();
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [userEmail, fetchLeads, fetchTeams]);
 
   // Refresh all data function
   const refreshData = useCallback(async () => {
