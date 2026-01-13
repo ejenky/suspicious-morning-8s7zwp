@@ -3756,21 +3756,23 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                   </p>
                 </div>
                 <div className="bg-purple-500/20 rounded-lg p-4 text-center">
-                  <p className="text-purple-300 text-sm">Avg Conversion</p>
+                  <p className="text-purple-300 text-sm">Conversion</p>
                   <p className="text-2xl font-bold text-white">
-                    {myTeamAgents.length > 0
-                      ? (
-                          myTeamAgents.reduce(
-                            (sum, member) =>
-                              sum +
-                              parseFloat(
-                                getRealAgentStats(member.email, dateFilter)
-                                  .conversionRate
-                              ),
-                            0
-                          ) / myTeamAgents.length
-                        ).toFixed(1)
-                      : 0}
+                    {(() => {
+                      const totalLeads = myTeamAgents.reduce(
+                        (sum, member) =>
+                          sum + getRealAgentStats(member.email, dateFilter).leads,
+                        0
+                      );
+                      const totalSales = myTeamAgents.reduce(
+                        (sum, member) =>
+                          sum + getRealAgentStats(member.email, dateFilter).sales,
+                        0
+                      );
+                      return totalLeads > 0
+                        ? ((totalSales / totalLeads) * 100).toFixed(1)
+                        : 0;
+                    })()}
                     %
                   </p>
                 </div>
