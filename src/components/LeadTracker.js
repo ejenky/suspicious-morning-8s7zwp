@@ -2720,9 +2720,12 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   const [isEditingTeamName, setIsEditingTeamName] = useState(false);
   const [myTeamAgents, setMyTeamAgents] = useState([]);
 
-  // Refs for team goals to prevent React from resetting values on re-render
-  const salesGoalRef = useRef(null);
-  const conversionGoalRef = useRef(null);
+  // State to force re-renders when agent goals change
+  const [agentGoalsVersion, setAgentGoalsVersion] = useState(0);
+
+  // State for team goals - controlled inputs
+  const [teamSalesGoal, setTeamSalesGoal] = useState(50);
+  const [teamConversionGoal, setTeamConversionGoal] = useState(25);
   const teamGoalsInitialized = useRef(false);
 
   // Use Firebase for teams and agents data
@@ -2761,15 +2764,11 @@ const ManagerDashboard = ({ user, onSignOut }) => {
     setMyTeamAgents(teamAgents);
   }, [firebaseAgents, myTeamMemberIds]);
 
-  // Initialize team goals refs only once
+  // Initialize team goals from Firebase only once
   useEffect(() => {
     if (!teamGoalsInitialized.current && myTeamGoals) {
-      if (salesGoalRef.current) {
-        salesGoalRef.current.textContent = myTeamGoals.salesGoal ?? 50;
-      }
-      if (conversionGoalRef.current) {
-        conversionGoalRef.current.textContent = myTeamGoals.conversionGoal ?? 25;
-      }
+      setTeamSalesGoal(myTeamGoals.salesGoal ?? 50);
+      setTeamConversionGoal(myTeamGoals.conversionGoal ?? 25);
       globalTeamGoals.salesGoal = myTeamGoals.salesGoal ?? 50;
       globalTeamGoals.conversionGoal = myTeamGoals.conversionGoal ?? 25;
       teamGoalsInitialized.current = true;
@@ -2813,6 +2812,8 @@ const ManagerDashboard = ({ user, onSignOut }) => {
       globalAgentGoals[agentEmail] = {};
     }
     globalAgentGoals[agentEmail][goalType] = value;
+    // Force re-render to update input values
+    setAgentGoalsVersion(v => v + 1);
   };
 
   // Handle Create Team
@@ -4454,10 +4455,10 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                       dateFilter
                     );
                     const memberGoals = globalAgentGoals[member.email] || {
-                      dailySales: myTeamGoals?.salesGoal || globalTeamGoals.salesGoal || 10,
+                      dailySales: teamSalesGoal || 10,
                       weeklySales: 50,
                       monthlyGoal: 120,
-                      conversionRate: myTeamGoals?.conversionGoal || globalTeamGoals.conversionGoal || 25,
+                      conversionRate: teamConversionGoal || 25,
                       referralRate: 15,
                     };
                     return (
@@ -4652,7 +4653,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                 )}
               </div>
 
-              {/* Team Goals - Using refs to prevent React from resetting values */}
+              {/* Team Goals - Using controlled inputs */}
               <div className="mt-6 bg-white/10 rounded-lg p-4">
                 <h4 className="text-lg font-semibold text-white mb-4">
                   Team Goals
@@ -4662,36 +4663,38 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                     <label className="block text-sm text-gray-300 mb-2">
                       Team Sales Goal (Daily)
                     </label>
-                    <div
-                      ref={salesGoalRef}
-                      contentEditable
-                      suppressContentEditableWarning
-                      onInput={(e) => {
-                        globalTeamGoals.salesGoal = e.currentTarget.textContent;
+                    <input
+                      type="number"
+                      value={teamSalesGoal}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value) || 0;
+                        setTeamSalesGoal(val);
+                        globalTeamGoals.salesGoal = val;
                       }}
-                      className="w-full bg-slate-800 border border-white/20 rounded px-3 py-2 text-white min-h-[40px] focus:outline-none focus:ring-2 focus:ring-green-500"
+                      className="w-full bg-slate-800 border border-white/20 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-green-500"
                     />
                   </div>
                   <div>
                     <label className="block text-sm text-gray-300 mb-2">
                       Team Conversion Goal (%)
                     </label>
-                    <div
-                      ref={conversionGoalRef}
-                      contentEditable
-                      suppressContentEditableWarning
-                      onInput={(e) => {
-                        globalTeamGoals.conversionGoal = e.currentTarget.textContent;
+                    <input
+                      type="number"
+                      value={teamConversionGoal}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value) || 0;
+                        setTeamConversionGoal(val);
+                        globalTeamGoals.conversionGoal = val;
                       }}
-                      className="w-full bg-slate-800 border border-white/20 rounded px-3 py-2 text-white min-h-[40px] focus:outline-none focus:ring-2 focus:ring-green-500"
+                      className="w-full bg-slate-800 border border-white/20 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-green-500"
                     />
                   </div>
                 </div>
                 <button
                   onClick={async () => {
                     const goals = {
-                      salesGoal: parseInt(salesGoalRef.current?.textContent) || 0,
-                      conversionGoal: parseInt(conversionGoalRef.current?.textContent) || 0,
+                      salesGoal: teamSalesGoal,
+                      conversionGoal: teamConversionGoal,
                     };
                     try {
                       await updateMyTeamGoals(goals);
