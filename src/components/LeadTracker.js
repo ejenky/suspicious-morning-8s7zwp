@@ -132,20 +132,20 @@ const getRealAgentStats = (agentEmail, dateFilter = null) => {
   }
 
   const sales = filteredLeads.filter((lead) => lead.sale);
-  const nonFUSales = filteredLeads.filter(
-    (lead) => lead.leadType !== "FU Sale"
+  const nonDashSales = filteredLeads.filter(
+    (lead) => !lead.leadType?.startsWith("Dash Sale")
   );
   const referrals = filteredLeads.filter(
-    (lead) => lead.leadType === "Referral Sale"
+    (lead) => lead.leadType?.startsWith("Referral Sale")
   );
 
   return {
-    leads: nonFUSales.length,
+    leads: nonDashSales.length,
     sales: sales.length,
     referrals: referrals.length,
     conversionRate:
-      nonFUSales.length > 0
-        ? ((sales.length / nonFUSales.length) * 100).toFixed(1)
+      nonDashSales.length > 0
+        ? ((sales.length / nonDashSales.length) * 100).toFixed(1)
         : 0,
     revenue: sales.reduce(
       (sum, lead) =>
@@ -220,10 +220,11 @@ const getTopNonSaleLeadTypes = (teamName, dateFilter = null, limit = 3) => {
   }
 
   const nonSaleLeadTypes = {};
+  const saleTypes = ["Sale", "Dash Sale", "Referral Sale"];
   filteredLeads.forEach((lead) => {
     if (
       !lead.sale &&
-      !["Sale", "FU Sale", "Referral Sale"].includes(lead.leadType)
+      !saleTypes.some(type => lead.leadType?.startsWith(type))
     ) {
       if (!nonSaleLeadTypes[lead.leadType]) {
         nonSaleLeadTypes[lead.leadType] = { count: 0, agents: new Set() };
@@ -818,15 +819,15 @@ const Leaderboards = ({ leads = [] }) => {
       }
 
       const agent = agentMap.get(agentId);
-      // Count non-FU leads
-      if (lead.leadType !== "FU Sale") {
+      // Count non-Dash Sale leads
+      if (!lead.leadType?.startsWith("Dash Sale")) {
         agent.leads++;
       }
       if (lead.sale) {
         agent.sales++;
         agent.revenue += (lead.commission || 115) + (lead.hra ? lead.hraValue || 15 : 0);
       }
-      if (lead.leadType === "Referral Sale") {
+      if (lead.leadType?.startsWith("Referral Sale")) {
         agent.referrals++;
       }
     });
@@ -1436,7 +1437,7 @@ const AnalyticsDashboard = ({ leads, user, theme }) => {
   const filteredLeads = getFilteredLeads();
   const sales = filteredLeads.filter((lead) => lead.sale);
   const referrals = filteredLeads.filter(
-    (lead) => lead.leadType === "Referral Sale"
+    (lead) => lead.leadType?.startsWith("Referral Sale")
   );
 
   const metrics = {
@@ -3002,8 +3003,8 @@ const ManagerDashboard = ({ user, onSignOut }) => {
     }
 
     const sales = agentLeads.filter(lead => lead.sale);
-    const referrals = agentLeads.filter(lead => lead.leadType === "Referral Sale" || lead.leadType === "Referral");
-    const newSales = agentLeads.filter(lead => lead.sale && lead.leadType !== "Referral Sale");
+    const referrals = agentLeads.filter(lead => lead.leadType?.startsWith("Referral Sale") || lead.leadType === "Referral");
+    const newSales = agentLeads.filter(lead => lead.sale && !lead.leadType?.startsWith("Referral Sale"));
     const unassigned = agentLeads.filter(lead => !lead.sale && lead.leadType === "Unassigned");
     const openActivities = agentLeads.filter(lead => !lead.sale && lead.status === "open");
     const pd15Plus = agentLeads.filter(lead => lead.pdDays && lead.pdDays >= 15);
@@ -5506,25 +5507,26 @@ const AgentDashboard = ({ user, onSignOut }) => {
   });
 
   const leadTypes = [
-    "Immediate DC",
-    "Has an Activity",
-    "Tier 1",
-    "Intro/Soa",
-    "RWB",
-    "No Value",
-    "Dr Change",
-    "Carrier Change",
-    "Third Party",
-    "Pen & Paper",
-    "Inbound",
-    "Sale",
-    "Twofer",
-    "2nd Part of Twofer",
-    "FU Sale",
-    "Referral Sale",
-    "Not Appointed",
-    "Spanish",
-    "No Sep",
+    "Immediate Dc - The client or dialer hangs up right away",
+    "Has an Activity - Another agent from our company has a valid activity on the lead",
+    "Tier 1 - A lead you are not allowed to sell (Employer, Tricare, Champ Va, Hospice)",
+    "Not Appointed - Area you are not appointed to sell in",
+    "Spanish - Spanish lead and you don't speak spanish",
+    "Intro/Soa - Lost the client on Step 0-1",
+    "RWB Card - Lost the client on step 8",
+    "No SEP - Did not have a SEP to enroll the client",
+    "No Value - Could not find any value to sell the client on (Supervisor Approval)",
+    "Dr Change - Lost the client because they wouldn't change their DR",
+    "Carrier Change - Lost the client because they wouldn't change their carrier",
+    "Third Party - Someone else came into the call and ruined the deal (Son, Daughter, Etc)",
+    "Pitch - Lost the client on step 15",
+    "Meds - Lost the client on step 17",
+    "Pre Inbound - Lost the client on step 19 or Ghosted",
+    "Inbound - Lost the client on enrollment call",
+    "Med Supp - Could not sell someone off a Med Supp",
+    "Sale - Sold the client",
+    "Referral Sale - 2nd part of Twofer or Referral from existing client",
+    "Dash Sale - Sale from your dash",
   ];
   const carriers = [
     "Zing",
@@ -5544,8 +5546,9 @@ const AgentDashboard = ({ user, onSignOut }) => {
   ];
 
   // Load existing leads from global state
+  const saleTypesList = ["Sale", "Dash Sale", "Referral Sale"];
   useEffect(() => {
-    if (["Sale", "FU Sale", "Referral Sale"].includes(newLead.leadType)) {
+    if (saleTypesList.some(type => newLead.leadType?.startsWith(type))) {
       setNewLead((prev) => ({
         ...prev,
         sale: true,
