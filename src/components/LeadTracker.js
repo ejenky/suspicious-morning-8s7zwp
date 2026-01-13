@@ -2729,7 +2729,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   const teamGoalsInitialized = useRef(false);
 
   // Use Firebase for teams and agents data
-  const { teams, agents: firebaseAgents, leads: firebaseLeads, createTeam, assignAgentToTeam, addToMyTeam, removeFromMyTeam, myTeamMemberIds, myTeamGoals, updateMyTeamGoals, refreshData, lastRefresh, loading: dataLoading } = useFirestore(user.email);
+  const { teams, agents: firebaseAgents, leads: firebaseLeads, createTeam, assignAgentToTeam, addToMyTeam, removeFromMyTeam, myTeamMemberIds, myTeamGoals, updateMyTeamGoals, updateAgentGoals, refreshData, lastRefresh, loading: dataLoading } = useFirestore(user.email);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Handle manual data refresh
@@ -2820,11 +2820,20 @@ const ManagerDashboard = ({ user, onSignOut }) => {
 
   const setAgentGoal = (agentEmail, goalType, value) => {
     if (!globalAgentGoals[agentEmail]) {
-      globalAgentGoals[agentEmail] = {};
+      globalAgentGoals[agentEmail] = {
+        dailySales: 10,
+        weeklySales: 50,
+        monthlyGoal: 120,
+        conversionRate: 25,
+        referralRate: 15,
+      };
     }
     globalAgentGoals[agentEmail][goalType] = value;
     // Force re-render to update input values
     setAgentGoalsVersion(v => v + 1);
+
+    // Persist to Firebase
+    updateAgentGoals(agentEmail, globalAgentGoals[agentEmail]);
   };
 
   // Handle Create Team
@@ -5390,6 +5399,8 @@ const AgentDashboard = ({ user, onSignOut }) => {
     addLead,
     calculateMetrics,
   } = useLeads(user.uid);
+  const { fetchAgentGoals } = useFirestore(user.email);
+  const [goalsLoaded, setGoalsLoaded] = useState(false);
   const [activeTab, setActiveTab] = useState("dashboard");
   const [streak, setStreak] = useState(3);
   const [formErrors, setFormErrors] = useState({});
@@ -5419,6 +5430,20 @@ const AgentDashboard = ({ user, onSignOut }) => {
   const hideToast = () => {
     setToast((prev) => ({ ...prev, isVisible: false }));
   };
+
+  // Fetch agent goals from Firebase on mount
+  useEffect(() => {
+    const loadGoals = async () => {
+      if (user.email && !goalsLoaded) {
+        const firebaseGoals = await fetchAgentGoals(user.email);
+        if (firebaseGoals) {
+          globalAgentGoals[user.email] = firebaseGoals;
+          setGoalsLoaded(true);
+        }
+      }
+    };
+    loadGoals();
+  }, [user.email, fetchAgentGoals, goalsLoaded]);
 
   const metrics = calculateMetrics(selectedDate);
   const [currentTheme, setCurrentTheme] = useState("default");

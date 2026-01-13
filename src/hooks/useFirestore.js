@@ -331,6 +331,49 @@ export const useFirestore = (userEmail) => {
     }
   };
 
+  // Update individual agent goals (persisted to Firebase)
+  const updateAgentGoals = async (agentEmail, goals) => {
+    if (!agentEmail) return;
+
+    try {
+      const docId = agentEmail.replace(/\./g, '_');
+      const agentGoalsRef = doc(db, "agentGoals", docId);
+
+      await setDoc(agentGoalsRef, {
+        agentEmail: agentEmail,
+        goals: goals,
+        updatedAt: new Date(),
+        setBy: userEmail,
+      }, { merge: true });
+
+      console.log("Agent goals updated for:", agentEmail, goals);
+    } catch (error) {
+      console.error("Error updating agent goals:", error);
+      throw error;
+    }
+  };
+
+  // Fetch individual agent goals from Firebase
+  const fetchAgentGoals = async (agentEmail) => {
+    if (!agentEmail) return null;
+
+    try {
+      const docId = agentEmail.replace(/\./g, '_');
+      const agentGoalsRef = doc(db, "agentGoals", docId);
+      const goalsDoc = await getDoc(agentGoalsRef);
+
+      if (goalsDoc.exists()) {
+        const data = goalsDoc.data();
+        console.log("Fetched agent goals for:", agentEmail, data.goals);
+        return data.goals;
+      }
+      return null;
+    } catch (error) {
+      console.error("Error fetching agent goals:", error);
+      return null;
+    }
+  };
+
   return {
     leads,
     agents,
@@ -346,6 +389,8 @@ export const useFirestore = (userEmail) => {
     addToMyTeam,
     removeFromMyTeam,
     updateMyTeamGoals,
+    updateAgentGoals,
+    fetchAgentGoals,
     refreshData,
   };
 };
