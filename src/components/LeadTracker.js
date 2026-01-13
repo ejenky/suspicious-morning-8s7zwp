@@ -2335,6 +2335,45 @@ const AgentDashboardView = ({ agent, onBack, user, leads = [] }) => {
             </table>
           </div>
         </div>
+
+        {/* Lead Type Distribution Chart */}
+        <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20 mt-6">
+          <h3 className="text-lg font-semibold text-white mb-4">
+            Lead Type Distribution
+          </h3>
+          {(() => {
+            // Calculate lead type breakdown for this agent
+            const leadTypeBreakdown = selectedDateLeads.reduce((acc, lead) => {
+              const type = lead.leadType?.split(" - ")[0] || lead.leadType || "Unknown";
+              if (!acc[type]) acc[type] = 0;
+              acc[type]++;
+              return acc;
+            }, {});
+
+            const pieData = Object.entries(leadTypeBreakdown)
+              .filter(([, count]) => count > 0)
+              .map(([type, count]) => ({ label: type, value: count }));
+
+            const pieColors = [
+              "#3B82F6", "#10B981", "#F59E0B", "#EF4444",
+              "#8B5CF6", "#06B6D4", "#EC4899", "#84CC16"
+            ];
+
+            if (pieData.length === 0) {
+              return (
+                <p className="text-center text-gray-300 py-8">
+                  No lead data available for this date
+                </p>
+              );
+            }
+
+            return (
+              <div className="flex justify-center">
+                <PieChart data={pieData} colors={pieColors} />
+              </div>
+            );
+          })()}
+        </div>
       </div>
     </div>
   );
