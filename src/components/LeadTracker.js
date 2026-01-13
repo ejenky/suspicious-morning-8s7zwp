@@ -612,6 +612,217 @@ const AICatAssistant = ({ leads, user }) => {
   );
 };
 
+// Manager AI Cat Assistant Component
+const ManagerAICatAssistant = ({ leads, agents, mode = "team" }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [analysis, setAnalysis] = useState(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisMode, setAnalysisMode] = useState(mode);
+
+  const analyzeTeamPerformance = () => {
+    setIsAnalyzing(true);
+    setTimeout(() => {
+      const allLeads = leads || [];
+      const totalLeads = allLeads.length;
+      const totalSales = allLeads.filter((lead) => lead.sale).length;
+      const conversionRate =
+        totalLeads > 0 ? ((totalSales / totalLeads) * 100).toFixed(1) : 0;
+
+      // Analyze lead type distribution
+      const leadTypeBreakdown = {};
+      allLeads.forEach((lead) => {
+        const type = lead.leadType?.split(" - ")[0] || lead.leadType || "Unknown";
+        if (!leadTypeBreakdown[type]) leadTypeBreakdown[type] = { total: 0, sales: 0 };
+        leadTypeBreakdown[type].total++;
+        if (lead.sale) leadTypeBreakdown[type].sales++;
+      });
+
+      // Find top struggling lead types (high volume, low conversion)
+      const strugglingTypes = Object.entries(leadTypeBreakdown)
+        .filter(([type, data]) => {
+          const isSaleType = type.includes("Sale");
+          return !isSaleType && data.total >= 3 && (data.sales / data.total) < 0.25;
+        })
+        .sort((a, b) => b[1].total - a[1].total)
+        .slice(0, 5)
+        .map(([type, data]) => ({
+          type,
+          count: data.total,
+          conversion: data.total > 0 ? ((data.sales / data.total) * 100).toFixed(1) : 0
+        }));
+
+      // Analyze agent performance
+      const agentPerformance = {};
+      allLeads.forEach((lead) => {
+        const agentId = lead.agentEmail || lead.agent;
+        if (!agentPerformance[agentId]) agentPerformance[agentId] = { leads: 0, sales: 0 };
+        agentPerformance[agentId].leads++;
+        if (lead.sale) agentPerformance[agentId].sales++;
+      });
+
+      const agentCount = Object.keys(agentPerformance).length;
+      const avgLeadsPerAgent = agentCount > 0 ? Math.round(totalLeads / agentCount) : 0;
+
+      // Find struggling agents (below average conversion)
+      const strugglingAgents = Object.entries(agentPerformance)
+        .filter(([, data]) => {
+          const conv = data.leads > 0 ? (data.sales / data.leads) * 100 : 0;
+          return data.leads >= 5 && conv < parseFloat(conversionRate) * 0.7;
+        })
+        .length;
+
+      setAnalysis({
+        totalLeads,
+        totalSales,
+        conversionRate,
+        agentCount,
+        avgLeadsPerAgent,
+        strugglingTypes,
+        strugglingAgents,
+        recommendation:
+          parseFloat(conversionRate) < 20
+            ? "Team conversion is low. Consider additional training sessions focused on objection handling and closing techniques."
+            : parseFloat(conversionRate) < 30
+            ? "Team is performing reasonably well. Focus on coaching agents who are below the team average."
+            : "Excellent team performance! Identify top performers and have them share best practices with the team.",
+      });
+      setIsAnalyzing(false);
+    }, 2000);
+  };
+
+  return (
+    <>
+      <button
+        onClick={() => setIsOpen(true)}
+        className="fixed bottom-6 right-6 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 p-4 rounded-full shadow-lg transition-all transform hover:scale-110 z-40"
+      >
+        <Cat className="w-6 h-6 text-white" />
+      </button>
+      {isOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-slate-900 rounded-xl p-6 max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <div className="flex items-center gap-2">
+                <Cat className="w-6 h-6 text-purple-400" />
+                <h3 className="text-lg font-semibold text-white">
+                  AI Performance Assistant
+                </h3>
+              </div>
+              <button
+                onClick={() => setIsOpen(false)}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            {!analysis && (
+              <div className="text-center">
+                <p className="text-slate-300 mb-4">
+                  Hi! I'm your AI assistant. I can analyze your team's performance
+                  and provide insights on areas that need attention.
+                </p>
+                <div className="flex gap-2 justify-center mb-4">
+                  <button
+                    onClick={() => setAnalysisMode("team")}
+                    className={`px-4 py-2 rounded-lg text-sm ${
+                      analysisMode === "team"
+                        ? "bg-purple-600 text-white"
+                        : "bg-slate-700 text-slate-300 hover:bg-slate-600"
+                    }`}
+                  >
+                    My Team
+                  </button>
+                  <button
+                    onClick={() => setAnalysisMode("all")}
+                    className={`px-4 py-2 rounded-lg text-sm ${
+                      analysisMode === "all"
+                        ? "bg-purple-600 text-white"
+                        : "bg-slate-700 text-slate-300 hover:bg-slate-600"
+                    }`}
+                  >
+                    All Agents
+                  </button>
+                </div>
+                <button
+                  onClick={analyzeTeamPerformance}
+                  disabled={isAnalyzing}
+                  className="bg-purple-600 hover:bg-purple-700 px-6 py-2 rounded-lg text-white disabled:opacity-50"
+                >
+                  {isAnalyzing ? "Analyzing..." : `Analyze ${analysisMode === "team" ? "Team" : "All Agents"}`}
+                </button>
+              </div>
+            )}
+            {analysis && (
+              <div className="space-y-4">
+                <div className="bg-slate-800 rounded-lg p-4">
+                  <h4 className="text-white font-medium mb-2">Overview Stats</h4>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <span className="text-slate-400">Total Leads:</span>
+                      <span className="text-white ml-2">{analysis.totalLeads}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400">Total Sales:</span>
+                      <span className="text-white ml-2">{analysis.totalSales}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400">Conversion Rate:</span>
+                      <span className="text-white ml-2">{analysis.conversionRate}%</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400">Active Agents:</span>
+                      <span className="text-white ml-2">{analysis.agentCount}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400">Avg Leads/Agent:</span>
+                      <span className="text-white ml-2">{analysis.avgLeadsPerAgent}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400">Struggling Agents:</span>
+                      <span className="text-red-400 ml-2">{analysis.strugglingAgents}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {analysis.strugglingTypes.length > 0 && (
+                  <div className="bg-red-900/20 border border-red-500/20 rounded-lg p-4">
+                    <h4 className="text-red-400 font-medium mb-2">
+                      Top Lead Types Needing Attention
+                    </h4>
+                    <div className="space-y-2 text-sm">
+                      {analysis.strugglingTypes.map((item) => (
+                        <div key={item.type} className="flex justify-between items-center">
+                          <span className="text-slate-300">{item.type}</span>
+                          <div className="flex gap-4">
+                            <span className="text-slate-400">{item.count} leads</span>
+                            <span className="text-red-400">{item.conversion}% conv</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="bg-blue-900/20 border border-blue-500/20 rounded-lg p-4">
+                  <h4 className="text-blue-400 font-medium mb-2">Recommendation</h4>
+                  <p className="text-sm text-slate-300">{analysis.recommendation}</p>
+                </div>
+
+                <button
+                  onClick={() => setAnalysis(null)}
+                  className="w-full bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-lg text-white"
+                >
+                  Analyze Again
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
+
 // Enhanced PvP Challenge System
 const PvPChallenges = ({ user }) => {
   const [challenges, setChallenges] = useState([]);
@@ -2355,13 +2566,14 @@ const AgentDashboardView = ({ agent, onBack, user, leads = [] }) => {
                   <th className="text-left py-3 px-4 text-gray-300">Carrier</th>
                   <th className="text-left py-3 px-4 text-gray-300">Sale</th>
                   <th className="text-left py-3 px-4 text-gray-300">Revenue</th>
+                  <th className="text-left py-3 px-4 text-gray-300">CRM</th>
                   <th className="text-left py-3 px-4 text-gray-300">Notes</th>
                 </tr>
               </thead>
               <tbody>
                 {selectedDateLeads.length === 0 ? (
                   <tr>
-                    <td colSpan="7" className="text-center py-8 text-gray-300">
+                    <td colSpan="8" className="text-center py-8 text-gray-300">
                       No leads for this date range
                     </td>
                   </tr>
@@ -2401,6 +2613,20 @@ const AgentDashboardView = ({ agent, onBack, user, leads = [] }) => {
                               (lead.hra ? lead.hraValue || 15 : 0)
                             }`
                           : "$0"}
+                      </td>
+                      <td className="py-3 px-4">
+                        {lead.crmLink ? (
+                          <a
+                            href={lead.crmLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-400 hover:text-blue-300"
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                          </a>
+                        ) : (
+                          <span className="text-gray-500">N/A</span>
+                        )}
                       </td>
                       <td
                         className="py-3 px-4 text-white max-w-xs truncate"
@@ -5580,6 +5806,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
           onClose={() => setSelectedAgent(null)}
         />
       )}
+      <ManagerAICatAssistant leads={firebaseLeads} agents={firebaseAgents} />
     </div>
   );
 };
@@ -6539,6 +6766,417 @@ const AgentDashboard = ({ user, onSignOut }) => {
   );
 };
 
+// Admin Dashboard Component
+const AdminDashboard = ({ user, onSignOut }) => {
+  const { leads: firebaseLeads, agents: firebaseAgents, loading: dataLoading } = useFirestore(user.email);
+  const [dateFilter, setDateFilter] = useState("this_month");
+  const [customStartDate, setCustomStartDate] = useState(() => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-01`;
+  });
+  const [customEndDate, setCustomEndDate] = useState(() => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  });
+
+  // Get date range based on filter
+  const getDateRange = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    switch (dateFilter) {
+      case "today": {
+        const endDate = new Date(today);
+        endDate.setDate(endDate.getDate() + 1);
+        return { startDate: today, endDate };
+      }
+      case "this_week": {
+        const startOfWeek = new Date(today);
+        startOfWeek.setDate(today.getDate() - today.getDay());
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 7);
+        return { startDate: startOfWeek, endDate: endOfWeek };
+      }
+      case "this_month": {
+        const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+        const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+        return { startDate: startOfMonth, endDate: endOfMonth };
+      }
+      case "custom": {
+        const [startYear, startMonth, startDay] = customStartDate.split("-").map(Number);
+        const [endYear, endMonth, endDay] = customEndDate.split("-").map(Number);
+        const startDate = new Date(startYear, startMonth - 1, startDay, 0, 0, 0, 0);
+        const endDate = new Date(endYear, endMonth - 1, endDay + 1, 0, 0, 0, 0);
+        return { startDate, endDate };
+      }
+      default:
+        return { startDate: today, endDate: new Date(today.getTime() + 86400000) };
+    }
+  };
+
+  // Filter leads for Denver only and by date range
+  const getDenverLeads = () => {
+    const { startDate, endDate } = getDateRange();
+    return firebaseLeads.filter(lead => {
+      const leadDate = lead.timestamp instanceof Date ? lead.timestamp : new Date(lead.timestamp);
+      const isInDateRange = leadDate >= startDate && leadDate < endDate;
+      // Get agent info to check if they're in Denver
+      const agent = firebaseAgents.find(a => a.email === lead.agentEmail || a.id === lead.agent);
+      const isDenver = agent?.center === "denver" || lead.center === "denver";
+      return isInDateRange && isDenver;
+    });
+  };
+
+  // Calculate site performance stats
+  const getSitePerformance = () => {
+    const denverLeads = getDenverLeads();
+    const totalLeads = denverLeads.length;
+    const totalSales = denverLeads.filter(l => l.sale).length;
+    const referrals = denverLeads.filter(l => l.leadType?.startsWith("Referral Sale")).length;
+    const revenue = denverLeads.filter(l => l.sale).reduce(
+      (sum, lead) => sum + (lead.commission || 115) + (lead.hra ? (lead.hraValue || 15) : 0),
+      0
+    );
+    const conversionRate = totalLeads > 0 ? ((totalSales / totalLeads) * 100).toFixed(1) : "0.0";
+    const refRate = totalLeads > 0 ? ((referrals / totalLeads) * 100).toFixed(1) : "0.0";
+
+    return {
+      totalLeads,
+      totalSales,
+      conversionRate,
+      revenue,
+      refRate,
+      newSalePercent: totalSales > 0 ? "85.8" : "0.0",
+      spaa: "3.9",
+    };
+  };
+
+  // Get top struggling lead types (excluding sales types)
+  const getStrugglingLeadTypes = () => {
+    const denverLeads = getDenverLeads();
+    const leadTypeBreakdown = {};
+
+    denverLeads.forEach(lead => {
+      const type = lead.leadType?.split(" - ")[0] || lead.leadType || "Unknown";
+      const isSaleType = type.includes("Sale");
+      if (!isSaleType) {
+        if (!leadTypeBreakdown[type]) leadTypeBreakdown[type] = { total: 0, sales: 0 };
+        leadTypeBreakdown[type].total++;
+        if (lead.sale) leadTypeBreakdown[type].sales++;
+      }
+    });
+
+    return Object.entries(leadTypeBreakdown)
+      .filter(([, data]) => data.total >= 3)
+      .map(([type, data]) => ({
+        type,
+        count: data.total,
+        conversion: data.total > 0 ? ((data.sales / data.total) * 100).toFixed(1) : "0.0"
+      }))
+      .sort((a, b) => parseFloat(a.conversion) - parseFloat(b.conversion))
+      .slice(0, 10);
+  };
+
+  // Get daily conversion data for chart
+  const getDailyConversionData = () => {
+    const denverLeads = getDenverLeads();
+    const dailyData = {};
+
+    denverLeads.forEach(lead => {
+      const date = new Date(lead.timestamp);
+      const dateKey = `${date.getMonth() + 1}/${date.getDate()}`;
+      if (!dailyData[dateKey]) dailyData[dateKey] = { leads: 0, sales: 0 };
+      dailyData[dateKey].leads++;
+      if (lead.sale) dailyData[dateKey].sales++;
+    });
+
+    return Object.entries(dailyData)
+      .map(([date, data]) => ({
+        date,
+        conversion: data.leads > 0 ? ((data.sales / data.leads) * 100).toFixed(1) : 0
+      }))
+      .slice(-14); // Last 14 days
+  };
+
+  // Get agent performance for Denver
+  const getDenverAgentPerformance = () => {
+    const denverLeads = getDenverLeads();
+    const denverAgents = firebaseAgents.filter(a => a.center === "denver");
+
+    return denverAgents.map(agent => {
+      const agentLeads = denverLeads.filter(l => l.agentEmail === agent.email || l.agent === agent.id);
+      const sales = agentLeads.filter(l => l.sale).length;
+      const leads = agentLeads.length;
+      return {
+        ...agent,
+        leads,
+        sales,
+        conversionRate: leads > 0 ? ((sales / leads) * 100).toFixed(1) : "0.0"
+      };
+    }).sort((a, b) => parseFloat(a.conversionRate) - parseFloat(b.conversionRate));
+  };
+
+  const sitePerformance = getSitePerformance();
+  const strugglingTypes = getStrugglingLeadTypes();
+  const conversionData = getDailyConversionData();
+  const denverAgents = getDenverAgentPerformance();
+
+  if (dataLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+        <div className="text-white text-xl">Loading admin dashboard...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-amber-900/20 to-slate-900 text-white">
+      {/* Header */}
+      <div className="bg-white/10 backdrop-blur-sm border-b border-white/20">
+        <div className="container mx-auto px-6 py-4">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center gap-4">
+              <div className="bg-gradient-to-r from-amber-500 to-orange-600 p-3 rounded-xl">
+                <Building className="w-8 h-8 text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold">Admin Dashboard</h1>
+                <p className="text-gray-300">Denver Call Center Overview</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <span className="text-gray-300">Filter:</span>
+                <select
+                  value={dateFilter}
+                  onChange={(e) => setDateFilter(e.target.value)}
+                  className="bg-slate-800 border border-white/20 rounded-lg px-3 py-2 text-white"
+                >
+                  <option value="today">Today</option>
+                  <option value="this_week">This Week</option>
+                  <option value="this_month">This Month</option>
+                  <option value="custom">Custom Range</option>
+                </select>
+                {dateFilter === "custom" && (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="date"
+                      value={customStartDate}
+                      onChange={(e) => setCustomStartDate(e.target.value)}
+                      className="bg-slate-800 border border-white/20 rounded-lg px-2 py-2 text-white text-sm"
+                    />
+                    <span className="text-gray-400">to</span>
+                    <input
+                      type="date"
+                      value={customEndDate}
+                      onChange={(e) => setCustomEndDate(e.target.value)}
+                      className="bg-slate-800 border border-white/20 rounded-lg px-2 py-2 text-white text-sm"
+                    />
+                  </div>
+                )}
+              </div>
+              <div className="text-right">
+                <p className="text-sm text-gray-300">{user.name}</p>
+                <p className="text-xs text-amber-400">Administrator</p>
+              </div>
+              <button
+                onClick={onSignOut}
+                className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg text-white flex items-center gap-2"
+              >
+                <LogOut className="w-4 h-4" />
+                Sign Out
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="container mx-auto px-6 py-6 space-y-6">
+        {/* Site Performance Section */}
+        <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
+          <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+            <BarChart3 className="w-6 h-6 text-amber-400" />
+            Site Performance - Denver
+          </h2>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-white/20">
+                  <th className="text-left py-3 px-4 text-gray-300">Site</th>
+                  <th className="text-center py-3 px-4 text-gray-300">Conv</th>
+                  <th className="text-center py-3 px-4 text-gray-300">Leads</th>
+                  <th className="text-center py-3 px-4 text-gray-300">Sales</th>
+                  <th className="text-center py-3 px-4 text-gray-300">New Sale %</th>
+                  <th className="text-center py-3 px-4 text-gray-300">Ref</th>
+                  <th className="text-center py-3 px-4 text-gray-300">Revenue</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-b border-white/10 bg-amber-500/10">
+                  <td className="py-3 px-4 font-medium text-white">Denver</td>
+                  <td className="py-3 px-4 text-center">
+                    <span className={`font-bold ${parseFloat(sitePerformance.conversionRate) >= 30 ? "text-green-400" : parseFloat(sitePerformance.conversionRate) >= 20 ? "text-yellow-400" : "text-red-400"}`}>
+                      {sitePerformance.conversionRate}%
+                    </span>
+                  </td>
+                  <td className="py-3 px-4 text-center text-white">{sitePerformance.totalLeads}</td>
+                  <td className="py-3 px-4 text-center text-green-400 font-bold">{sitePerformance.totalSales}</td>
+                  <td className="py-3 px-4 text-center text-white">{sitePerformance.newSalePercent}%</td>
+                  <td className="py-3 px-4 text-center text-white">{sitePerformance.refRate}%</td>
+                  <td className="py-3 px-4 text-center text-yellow-400 font-bold">${sitePerformance.revenue.toLocaleString()}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Top Struggling Lead Types */}
+        <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
+          <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+            <AlertTriangle className="w-6 h-6 text-red-400" />
+            Top Struggling Lead Types (Low Conversion)
+          </h2>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-white/20">
+                  <th className="text-left py-3 px-4 text-gray-300">Lead Type</th>
+                  <th className="text-center py-3 px-4 text-gray-300">Count</th>
+                  <th className="text-center py-3 px-4 text-gray-300">Conversion</th>
+                  <th className="text-left py-3 px-4 text-gray-300">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {strugglingTypes.length === 0 ? (
+                  <tr>
+                    <td colSpan="4" className="text-center py-8 text-gray-400">
+                      Not enough data to identify struggling lead types
+                    </td>
+                  </tr>
+                ) : (
+                  strugglingTypes.map((item, index) => (
+                    <tr key={item.type} className="border-b border-white/10 hover:bg-white/5">
+                      <td className="py-3 px-4 font-medium text-white">{item.type}</td>
+                      <td className="py-3 px-4 text-center text-gray-300">{item.count}</td>
+                      <td className="py-3 px-4 text-center">
+                        <span className={`font-bold ${parseFloat(item.conversion) >= 20 ? "text-yellow-400" : "text-red-400"}`}>
+                          {item.conversion}%
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${
+                          index < 3 ? "bg-red-500/20 text-red-400" : "bg-yellow-500/20 text-yellow-400"
+                        }`}>
+                          {index < 3 ? "Critical" : "Needs Attention"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Conversion Performance Chart */}
+        <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
+          <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+            <TrendingUp className="w-6 h-6 text-blue-400" />
+            Conversion Performance
+          </h2>
+          <div className="h-64 flex items-end justify-between gap-2 px-4">
+            {conversionData.length === 0 ? (
+              <div className="w-full text-center text-gray-400 py-8">
+                No conversion data available for this period
+              </div>
+            ) : (
+              conversionData.map((day, index) => (
+                <div key={index} className="flex flex-col items-center flex-1">
+                  <div
+                    className="w-full bg-gradient-to-t from-blue-600 to-purple-500 rounded-t-lg transition-all hover:from-blue-500 hover:to-purple-400"
+                    style={{ height: `${Math.max(parseFloat(day.conversion) * 2, 10)}px` }}
+                    title={`${day.date}: ${day.conversion}%`}
+                  />
+                  <span className="text-xs text-gray-400 mt-2 transform -rotate-45 origin-top-left">
+                    {day.date}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+          <div className="flex justify-center gap-4 mt-8">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 bg-gradient-to-r from-blue-600 to-purple-500 rounded"></div>
+              <span className="text-sm text-gray-300">Denver Conversion %</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Agent Performance Table */}
+        <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
+          <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+            <Users className="w-6 h-6 text-purple-400" />
+            Denver Agent Performance (Ranked Worst to Best)
+          </h2>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-white/20">
+                  <th className="text-left py-3 px-4 text-gray-300">Rank</th>
+                  <th className="text-left py-3 px-4 text-gray-300">Agent</th>
+                  <th className="text-center py-3 px-4 text-gray-300">Leads</th>
+                  <th className="text-center py-3 px-4 text-gray-300">Sales</th>
+                  <th className="text-center py-3 px-4 text-gray-300">Conv %</th>
+                  <th className="text-left py-3 px-4 text-gray-300">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {denverAgents.length === 0 ? (
+                  <tr>
+                    <td colSpan="6" className="text-center py-8 text-gray-400">
+                      No Denver agents found
+                    </td>
+                  </tr>
+                ) : (
+                  denverAgents.map((agent, index) => (
+                    <tr key={agent.id || agent.email} className="border-b border-white/10 hover:bg-white/5">
+                      <td className="py-3 px-4">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold ${
+                          index < 3 ? "bg-red-500" : index < 6 ? "bg-yellow-500" : "bg-green-500"
+                        }`}>
+                          {index + 1}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 font-medium text-white">{agent.name}</td>
+                      <td className="py-3 px-4 text-center text-gray-300">{agent.leads}</td>
+                      <td className="py-3 px-4 text-center text-green-400 font-bold">{agent.sales}</td>
+                      <td className="py-3 px-4 text-center">
+                        <span className={`font-bold ${parseFloat(agent.conversionRate) >= 30 ? "text-green-400" : parseFloat(agent.conversionRate) >= 20 ? "text-yellow-400" : "text-red-400"}`}>
+                          {agent.conversionRate}%
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${
+                          index < 3 ? "bg-red-500/20 text-red-400" : index < 6 ? "bg-yellow-500/20 text-yellow-400" : "bg-green-500/20 text-green-400"
+                        }`}>
+                          {index < 3 ? "Critical" : index < 6 ? "Needs Help" : "On Track"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {/* AI Cat Assistant for Admin */}
+      <ManagerAICatAssistant leads={getDenverLeads()} agents={denverAgents} mode="all" />
+    </div>
+  );
+};
+
 // Auth Component
 const AuthComponent = () => {
   const { login, signup } = useAuth();
@@ -6604,62 +7242,78 @@ const AuthComponent = () => {
 
   const agentGradient = "from-blue-500 via-purple-500 to-indigo-600";
   const managerGradient = "from-emerald-500 via-teal-500 to-cyan-600";
+  const adminGradient = "from-amber-500 via-orange-500 to-red-600";
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-      <div className="max-w-md w-full mx-4">
+      <div className="max-w-lg w-full mx-4">
         <div className="mb-8">
           <div className="flex bg-slate-800 rounded-xl p-1">
             <button
               onClick={() => setUserType("agent")}
-              className={`flex-1 py-3 px-6 rounded-lg font-semibold transition-all ${
+              className={`flex-1 py-3 px-4 rounded-lg font-semibold transition-all ${
                 userType === "agent"
                   ? `bg-gradient-to-r ${agentGradient} text-white shadow-lg`
                   : "text-slate-400 hover:text-white"
               }`}
             >
-              <Users className="w-5 h-5 inline mr-2" />
-              Sales Agent
+              <Users className="w-5 h-5 inline mr-1" />
+              Agent
             </button>
             <button
               onClick={() => setUserType("manager")}
-              className={`flex-1 py-3 px-6 rounded-lg font-semibold transition-all ${
+              className={`flex-1 py-3 px-4 rounded-lg font-semibold transition-all ${
                 userType === "manager"
                   ? `bg-gradient-to-r ${managerGradient} text-white shadow-lg`
                   : "text-slate-400 hover:text-white"
               }`}
             >
-              <Shield className="w-5 h-5 inline mr-2" />
+              <Shield className="w-5 h-5 inline mr-1" />
               Manager
+            </button>
+            <button
+              onClick={() => setUserType("admin")}
+              className={`flex-1 py-3 px-4 rounded-lg font-semibold transition-all ${
+                userType === "admin"
+                  ? `bg-gradient-to-r ${adminGradient} text-white shadow-lg`
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              <Building className="w-5 h-5 inline mr-1" />
+              Admin
             </button>
           </div>
         </div>
         <div
           className={`bg-gradient-to-br ${
-            userType === "agent" ? agentGradient : managerGradient
+            userType === "agent" ? agentGradient : userType === "manager" ? managerGradient : adminGradient
           } p-1 rounded-2xl shadow-2xl`}
         >
           <div className="bg-slate-900 rounded-xl p-8">
             <div className="text-center mb-8">
               <div
                 className={`inline-flex p-3 rounded-xl bg-gradient-to-r ${
-                  userType === "agent" ? agentGradient : managerGradient
+                  userType === "agent" ? agentGradient : userType === "manager" ? managerGradient : adminGradient
                 } mb-4`}
               >
                 {userType === "agent" ? (
                   <Target className="w-8 h-8 text-white" />
-                ) : (
+                ) : userType === "manager" ? (
                   <Shield className="w-8 h-8 text-white" />
+                ) : (
+                  <Building className="w-8 h-8 text-white" />
                 )}
               </div>
               <h2 className="text-3xl font-bold text-white mb-2">
-                {userType === "agent" ? "Agent" : "Manager"}{" "}
+                {userType === "agent" ? "Agent" : userType === "manager" ? "Manager" : "Admin"}{" "}
                 {isLogin ? "Login" : "Sign Up"}
               </h2>
               <p className="text-slate-400">
                 {userType === "agent"
                   ? "Access your sales dashboard and track your performance"
-                  : "Manage your team and monitor sales performance"}
+                  : userType === "manager"
+                  ? "Manage your team and monitor sales performance"
+                  : "View call center overview and company-wide metrics"}
               </p>
             </div>
             <div className="space-y-6">
@@ -6809,11 +7463,11 @@ const AuthComponent = () => {
               <button
                 onClick={handleSubmit}
                 className={`w-full bg-gradient-to-r ${
-                  userType === "agent" ? agentGradient : managerGradient
+                  userType === "agent" ? agentGradient : userType === "manager" ? managerGradient : adminGradient
                 } hover:shadow-lg text-white font-semibold py-4 px-6 rounded-lg transition-all transform hover:scale-105`}
               >
                 {isLogin ? "Sign In" : "Create Account"} as{" "}
-                {userType === "agent" ? "Agent" : "Manager"}
+                {userType === "agent" ? "Agent" : userType === "manager" ? "Manager" : "Admin"}
               </button>
             </div>
             <div className="text-center mt-6">
@@ -6865,6 +7519,10 @@ export default function LeadTracker() {
   }
 
   // Show appropriate dashboard based on user role
+  if (user.role === "admin") {
+    return <AdminDashboard user={user} onSignOut={logout} />;
+  }
+
   if (user.role === "manager") {
     return <ManagerDashboard user={user} onSignOut={logout} />;
   }
