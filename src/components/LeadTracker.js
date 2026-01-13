@@ -55,6 +55,7 @@ import {
   MapPin,
   Check,
   Loader,
+  RefreshCw,
 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { useLeads } from "../hooks/useLeads";
@@ -2717,7 +2718,15 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   const [myTeamAgents, setMyTeamAgents] = useState([]);
 
   // Use Firebase for teams and agents data
-  const { teams, agents: firebaseAgents, leads: firebaseLeads, createTeam, assignAgentToTeam } = useFirestore(user.email);
+  const { teams, agents: firebaseAgents, leads: firebaseLeads, createTeam, assignAgentToTeam, refreshData, lastRefresh, loading: dataLoading } = useFirestore(user.email);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Handle manual data refresh
+  const handleRefreshData = async () => {
+    setIsRefreshing(true);
+    await refreshData();
+    setIsRefreshing(false);
+  };
 
   // Create Team Modal state
   const [showCreateTeamModal, setShowCreateTeamModal] = useState(false);
@@ -3569,7 +3578,20 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                 <span className="text-sm text-gray-300 ml-4">
                   Showing data for {dateFilter ? (() => { const [y, m, d] = dateFilter.split('-'); return new Date(y, m - 1, d).toLocaleDateString(); })() : 'today'}
                 </span>
+                <button
+                  onClick={handleRefreshData}
+                  disabled={isRefreshing || dataLoading}
+                  className={`ml-auto bg-gradient-to-r ${currentThemeStyles.accent} hover:shadow-lg px-4 py-2 rounded-lg flex items-center gap-2 disabled:opacity-50`}
+                >
+                  <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                  {isRefreshing ? 'Refreshing...' : 'Refresh Data'}
+                </button>
               </div>
+              {lastRefresh && (
+                <p className="text-xs text-gray-400 mt-2">
+                  Last updated: {lastRefresh.toLocaleTimeString()}
+                </p>
+              )}
             </div>
 
             {/* Main metrics */}

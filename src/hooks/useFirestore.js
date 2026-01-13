@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   collection,
   addDoc,
@@ -10,6 +10,7 @@ import {
   orderBy,
   onSnapshot,
   setDoc,
+  Timestamp,
 } from "firebase/firestore";
 import { db } from "../firebase";
 
@@ -18,45 +19,51 @@ export const useFirestore = (userEmail) => {
   const [agents, setAgents] = useState([]);
   const [teams, setTeams] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [lastRefresh, setLastRefresh] = useState(null);
 
-  // Fetch ALL leads for manager view
-  useEffect(() => {
+  // One-time fetch for leads (much more efficient than real-time listener)
+  const fetchLeads = useCallback(async () => {
     if (!userEmail) {
       setLoading(false);
       return;
     }
 
-    console.log("useFirestore: Setting up leads listener for manager view");
-    const leadsCollection = collection(db, "leads");
+    setLoading(true);
+    console.log("useFirestore: Fetching leads (one-time)");
 
-    // Fetch ALL leads without orderBy (avoids index requirements)
-    const unsubscribe = onSnapshot(
-      leadsCollection,
-      (snapshot) => {
-        console.log("useFirestore: Received", snapshot.docs.length, "leads from Firebase");
-        const leadsData = snapshot.docs.map((doc) => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            ...data,
-            // Normalize timestamp
-            timestamp: data.timestamp?.toDate?.() || data.timestamp || new Date(data.createdAt || Date.now()),
-          };
-        });
-        // Sort by timestamp client-side
-        leadsData.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-        console.log("useFirestore: Processed leads:", leadsData.length);
-        setLeads(leadsData);
-        setLoading(false);
-      },
-      (error) => {
-        console.error("useFirestore: Error fetching leads:", error);
-        setLoading(false);
-      }
-    );
+    try {
+      const leadsCollection = collection(db, "leads");
+      const snapshot = await getDocs(leadsCollection);
 
-    return () => unsubscribe();
+      console.log("useFirestore: Received", snapshot.docs.length, "leads from Firebase");
+
+      const leadsData = snapshot.docs.map((doc) => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          // Normalize timestamp
+          timestamp: data.timestamp?.toDate?.() || data.timestamp || new Date(data.createdAt || Date.now()),
+        };
+      });
+
+      // Sort by timestamp client-side
+      leadsData.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+      console.log("useFirestore: Processed leads:", leadsData.length);
+
+      setLeads(leadsData);
+      setLastRefresh(new Date());
+      setLoading(false);
+    } catch (error) {
+      console.error("useFirestore: Error fetching leads:", error);
+      setLoading(false);
+    }
   }, [userEmail]);
+
+  // Initial fetch on mount
+  useEffect(() => {
+    fetchLeads();
+  }, [fetchLeads]);
 
   // Derive agents from leads data - extract unique agents who have submitted leads
   useEffect(() => {
@@ -92,28 +99,33 @@ export const useFirestore = (userEmail) => {
     setAgents(agentsData);
   }, [leads]);
 
-  // Fetch teams
-  useEffect(() => {
+  // One-time fetch for teams
+  const fetchTeams = useCallback(async () => {
     if (!userEmail) return;
 
-    const teamsCollection = collection(db, "teams");
-
-    const unsubscribe = onSnapshot(
-      teamsCollection,
-      (snapshot) => {
-        const teamsData = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-        setTeams(teamsData);
-      },
-      (error) => {
-        console.error("Error fetching teams:", error);
-      }
-    );
-
-    return () => unsubscribe();
+    try {
+      const teamsCollection = collection(db, "teams");
+      const snapshot = await getDocs(teamsCollection);
+      const teamsData = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      setTeams(teamsData);
+    } catch (error) {
+      console.error("Error fetching teams:", error);
+    }
   }, [userEmail]);
+
+  // Initial fetch for teams
+  useEffect(() => {
+    fetchTeams();
+  }, [fetchTeams]);
+
+  // Refresh all data function
+  const refreshData = useCallback(async () => {
+    console.log("useFirestore: Refreshing all data...");
+    await Promise.all([fetchLeads(), fetchTeams()]);
+  }, [fetchLeads, fetchTeams]);
 
   // Add lead function
   const addLead = async (leadData) => {
@@ -181,9 +193,11 @@ export const useFirestore = (userEmail) => {
     agents,
     teams,
     loading,
+    lastRefresh,
     addLead,
     updateAgentSettings,
     createTeam,
     assignAgentToTeam,
+    refreshData,
   };
 };
