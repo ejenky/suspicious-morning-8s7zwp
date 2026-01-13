@@ -2007,7 +2007,7 @@ const AgentDashboardView = ({ agent, onBack, user }) => {
               <div>
                 <h1 className="text-2xl font-bold">{agent.name}'s Dashboard</h1>
                 <p className="text-gray-300">
-                  {agent.team} • {agent.center.toUpperCase()}
+                  {agent.team} • {agent.center?.toUpperCase() || "N/A"}
                 </p>
               </div>
             </div>
@@ -3120,7 +3120,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
               <div>
                 <h2 className="text-2xl font-bold text-white">{agent.name}</h2>
                 <p className="text-gray-300">
-                  {agent.team} • {agent.center.toUpperCase()}
+                  {agent.team} • {agent.center?.toUpperCase() || "N/A"}
                 </p>
               </div>
             </div>
@@ -3744,7 +3744,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                               {agent.name}
                             </p>
                             <p className="text-xs text-gray-400">
-                              {agent.team} • {agent.center.toUpperCase()}
+                              {agent.team} • {agent.center?.toUpperCase() || "N/A"}
                             </p>
                           </div>
                         </div>
@@ -3788,7 +3788,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                         <div>
                           <p className="font-medium text-white">{agent.name}</p>
                           <p className="text-xs text-gray-400">
-                            {agent.team} • {agent.center.toUpperCase()}
+                            {agent.team} • {agent.center?.toUpperCase() || "N/A"}
                           </p>
                         </div>
                       </div>
