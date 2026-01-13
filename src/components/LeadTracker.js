@@ -770,7 +770,7 @@ const PvPChallenges = ({ user }) => {
 };
 
 // Enhanced Leaderboards
-const Leaderboards = () => {
+const Leaderboards = ({ leads = [] }) => {
   const [selectedCenter, setSelectedCenter] = useState("all");
   const [selectedBoard, setSelectedBoard] = useState("sales");
   const centers = ["all", "denver", "tampa", "orlando", "daytona"];
@@ -795,16 +795,56 @@ const Leaderboards = () => {
     },
   ];
 
-  const getFilteredAgents = () => {
-    let agentsWithStats = mockAgents.map((agent) => {
-      const stats = getRealAgentStats(agent.email);
-      return { ...agent, ...stats };
+  // Derive agents and their stats from Firebase leads
+  const getAgentsFromLeads = () => {
+    const agentMap = new Map();
+
+    leads.forEach((lead) => {
+      const agentId = lead.agent;
+      const agentEmail = lead.agentEmail || lead.agent;
+      const agentName = lead.agentName || (agentEmail.includes('@') ? agentEmail.split('@')[0] : agentEmail);
+
+      if (!agentMap.has(agentId)) {
+        agentMap.set(agentId, {
+          id: agentId,
+          email: agentEmail,
+          name: agentName,
+          center: lead.center || 'unknown',
+          leads: 0,
+          sales: 0,
+          referrals: 0,
+          revenue: 0,
+        });
+      }
+
+      const agent = agentMap.get(agentId);
+      // Count non-FU leads
+      if (lead.leadType !== "FU Sale") {
+        agent.leads++;
+      }
+      if (lead.sale) {
+        agent.sales++;
+        agent.revenue += (lead.commission || 115) + (lead.hra ? lead.hraValue || 15 : 0);
+      }
+      if (lead.leadType === "Referral Sale") {
+        agent.referrals++;
+      }
     });
 
+    // Calculate conversion rates
+    return Array.from(agentMap.values()).map(agent => ({
+      ...agent,
+      conversionRate: agent.leads > 0 ? ((agent.sales / agent.leads) * 100).toFixed(1) : "0.0",
+    }));
+  };
+
+  const allAgents = getAgentsFromLeads();
+
+  const getFilteredAgents = () => {
     let filtered =
       selectedCenter === "all"
-        ? agentsWithStats
-        : agentsWithStats.filter((agent) => agent.center === selectedCenter);
+        ? allAgents
+        : allAgents.filter((agent) => agent.center === selectedCenter);
     switch (selectedBoard) {
       case "sales":
         return filtered.sort((a, b) => b.sales - a.sales);
@@ -871,14 +911,10 @@ const Leaderboards = () => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {boards.map((board) => {
           const boardAgents = (() => {
-            let agentsWithStats = mockAgents.map((agent) => {
-              const stats = getRealAgentStats(agent.email);
-              return { ...agent, ...stats };
-            });
             let agents =
               selectedCenter === "all"
-                ? agentsWithStats
-                : agentsWithStats.filter(
+                ? [...allAgents]
+                : allAgents.filter(
                     (agent) => agent.center === selectedCenter
                   );
             switch (board.key) {
@@ -907,7 +943,9 @@ const Leaderboards = () => {
                 </h4>
               </div>
               <div className="space-y-3">
-                {boardAgents.slice(0, 5).map((agent, index) => {
+                {boardAgents.length === 0 ? (
+                  <p className="text-gray-400 text-center py-4">No data yet</p>
+                ) : boardAgents.slice(0, 5).map((agent, index) => {
                   const profileColors = [
                     "bg-red-500",
                     "bg-blue-500",
@@ -6325,7 +6363,7 @@ const AgentDashboard = ({ user, onSignOut }) => {
         {activeTab === "analytics" && (
           <AnalyticsDashboard leads={leads} user={user} theme={currentTheme} />
         )}
-        {activeTab === "leaderboards" && <Leaderboards />}
+        {activeTab === "leaderboards" && <Leaderboards leads={leads} />}
         {activeTab === "notifications" && (
           <div
             className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-6 border border-white/20`}
