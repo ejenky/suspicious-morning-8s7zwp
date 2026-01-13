@@ -2815,6 +2815,29 @@ const ManagerDashboard = ({ user, onSignOut }) => {
     setMyTeamAgents(teamAgents);
   }, [firebaseAgents, myTeamMemberIds]);
 
+  // Load goals for all team members from Firebase
+  useEffect(() => {
+    const loadTeamMemberGoals = async () => {
+      if (myTeamAgents.length === 0) return;
+
+      for (const member of myTeamAgents) {
+        if (member.email && !globalAgentGoals[member.email]) {
+          try {
+            const memberGoals = await fetchAgentGoals(member.email);
+            if (memberGoals) {
+              globalAgentGoals[member.email] = memberGoals;
+            }
+          } catch (err) {
+            console.log("Could not load goals for:", member.email);
+          }
+        }
+      }
+      // Force re-render after loading goals
+      setAgentGoalsVersion(prev => prev + 1);
+    };
+    loadTeamMemberGoals();
+  }, [myTeamAgents, fetchAgentGoals]);
+
   // Initialize team goals from Firebase only once
   useEffect(() => {
     if (!teamGoalsInitialized.current && myTeamGoals) {
