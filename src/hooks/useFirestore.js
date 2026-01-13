@@ -5,6 +5,8 @@ import {
   getDocs,
   doc,
   updateDoc,
+  getDoc,
+  setDoc,
   Timestamp,
 } from "firebase/firestore";
 import { db } from "../firebase";
@@ -16,6 +18,7 @@ export const useFirestore = (userEmail) => {
   const [leads, setLeads] = useState([]);
   const [agents, setAgents] = useState([]);
   const [teams, setTeams] = useState([]);
+  const [myTeamMemberIds, setMyTeamMemberIds] = useState([]);
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState(null);
   const pollingRef = useRef(null);
@@ -227,16 +230,93 @@ export const useFirestore = (userEmail) => {
     }
   };
 
+  // Fetch manager's team from Firebase
+  const fetchMyTeam = useCallback(async () => {
+    if (!userEmail) return;
+
+    try {
+      // Use email as document ID (replace dots with underscores for valid ID)
+      const docId = userEmail.replace(/\./g, '_');
+      const teamDocRef = doc(db, "managerTeams", docId);
+      const teamDoc = await getDoc(teamDocRef);
+
+      if (teamDoc.exists()) {
+        const data = teamDoc.data();
+        console.log("Fetched manager team:", data.memberIds?.length || 0, "members");
+        setMyTeamMemberIds(data.memberIds || []);
+      } else {
+        console.log("No manager team found, starting fresh");
+        setMyTeamMemberIds([]);
+      }
+    } catch (error) {
+      console.error("Error fetching manager team:", error);
+    }
+  }, [userEmail]);
+
+  // Initial fetch for manager's team
+  useEffect(() => {
+    fetchMyTeam();
+  }, [fetchMyTeam]);
+
+  // Add agent to manager's team (persisted to Firebase)
+  const addToMyTeam = async (agentId) => {
+    if (!userEmail) return;
+
+    try {
+      const docId = userEmail.replace(/\./g, '_');
+      const teamDocRef = doc(db, "managerTeams", docId);
+      const newMemberIds = [...myTeamMemberIds, agentId];
+
+      await setDoc(teamDocRef, {
+        managerEmail: userEmail,
+        memberIds: newMemberIds,
+        updatedAt: new Date(),
+      }, { merge: true });
+
+      setMyTeamMemberIds(newMemberIds);
+      console.log("Agent added to manager team:", agentId);
+    } catch (error) {
+      console.error("Error adding agent to team:", error);
+      throw error;
+    }
+  };
+
+  // Remove agent from manager's team (persisted to Firebase)
+  const removeFromMyTeam = async (agentId) => {
+    if (!userEmail) return;
+
+    try {
+      const docId = userEmail.replace(/\./g, '_');
+      const teamDocRef = doc(db, "managerTeams", docId);
+      const newMemberIds = myTeamMemberIds.filter(id => id !== agentId);
+
+      await setDoc(teamDocRef, {
+        managerEmail: userEmail,
+        memberIds: newMemberIds,
+        updatedAt: new Date(),
+      }, { merge: true });
+
+      setMyTeamMemberIds(newMemberIds);
+      console.log("Agent removed from manager team:", agentId);
+    } catch (error) {
+      console.error("Error removing agent from team:", error);
+      throw error;
+    }
+  };
+
   return {
     leads,
     agents,
     teams,
+    myTeamMemberIds,
     loading,
     lastRefresh,
     addLead,
     updateAgentSettings,
     createTeam,
     assignAgentToTeam,
+    addToMyTeam,
+    removeFromMyTeam,
     refreshData,
   };
 };

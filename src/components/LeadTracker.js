@@ -2718,7 +2718,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   const [myTeamAgents, setMyTeamAgents] = useState([]);
 
   // Use Firebase for teams and agents data
-  const { teams, agents: firebaseAgents, leads: firebaseLeads, createTeam, assignAgentToTeam, refreshData, lastRefresh, loading: dataLoading } = useFirestore(user.email);
+  const { teams, agents: firebaseAgents, leads: firebaseLeads, createTeam, assignAgentToTeam, addToMyTeam, removeFromMyTeam, myTeamMemberIds, refreshData, lastRefresh, loading: dataLoading } = useFirestore(user.email);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Handle manual data refresh
@@ -2737,21 +2737,14 @@ const ManagerDashboard = ({ user, onSignOut }) => {
 
   const [notifications] = useState([]);
 
+  // Update myTeamAgents when Firebase data changes
   useEffect(() => {
-    // Initialize team assignments using Firebase agents
-    if (!globalTeamAssignments[user.email]) {
-      // Default to agents with matching supervisor
-      const defaultTeamAgents = firebaseAgents.filter(
-        (agent) => agent.supervisor === user.name
-      );
-      globalTeamAssignments[user.email] = defaultTeamAgents.map((a) => a.id);
-    }
-    setMyTeamAgents(
-      firebaseAgents.filter((agent) =>
-        globalTeamAssignments[user.email]?.includes(agent.id)
-      )
+    // Filter agents based on persisted myTeamMemberIds from Firebase
+    const teamAgents = firebaseAgents.filter((agent) =>
+      myTeamMemberIds.includes(agent.id)
     );
-  }, [user.email, user.name, firebaseAgents]);
+    setMyTeamAgents(teamAgents);
+  }, [firebaseAgents, myTeamMemberIds]);
 
   const handleAvatarUpload = (event) => {
     const file = event.target.files[0];
@@ -2764,30 +2757,24 @@ const ManagerDashboard = ({ user, onSignOut }) => {
 
   const handleTeamNameEdit = () => setIsEditingTeamName(false);
 
-  const addAgentToTeam = (agentId) => {
-    if (!globalTeamAssignments[user.email]) {
-      globalTeamAssignments[user.email] = [];
-    }
-    if (!globalTeamAssignments[user.email].includes(agentId)) {
-      globalTeamAssignments[user.email].push(agentId);
-      setMyTeamAgents(
-        firebaseAgents.filter((agent) =>
-          globalTeamAssignments[user.email].includes(agent.id)
-        )
-      );
+  const addAgentToTeam = async (agentId) => {
+    // Check if already in team
+    if (myTeamMemberIds.includes(agentId)) return;
+
+    try {
+      await addToMyTeam(agentId);
+    } catch (error) {
+      console.error("Error adding agent to team:", error);
+      alert("Error adding agent to team: " + error.message);
     }
   };
 
-  const removeAgentFromTeam = (agentId) => {
-    if (globalTeamAssignments[user.email]) {
-      globalTeamAssignments[user.email] = globalTeamAssignments[
-        user.email
-      ].filter((id) => id !== agentId);
-      setMyTeamAgents(
-        firebaseAgents.filter((agent) =>
-          globalTeamAssignments[user.email].includes(agent.id)
-        )
-      );
+  const removeAgentFromTeam = async (agentId) => {
+    try {
+      await removeFromMyTeam(agentId);
+    } catch (error) {
+      console.error("Error removing agent from team:", error);
+      alert("Error removing agent from team: " + error.message);
     }
   };
 
