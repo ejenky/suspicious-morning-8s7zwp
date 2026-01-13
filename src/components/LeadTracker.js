@@ -2976,6 +2976,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
 
   const strugglingAgents = getStrugglingAgents();
   const rankedTeams = getAllTeamsData();
+  const worstAdherenceAgents = []; // Five9 data not available - empty array
   const currentThemeStyles = themes[currentTheme];
 
   // Get overall company stats from Firebase data
