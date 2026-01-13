@@ -4632,43 +4632,50 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                 )}
               </div>
 
-              {/* Team Goals - Using global object like agent goals to avoid re-render lag */}
+              {/* Team Goals - Pure DOM approach, no React state */}
               <div className="mt-6 bg-white/10 rounded-lg p-4">
                 <h4 className="text-lg font-semibold text-white mb-4">
                   Team Goals
                 </h4>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm text-gray-300 mb-2">
+                    <label htmlFor="team-sales-goal" className="block text-sm text-gray-300 mb-2">
                       Team Sales Goal (Daily)
                     </label>
                     <input
-                      type="number"
-                      defaultValue={myTeamGoals?.salesGoal ?? globalTeamGoals.salesGoal}
-                      onChange={(e) => {
-                        globalTeamGoals.salesGoal = parseInt(e.target.value) || 0;
-                      }}
+                      id="team-sales-goal"
+                      type="text"
+                      inputMode="numeric"
+                      defaultValue={myTeamGoals?.salesGoal ?? 50}
                       className="w-full bg-slate-800 border border-white/20 rounded px-3 py-2 text-white"
+                      style={{ WebkitAppearance: 'none', MozAppearance: 'textfield' }}
                     />
                   </div>
                   <div>
-                    <label className="block text-sm text-gray-300 mb-2">
+                    <label htmlFor="team-conversion-goal" className="block text-sm text-gray-300 mb-2">
                       Team Conversion Goal (%)
                     </label>
                     <input
-                      type="number"
-                      defaultValue={myTeamGoals?.conversionGoal ?? globalTeamGoals.conversionGoal}
-                      onChange={(e) => {
-                        globalTeamGoals.conversionGoal = parseInt(e.target.value) || 0;
-                      }}
+                      id="team-conversion-goal"
+                      type="text"
+                      inputMode="numeric"
+                      defaultValue={myTeamGoals?.conversionGoal ?? 25}
                       className="w-full bg-slate-800 border border-white/20 rounded px-3 py-2 text-white"
+                      style={{ WebkitAppearance: 'none', MozAppearance: 'textfield' }}
                     />
                   </div>
                 </div>
                 <button
                   onClick={async () => {
+                    // Read directly from DOM
+                    const salesInput = document.getElementById('team-sales-goal');
+                    const convInput = document.getElementById('team-conversion-goal');
+                    const goals = {
+                      salesGoal: parseInt(salesInput?.value) || 0,
+                      conversionGoal: parseInt(convInput?.value) || 0,
+                    };
                     try {
-                      await updateMyTeamGoals(globalTeamGoals);
+                      await updateMyTeamGoals(goals);
                       alert("Team goals updated successfully!");
                     } catch (error) {
                       alert("Error updating team goals: " + error.message);
