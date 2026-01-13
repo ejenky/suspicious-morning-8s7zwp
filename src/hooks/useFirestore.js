@@ -48,28 +48,66 @@ export const useFirestore = (userEmail) => {
     return () => unsubscribe();
   }, [userEmail]);
 
-  // Fetch agents
+  // Fetch agents - get all users who are agents (or all users if role not set)
   useEffect(() => {
     if (!userEmail) return;
 
-    const usersCollection = collection(db, "users");
-    const q = query(usersCollection, where("role", "==", "agent"));
+    // First try to get from "agents" collection if it exists
+    const agentsCollection = collection(db, "agents");
 
-    const unsubscribe = onSnapshot(
-      q,
+    const unsubscribeAgents = onSnapshot(
+      agentsCollection,
       (snapshot) => {
-        const agentsData = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-        setAgents(agentsData);
+        if (snapshot.docs.length > 0) {
+          // If agents collection has data, use it
+          const agentsData = snapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }));
+          setAgents(agentsData);
+        } else {
+          // Fall back to users collection - get all users except managers
+          const usersCollection = collection(db, "users");
+          onSnapshot(
+            usersCollection,
+            (userSnapshot) => {
+              const agentsData = userSnapshot.docs
+                .map((doc) => ({
+                  id: doc.id,
+                  ...doc.data(),
+                }))
+                .filter((user) => user.role !== "manager"); // Include all non-managers
+              setAgents(agentsData);
+            },
+            (error) => {
+              console.error("Error fetching users:", error);
+            }
+          );
+        }
       },
       (error) => {
-        console.error("Error fetching agents:", error);
+        console.error("Error fetching agents collection:", error);
+        // Fall back to users collection
+        const usersCollection = collection(db, "users");
+        onSnapshot(
+          usersCollection,
+          (userSnapshot) => {
+            const agentsData = userSnapshot.docs
+              .map((doc) => ({
+                id: doc.id,
+                ...doc.data(),
+              }))
+              .filter((user) => user.role !== "manager");
+            setAgents(agentsData);
+          },
+          (error) => {
+            console.error("Error fetching users:", error);
+          }
+        );
       }
     );
 
-    return () => unsubscribe();
+    return () => unsubscribeAgents();
   }, [userEmail]);
 
   // Fetch teams

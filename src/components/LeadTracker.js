@@ -3564,7 +3564,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                   ))}
                 </select>
                 <span className="text-sm text-gray-300 ml-4">
-                  Showing data for {new Date(dateFilter).toLocaleDateString()}
+                  Showing data for {dateFilter ? (() => { const [y, m, d] = dateFilter.split('-'); return new Date(y, m - 1, d).toLocaleDateString(); })() : 'today'}
                 </span>
               </div>
             </div>
@@ -3909,7 +3909,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                   className="bg-slate-800 border border-white/20 rounded-lg px-3 py-2 text-white"
                 />
                 <span className="text-sm text-gray-300">
-                  Showing data for {new Date(dateFilter).toLocaleDateString()}
+                  Showing data for {dateFilter ? (() => { const [y, m, d] = dateFilter.split('-'); return new Date(y, m - 1, d).toLocaleDateString(); })() : 'today'}
                 </span>
               </div>
             </div>
