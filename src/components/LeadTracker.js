@@ -132,20 +132,20 @@ const getRealAgentStats = (agentEmail, dateFilter = null) => {
   }
 
   const sales = filteredLeads.filter((lead) => lead.sale);
-  const nonFUSales = filteredLeads.filter(
-    (lead) => lead.leadType !== "FU Sale"
+  const nonDashSales = filteredLeads.filter(
+    (lead) => lead.leadType !== "Dash Sale"
   );
   const referrals = filteredLeads.filter(
     (lead) => lead.leadType === "Referral Sale"
   );
 
   return {
-    leads: nonFUSales.length,
+    leads: nonDashSales.length,
     sales: sales.length,
     referrals: referrals.length,
     conversionRate:
-      nonFUSales.length > 0
-        ? ((sales.length / nonFUSales.length) * 100).toFixed(1)
+      nonDashSales.length > 0
+        ? ((sales.length / nonDashSales.length) * 100).toFixed(1)
         : 0,
     revenue: sales.reduce(
       (sum, lead) =>
@@ -223,7 +223,7 @@ const getTopNonSaleLeadTypes = (teamName, dateFilter = null, limit = 3) => {
   filteredLeads.forEach((lead) => {
     if (
       !lead.sale &&
-      !["Sale", "FU Sale", "Referral Sale"].includes(lead.leadType)
+      !["Sale", "Dash Sale", "Referral Sale"].includes(lead.leadType)
     ) {
       if (!nonSaleLeadTypes[lead.leadType]) {
         nonSaleLeadTypes[lead.leadType] = { count: 0, agents: new Set() };
@@ -818,8 +818,8 @@ const Leaderboards = ({ leads = [] }) => {
       }
 
       const agent = agentMap.get(agentId);
-      // Count non-FU leads
-      if (lead.leadType !== "FU Sale") {
+      // Count non-Dash Sale leads
+      if (lead.leadType !== "Dash Sale") {
         agent.leads++;
       }
       if (lead.sale) {
@@ -5506,25 +5506,26 @@ const AgentDashboard = ({ user, onSignOut }) => {
   });
 
   const leadTypes = [
-    "Immediate DC",
+    "Immediate Dc",
     "Has an Activity",
     "Tier 1",
+    "Not Appointed",
+    "Spanish",
     "Intro/Soa",
-    "RWB",
+    "RWB Card",
+    "No SEP",
     "No Value",
     "Dr Change",
     "Carrier Change",
     "Third Party",
-    "Pen & Paper",
+    "Pitch",
+    "Meds",
+    "Pre Inbound",
     "Inbound",
+    "Med Supp",
     "Sale",
-    "Twofer",
-    "2nd Part of Twofer",
-    "FU Sale",
     "Referral Sale",
-    "Not Appointed",
-    "Spanish",
-    "No Sep",
+    "Dash Sale",
   ];
   const carriers = [
     "Zing",
@@ -5545,7 +5546,7 @@ const AgentDashboard = ({ user, onSignOut }) => {
 
   // Load existing leads from global state
   useEffect(() => {
-    if (["Sale", "FU Sale", "Referral Sale"].includes(newLead.leadType)) {
+    if (["Sale", "Dash Sale", "Referral Sale"].includes(newLead.leadType)) {
       setNewLead((prev) => ({
         ...prev,
         sale: true,
