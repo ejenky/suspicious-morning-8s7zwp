@@ -1,99 +1,169 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   collection,
   addDoc,
   getDocs,
   doc,
   updateDoc,
-  query,
-  where,
-  orderBy,
-  onSnapshot,
+  getDoc,
   setDoc,
+  Timestamp,
 } from "firebase/firestore";
 import { db } from "../firebase";
+
+// Polling interval in milliseconds (60 seconds = controlled, predictable reads)
+const POLLING_INTERVAL = 60000;
 
 export const useFirestore = (userEmail) => {
   const [leads, setLeads] = useState([]);
   const [agents, setAgents] = useState([]);
   const [teams, setTeams] = useState([]);
+  const [myTeamMemberIds, setMyTeamMemberIds] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [lastRefresh, setLastRefresh] = useState(null);
+  const pollingRef = useRef(null);
+  const isVisibleRef = useRef(true);
 
-  // Fetch leads
-  useEffect(() => {
+  // One-time fetch for leads (much more efficient than real-time listener)
+  const fetchLeads = useCallback(async () => {
     if (!userEmail) {
       setLoading(false);
       return;
     }
 
-    const leadsCollection = collection(db, "leads");
-    const q = query(leadsCollection, orderBy("timestamp", "desc"));
+    setLoading(true);
+    console.log("useFirestore: Fetching leads (one-time)");
 
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const leadsData = snapshot.docs.map((doc) => ({
+    try {
+      const leadsCollection = collection(db, "leads");
+      const snapshot = await getDocs(leadsCollection);
+
+      console.log("useFirestore: Received", snapshot.docs.length, "leads from Firebase");
+
+      const leadsData = snapshot.docs.map((doc) => {
+        const data = doc.data();
+        return {
           id: doc.id,
-          ...doc.data(),
-        }));
-        setLeads(leadsData);
-        setLoading(false);
-      },
-      (error) => {
-        console.error("Error fetching leads:", error);
-        setLoading(false);
-      }
-    );
+          ...data,
+          // Normalize timestamp
+          timestamp: data.timestamp?.toDate?.() || data.timestamp || new Date(data.createdAt || Date.now()),
+        };
+      });
 
-    return () => unsubscribe();
+      // Sort by timestamp client-side
+      leadsData.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+      console.log("useFirestore: Processed leads:", leadsData.length);
+
+      setLeads(leadsData);
+      setLastRefresh(new Date());
+      setLoading(false);
+    } catch (error) {
+      console.error("useFirestore: Error fetching leads:", error);
+      setLoading(false);
+    }
   }, [userEmail]);
 
-  // Fetch agents
+  // Initial fetch on mount
+  useEffect(() => {
+    fetchLeads();
+  }, [fetchLeads]);
+
+  // Derive agents from leads data - extract unique agents who have submitted leads
+  useEffect(() => {
+    if (leads.length === 0) {
+      setAgents([]);
+      return;
+    }
+
+    console.log("useFirestore: Deriving agents from", leads.length, "leads");
+
+    // Extract unique agents from leads data
+    const agentMap = new Map();
+
+    leads.forEach((lead) => {
+      // Use agent (userId) as the primary identifier
+      const agentId = lead.agent;
+      const agentEmail = lead.agentEmail || lead.agent;
+
+      if (agentId && !agentMap.has(agentId)) {
+        agentMap.set(agentId, {
+          id: agentId,
+          email: agentEmail,
+          name: lead.agentName || (agentEmail.includes('@') ? agentEmail.split('@')[0] : agentEmail) || 'Unknown Agent',
+          teamId: lead.teamId || null,
+          team: lead.team || null,
+          center: lead.center || null,
+        });
+      }
+    });
+
+    const agentsData = Array.from(agentMap.values());
+    console.log("useFirestore: Found", agentsData.length, "unique agents");
+    setAgents(agentsData);
+  }, [leads]);
+
+  // One-time fetch for teams
+  const fetchTeams = useCallback(async () => {
+    if (!userEmail) return;
+
+    try {
+      const teamsCollection = collection(db, "teams");
+      const snapshot = await getDocs(teamsCollection);
+      const teamsData = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      setTeams(teamsData);
+    } catch (error) {
+      console.error("Error fetching teams:", error);
+    }
+  }, [userEmail]);
+
+  // Initial fetch for teams
+  useEffect(() => {
+    fetchTeams();
+  }, [fetchTeams]);
+
+  // Smart polling - auto-refresh every 60 seconds when tab is visible
   useEffect(() => {
     if (!userEmail) return;
 
-    const usersCollection = collection(db, "users");
-    const q = query(usersCollection, where("role", "==", "agent"));
+    // Start polling
+    const startPolling = () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+      pollingRef.current = setInterval(() => {
+        if (isVisibleRef.current) {
+          console.log("useFirestore: Auto-refresh polling...");
+          fetchLeads();
+          fetchTeams();
+        }
+      }, POLLING_INTERVAL);
+    };
 
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const agentsData = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-        setAgents(agentsData);
-      },
-      (error) => {
-        console.error("Error fetching agents:", error);
+    // Handle visibility change - refresh when tab becomes visible
+    const handleVisibilityChange = () => {
+      isVisibleRef.current = !document.hidden;
+      if (!document.hidden) {
+        console.log("useFirestore: Tab visible, refreshing data...");
+        fetchLeads();
+        fetchTeams();
       }
-    );
+    };
 
-    return () => unsubscribe();
-  }, [userEmail]);
+    startPolling();
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
-  // Fetch teams
-  useEffect(() => {
-    if (!userEmail) return;
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [userEmail, fetchLeads, fetchTeams]);
 
-    const teamsCollection = collection(db, "teams");
-
-    const unsubscribe = onSnapshot(
-      teamsCollection,
-      (snapshot) => {
-        const teamsData = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-        setTeams(teamsData);
-      },
-      (error) => {
-        console.error("Error fetching teams:", error);
-      }
-    );
-
-    return () => unsubscribe();
-  }, [userEmail]);
+  // Refresh all data function
+  const refreshData = useCallback(async () => {
+    console.log("useFirestore: Refreshing all data...");
+    await Promise.all([fetchLeads(), fetchTeams()]);
+  }, [fetchLeads, fetchTeams]);
 
   // Add lead function
   const addLead = async (leadData) => {
@@ -129,12 +199,16 @@ export const useFirestore = (userEmail) => {
   // Create team
   const createTeam = async (teamData) => {
     try {
+      console.log("Creating team with data:", teamData);
       const teamsCollection = collection(db, "teams");
       const docRef = await addDoc(teamsCollection, {
         ...teamData,
+        members: teamData.members || [],
         createdAt: new Date(),
       });
       console.log("Team created with ID:", docRef.id);
+      // Refresh teams list after creating
+      await fetchTeams();
       return docRef.id;
     } catch (error) {
       console.error("Error creating team:", error);
@@ -156,14 +230,93 @@ export const useFirestore = (userEmail) => {
     }
   };
 
+  // Fetch manager's team from Firebase
+  const fetchMyTeam = useCallback(async () => {
+    if (!userEmail) return;
+
+    try {
+      // Use email as document ID (replace dots with underscores for valid ID)
+      const docId = userEmail.replace(/\./g, '_');
+      const teamDocRef = doc(db, "managerTeams", docId);
+      const teamDoc = await getDoc(teamDocRef);
+
+      if (teamDoc.exists()) {
+        const data = teamDoc.data();
+        console.log("Fetched manager team:", data.memberIds?.length || 0, "members");
+        setMyTeamMemberIds(data.memberIds || []);
+      } else {
+        console.log("No manager team found, starting fresh");
+        setMyTeamMemberIds([]);
+      }
+    } catch (error) {
+      console.error("Error fetching manager team:", error);
+    }
+  }, [userEmail]);
+
+  // Initial fetch for manager's team
+  useEffect(() => {
+    fetchMyTeam();
+  }, [fetchMyTeam]);
+
+  // Add agent to manager's team (persisted to Firebase)
+  const addToMyTeam = async (agentId) => {
+    if (!userEmail) return;
+
+    try {
+      const docId = userEmail.replace(/\./g, '_');
+      const teamDocRef = doc(db, "managerTeams", docId);
+      const newMemberIds = [...myTeamMemberIds, agentId];
+
+      await setDoc(teamDocRef, {
+        managerEmail: userEmail,
+        memberIds: newMemberIds,
+        updatedAt: new Date(),
+      }, { merge: true });
+
+      setMyTeamMemberIds(newMemberIds);
+      console.log("Agent added to manager team:", agentId);
+    } catch (error) {
+      console.error("Error adding agent to team:", error);
+      throw error;
+    }
+  };
+
+  // Remove agent from manager's team (persisted to Firebase)
+  const removeFromMyTeam = async (agentId) => {
+    if (!userEmail) return;
+
+    try {
+      const docId = userEmail.replace(/\./g, '_');
+      const teamDocRef = doc(db, "managerTeams", docId);
+      const newMemberIds = myTeamMemberIds.filter(id => id !== agentId);
+
+      await setDoc(teamDocRef, {
+        managerEmail: userEmail,
+        memberIds: newMemberIds,
+        updatedAt: new Date(),
+      }, { merge: true });
+
+      setMyTeamMemberIds(newMemberIds);
+      console.log("Agent removed from manager team:", agentId);
+    } catch (error) {
+      console.error("Error removing agent from team:", error);
+      throw error;
+    }
+  };
+
   return {
     leads,
     agents,
     teams,
+    myTeamMemberIds,
     loading,
+    lastRefresh,
     addLead,
     updateAgentSettings,
     createTeam,
     assignAgentToTeam,
+    addToMyTeam,
+    removeFromMyTeam,
+    refreshData,
   };
 };

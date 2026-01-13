@@ -1,73 +1,110 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   collection,
   addDoc,
   query,
   where,
-  orderBy,
-  onSnapshot,
+  getDocs,
   serverTimestamp,
   Timestamp,
 } from "firebase/firestore";
 import { db } from "../firebase";
 
+// Polling interval in milliseconds (60 seconds = controlled, predictable reads)
+const POLLING_INTERVAL = 60000;
+
 export const useLeads = (userId) => {
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const pollingRef = useRef(null);
+  const isVisibleRef = useRef(true);
 
-  useEffect(() => {
+  // One-time fetch function (much more efficient than real-time listener)
+  const fetchLeads = useCallback(async (showLoading = false) => {
     if (!userId) {
       console.log("No userId provided to useLeads");
       setLoading(false);
       return;
     }
 
-    console.log("Setting up leads listener for user:", userId);
+    if (showLoading) setLoading(true);
+    console.log("useLeads: Fetching leads for user:", userId);
 
-    // Create query for user's leads
-    const leadsQuery = query(
-      collection(db, "leads"),
-      where("agent", "==", userId),
-      orderBy("timestamp", "desc")
-    );
+    try {
+      // Query for user's leads (no orderBy to avoid index requirement)
+      const leadsQuery = query(
+        collection(db, "leads"),
+        where("agent", "==", userId)
+      );
 
-    // Set up real-time listener
-    const unsubscribe = onSnapshot(
-      leadsQuery,
-      (snapshot) => {
-        console.log("Firestore leads snapshot received. Size:", snapshot.size);
+      const snapshot = await getDocs(leadsQuery);
+      console.log("useLeads: Received", snapshot.size, "leads");
 
-        const leadsData = snapshot.docs.map((doc) => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            ...data,
-            timestamp:
-              data.timestamp instanceof Timestamp
-                ? data.timestamp.toDate()
-                : data.timestamp?.toDate?.() ||
-                  new Date(data.timestamp || data.createdAt),
-          };
-        });
+      const leadsData = snapshot.docs.map((doc) => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          timestamp:
+            data.timestamp instanceof Timestamp
+              ? data.timestamp.toDate()
+              : data.timestamp?.toDate?.() ||
+                new Date(data.timestamp || data.createdAt),
+        };
+      });
 
-        console.log("Processed leads data:", leadsData.length, "leads");
-        setLeads(leadsData);
-        setLoading(false);
-        setError(null);
-      },
-      (error) => {
-        console.error("Firestore leads error:", error);
-        setError(error.message);
-        setLoading(false);
+      // Sort client-side by timestamp descending
+      leadsData.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+      console.log("useLeads: Processed leads data:", leadsData.length, "leads");
+      setLeads(leadsData);
+      setLoading(false);
+      setError(null);
+    } catch (err) {
+      console.error("useLeads: Firestore error:", err);
+      setError(err.message);
+      setLoading(false);
+    }
+  }, [userId]);
+
+  // Initial fetch on mount
+  useEffect(() => {
+    fetchLeads(true);
+  }, [fetchLeads]);
+
+  // Smart polling - auto-refresh every 60 seconds when tab is visible
+  useEffect(() => {
+    if (!userId) return;
+
+    // Start polling
+    const startPolling = () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+      pollingRef.current = setInterval(() => {
+        if (isVisibleRef.current) {
+          console.log("useLeads: Auto-refresh polling...");
+          fetchLeads(false); // Don't show loading spinner for background refresh
+        }
+      }, POLLING_INTERVAL);
+    };
+
+    // Handle visibility change - refresh when tab becomes visible
+    const handleVisibilityChange = () => {
+      isVisibleRef.current = !document.hidden;
+      if (!document.hidden) {
+        console.log("useLeads: Tab visible, refreshing data...");
+        fetchLeads(false);
       }
-    );
+    };
+
+    startPolling();
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
-      console.log("Cleaning up leads listener");
-      unsubscribe();
+      if (pollingRef.current) clearInterval(pollingRef.current);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [userId]);
+  }, [userId, fetchLeads]);
 
   const addLead = async (leadData) => {
     try {
@@ -82,6 +119,9 @@ export const useLeads = (userId) => {
 
       const docRef = await addDoc(collection(db, "leads"), lead);
       console.log("Lead added successfully with ID:", docRef.id);
+
+      // Immediately refresh leads so agent sees their new entry
+      await fetchLeads(false);
 
       return { success: true, id: docRef.id };
     } catch (error) {
@@ -139,5 +179,8 @@ export const useLeads = (userId) => {
     return metrics;
   };
 
-  return { leads, loading, error, addLead, calculateMetrics };
+  // Manual refresh function (in case agent wants to force refresh)
+  const refreshLeads = useCallback(() => fetchLeads(false), [fetchLeads]);
+
+  return { leads, loading, error, addLead, calculateMetrics, refreshLeads };
 };
