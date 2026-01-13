@@ -3019,9 +3019,9 @@ const ManagerDashboard = ({ user, onSignOut }) => {
       revenue: 0,
     });
 
-    // Calculate aggregate percentages
-    const avgConversion = teamMemberStats.length > 0
-      ? (teamMemberStats.reduce((sum, m) => sum + parseFloat(m.conversionRate), 0) / teamMemberStats.length).toFixed(1)
+    // Calculate aggregate percentages (using totals, not averages)
+    const teamConversion = totals.leads > 0
+      ? ((totals.sales / totals.leads) * 100).toFixed(1)
       : "0.0";
 
     const avgRefRate = totals.leads > 0
@@ -3053,7 +3053,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
       totalSales: totals.sales,
       totalReferrals: totals.referrals,
       totalRevenue: totals.revenue,
-      avgConversion,
+      avgConversion: teamConversion,
       avgRefRate,
       avgSpd,
       avgEffectiveness,
