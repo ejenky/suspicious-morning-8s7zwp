@@ -2729,20 +2729,20 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   const [notifications] = useState([]);
 
   useEffect(() => {
-    // Initialize team assignments
+    // Initialize team assignments using Firebase agents
     if (!globalTeamAssignments[user.email]) {
       // Default to agents with matching supervisor
-      const defaultTeamAgents = mockAgents.filter(
+      const defaultTeamAgents = firebaseAgents.filter(
         (agent) => agent.supervisor === user.name
       );
       globalTeamAssignments[user.email] = defaultTeamAgents.map((a) => a.id);
     }
     setMyTeamAgents(
-      mockAgents.filter((agent) =>
+      firebaseAgents.filter((agent) =>
         globalTeamAssignments[user.email]?.includes(agent.id)
       )
     );
-  }, [user.email, user.name]);
+  }, [user.email, user.name, firebaseAgents]);
 
   const handleAvatarUpload = (event) => {
     const file = event.target.files[0];
@@ -2762,7 +2762,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
     if (!globalTeamAssignments[user.email].includes(agentId)) {
       globalTeamAssignments[user.email].push(agentId);
       setMyTeamAgents(
-        mockAgents.filter((agent) =>
+        firebaseAgents.filter((agent) =>
           globalTeamAssignments[user.email].includes(agent.id)
         )
       );
@@ -2775,7 +2775,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
         user.email
       ].filter((id) => id !== agentId);
       setMyTeamAgents(
-        mockAgents.filter((agent) =>
+        firebaseAgents.filter((agent) =>
           globalTeamAssignments[user.email].includes(agent.id)
         )
       );
@@ -2990,10 +2990,9 @@ const ManagerDashboard = ({ user, onSignOut }) => {
 
   // Get struggling agents based on real data with location and performance filters
   const getStrugglingAgents = () => {
-    let agents = mockAgents.map((agent) => ({
+    let agents = firebaseAgents.map((agent) => ({
       ...agent,
-      ...getRealAgentStats(agent.email, dateFilter),
-      five9Data: mockFive9Data[agent.email],
+      ...getAgentStatsFromFirebase(agent.email, dateFilter),
     }));
 
     if (selectedCenter !== "all") {
@@ -3002,36 +3001,33 @@ const ManagerDashboard = ({ user, onSignOut }) => {
 
     return agents
       .sort((a, b) => {
-        // Sort by multiple criteria: sales, conversion rate, Five9 adherence
+        // Sort by multiple criteria: sales, conversion rate
         const scoreA =
           a.sales * 0.4 +
-          parseFloat(a.conversionRate) * 0.3 +
-          (a.five9Data?.nrt || 0) * 0.3;
+          parseFloat(a.conversionRate) * 0.3;
         const scoreB =
           b.sales * 0.4 +
-          parseFloat(b.conversionRate) * 0.3 +
-          (b.five9Data?.nrt || 0) * 0.3;
+          parseFloat(b.conversionRate) * 0.3;
         return scoreA - scoreB;
       })
       .slice(0, 10);
   };
 
-  // Get worst Five9 adherence agents
+  // Get worst Five9 adherence agents (placeholder - Five9 data would come from integration)
   const getWorstAdherenceAgents = () => {
-    let agents = mockAgents
-      .map((agent) => ({ ...agent, five9Data: mockFive9Data[agent.email] }))
-      .filter((agent) => agent.five9Data);
+    // Five9 data would need to be integrated from Five9 API
+    // For now, return agents sorted by lowest performance
+    let agents = firebaseAgents.map((agent) => ({
+      ...agent,
+      ...getAgentStatsFromFirebase(agent.email, dateFilter),
+    }));
 
     if (selectedCenter !== "all") {
       agents = agents.filter((agent) => agent.center === selectedCenter);
     }
 
     return agents
-      .sort((a, b) => {
-        const scoreA = a.five9Data.talkTime - a.five9Data.nrt;
-        const scoreB = b.five9Data.talkTime - b.five9Data.nrt;
-        return scoreA - scoreB;
-      })
+      .sort((a, b) => parseFloat(a.conversionRate) - parseFloat(b.conversionRate))
       .slice(0, 10);
   };
 
@@ -3042,50 +3038,37 @@ const ManagerDashboard = ({ user, onSignOut }) => {
 
   // Get overall company stats
   const getCompanyStats = () => {
-    let agents = mockAgents;
+    let agents = firebaseAgents;
     if (selectedCenter !== "all") {
       agents = agents.filter((agent) => agent.center === selectedCenter);
     }
 
     const allAgentStats = agents.map((agent) =>
-      getRealAgentStats(agent.email, dateFilter)
+      getAgentStatsFromFirebase(agent.email, dateFilter)
     );
+
+    const totalLeads = allAgentStats.reduce((sum, stats) => sum + parseInt(stats.leads || 0), 0);
+    const totalReferrals = allAgentStats.reduce((sum, stats) => sum + parseInt(stats.referrals || 0), 0);
+
     return {
       totalAgents: agents.length,
       totalSales: allAgentStats.reduce(
-        (sum, stats) => sum + parseInt(stats.sales),
+        (sum, stats) => sum + parseInt(stats.sales || 0),
         0
       ),
-      totalLeads: allAgentStats.reduce(
-        (sum, stats) => sum + parseInt(stats.leads),
-        0
-      ),
-      totalReferrals: allAgentStats.reduce(
-        (sum, stats) => sum + parseInt(stats.referrals),
-        0
-      ),
-      avgConversion: (
+      totalLeads,
+      totalReferrals,
+      avgConversion: agents.length > 0 ? (
         allAgentStats.reduce(
-          (sum, stats) => sum + parseFloat(stats.conversionRate),
+          (sum, stats) => sum + parseFloat(stats.conversionRate || 0),
           0
-        ) / allAgentStats.length
-      ).toFixed(1),
-      referralRate:
-        allAgentStats.reduce((sum, stats) => sum + parseInt(stats.leads), 0) > 0
-          ? (
-              (allAgentStats.reduce(
-                (sum, stats) => sum + parseInt(stats.referrals),
-                0
-              ) /
-                allAgentStats.reduce(
-                  (sum, stats) => sum + parseInt(stats.leads),
-                  0
-                )) *
-              100
-            ).toFixed(1)
-          : 0,
+        ) / agents.length
+      ).toFixed(1) : "0.0",
+      referralRate: totalLeads > 0
+        ? ((totalReferrals / totalLeads) * 100).toFixed(1)
+        : "0.0",
       totalRevenue: allAgentStats.reduce(
-        (sum, stats) => sum + stats.revenue,
+        (sum, stats) => sum + (stats.revenue || 0),
         0
       ),
     };
@@ -4164,7 +4147,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                   <p className="text-2xl font-bold text-white">
                     {myTeamAgents.reduce(
                       (sum, member) =>
-                        sum + getRealAgentStats(member.email, dateFilter).sales,
+                        sum + getAgentStatsFromFirebase(member.email, dateFilter).sales,
                       0
                     )}
                   </p>
@@ -4178,7 +4161,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                             (sum, member) =>
                               sum +
                               parseFloat(
-                                getRealAgentStats(member.email, dateFilter)
+                                getAgentStatsFromFirebase(member.email, dateFilter)
                                   .conversionRate
                               ),
                             0
@@ -4196,7 +4179,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                       .reduce(
                         (sum, member) =>
                           sum +
-                          getRealAgentStats(member.email, dateFilter).revenue,
+                          getAgentStatsFromFirebase(member.email, dateFilter).revenue,
                         0
                       )
                       .toLocaleString()}
@@ -4210,7 +4193,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                   Add Agents to Your Team
                 </h4>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  {mockAgents
+                  {firebaseAgents
                     .filter(
                       (agent) => !myTeamAgents.some((ta) => ta.id === agent.id)
                     )
@@ -4219,7 +4202,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                         key={agent.id}
                         className="flex items-center justify-between bg-white/5 rounded-lg p-2"
                       >
-                        <span className="text-white text-sm">{agent.name}</span>
+                        <span className="text-white text-sm">{agent.name || agent.email}</span>
                         <button
                           onClick={() => addAgentToTeam(agent.id)}
                           className="bg-green-600 hover:bg-green-700 px-2 py-1 rounded text-white text-xs"
@@ -4228,11 +4211,11 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                         </button>
                       </div>
                     ))}
-                  {mockAgents.filter(
+                  {firebaseAgents.filter(
                     (agent) => !myTeamAgents.some((ta) => ta.id === agent.id)
                   ).length === 0 && (
                     <p className="text-gray-300 text-sm col-span-3">
-                      All available agents are already on your team
+                      {firebaseAgents.length === 0 ? "No agents registered yet" : "All available agents are already on your team"}
                     </p>
                   )}
                 </div>
@@ -4249,7 +4232,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                   </p>
                 ) : (
                   myTeamAgents.map((member) => {
-                    const memberStats = getRealAgentStats(
+                    const memberStats = getAgentStatsFromFirebase(
                       member.email,
                       dateFilter
                     );
