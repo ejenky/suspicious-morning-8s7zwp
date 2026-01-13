@@ -766,7 +766,7 @@ const PvPChallenges = ({ user }) => {
 };
 
 // Enhanced Leaderboards
-const Leaderboards = ({ agents = [], leads = [] }) => {
+const Leaderboards = ({ leads = [] }) => {
   const boards = [
     {
       key: "sales",
@@ -787,6 +787,31 @@ const Leaderboards = ({ agents = [], leads = [] }) => {
       color: "from-purple-500 to-pink-500",
     },
   ];
+
+  // Derive unique agents from leads data
+  const getAgentsFromLeads = () => {
+    const agentMap = new Map();
+    leads.forEach((lead) => {
+      const email = lead.agentEmail || lead.agent;
+      if (email && !agentMap.has(email)) {
+        agentMap.set(email, {
+          id: email,
+          email: email,
+          name: lead.agentName || email.split("@")[0],
+        });
+      }
+      // Update name if we find a better one
+      if (lead.agentName && agentMap.has(email)) {
+        const existing = agentMap.get(email);
+        if (!existing.name || existing.name === email.split("@")[0]) {
+          agentMap.set(email, { ...existing, name: lead.agentName });
+        }
+      }
+    });
+    return Array.from(agentMap.values());
+  };
+
+  const agents = getAgentsFromLeads();
 
   // Calculate stats from real leads data for each agent
   const getAgentStats = (agentEmail) => {
@@ -843,13 +868,13 @@ const Leaderboards = ({ agents = [], leads = [] }) => {
     }
   };
 
-  if (agents.length === 0) {
+  if (leads.length === 0) {
     return (
       <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20 text-center">
         <Trophy className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-        <p className="text-white text-lg font-medium">No agents found</p>
+        <p className="text-white text-lg font-medium">No data yet</p>
         <p className="text-gray-400 text-sm mt-1">
-          Agent data will appear here once agents are registered in the system.
+          Leaderboard data will appear once leads are submitted.
         </p>
       </div>
     );
@@ -4648,7 +4673,6 @@ const AgentDashboard = ({ user, onSignOut }) => {
   } = useLeads(user.uid);
   const {
     leads: allLeads,
-    agents: allAgents,
     loading: firestoreLoading,
   } = useFirestore(user.email);
   const [activeTab, setActiveTab] = useState("dashboard");
@@ -5554,7 +5578,7 @@ const AgentDashboard = ({ user, onSignOut }) => {
         {activeTab === "analytics" && (
           <AnalyticsDashboard leads={leads} user={user} theme={currentTheme} />
         )}
-        {activeTab === "leaderboards" && <Leaderboards agents={allAgents} leads={allLeads} />}
+        {activeTab === "leaderboards" && <Leaderboards leads={allLeads} />}
         {activeTab === "notifications" && (
           <div
             className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-6 border border-white/20`}
