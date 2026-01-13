@@ -1731,6 +1731,7 @@ const AnalyticsDashboard = ({ leads, user, theme }) => {
           </h3>
           <div className="space-y-4">
             {Object.entries(leadTypeBreakdown)
+              .filter(([type]) => !["Sale", "Dash Sale", "Referral Sale"].some(saleType => type?.startsWith(saleType)))
               .sort(([, a], [, b]) => b.total - a.total)
               .slice(0, 3)
               .map(([type, data], index) => (
