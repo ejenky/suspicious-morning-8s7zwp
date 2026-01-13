@@ -19,6 +19,7 @@ export const useFirestore = (userEmail) => {
   const [agents, setAgents] = useState([]);
   const [teams, setTeams] = useState([]);
   const [myTeamMemberIds, setMyTeamMemberIds] = useState([]);
+  const [myTeamGoals, setMyTeamGoals] = useState({ salesGoal: 50, conversionGoal: 25 });
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState(null);
   const pollingRef = useRef(null);
@@ -244,6 +245,10 @@ export const useFirestore = (userEmail) => {
         const data = teamDoc.data();
         console.log("Fetched manager team:", data.memberIds?.length || 0, "members");
         setMyTeamMemberIds(data.memberIds || []);
+        // Load team goals if they exist
+        if (data.teamGoals) {
+          setMyTeamGoals(data.teamGoals);
+        }
       } else {
         console.log("No manager team found, starting fresh");
         setMyTeamMemberIds([]);
@@ -304,11 +309,34 @@ export const useFirestore = (userEmail) => {
     }
   };
 
+  // Update team goals (persisted to Firebase)
+  const updateMyTeamGoals = async (goals) => {
+    if (!userEmail) return;
+
+    try {
+      const docId = userEmail.replace(/\./g, '_');
+      const teamDocRef = doc(db, "managerTeams", docId);
+
+      await setDoc(teamDocRef, {
+        managerEmail: userEmail,
+        teamGoals: goals,
+        updatedAt: new Date(),
+      }, { merge: true });
+
+      setMyTeamGoals(goals);
+      console.log("Team goals updated:", goals);
+    } catch (error) {
+      console.error("Error updating team goals:", error);
+      throw error;
+    }
+  };
+
   return {
     leads,
     agents,
     teams,
     myTeamMemberIds,
+    myTeamGoals,
     loading,
     lastRefresh,
     addLead,
@@ -317,6 +345,7 @@ export const useFirestore = (userEmail) => {
     assignAgentToTeam,
     addToMyTeam,
     removeFromMyTeam,
+    updateMyTeamGoals,
     refreshData,
   };
 };

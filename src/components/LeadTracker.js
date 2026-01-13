@@ -2718,9 +2718,10 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   const [teamName, setTeamName] = useState("Sales Team Alpha");
   const [isEditingTeamName, setIsEditingTeamName] = useState(false);
   const [myTeamAgents, setMyTeamAgents] = useState([]);
+  const [teamGoalsForm, setTeamGoalsForm] = useState({ salesGoal: 50, conversionGoal: 25 });
 
   // Use Firebase for teams and agents data
-  const { teams, agents: firebaseAgents, leads: firebaseLeads, createTeam, assignAgentToTeam, addToMyTeam, removeFromMyTeam, myTeamMemberIds, refreshData, lastRefresh, loading: dataLoading } = useFirestore(user.email);
+  const { teams, agents: firebaseAgents, leads: firebaseLeads, createTeam, assignAgentToTeam, addToMyTeam, removeFromMyTeam, myTeamMemberIds, myTeamGoals, updateMyTeamGoals, refreshData, lastRefresh, loading: dataLoading } = useFirestore(user.email);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Handle manual data refresh
@@ -2754,6 +2755,13 @@ const ManagerDashboard = ({ user, onSignOut }) => {
     );
     setMyTeamAgents(teamAgents);
   }, [firebaseAgents, myTeamMemberIds]);
+
+  // Sync team goals form with Firebase data
+  useEffect(() => {
+    if (myTeamGoals) {
+      setTeamGoalsForm(myTeamGoals);
+    }
+  }, [myTeamGoals]);
 
   const handleAvatarUpload = (event) => {
     const file = event.target.files[0];
@@ -4643,7 +4651,13 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                     </label>
                     <input
                       type="number"
-                      placeholder="50"
+                      value={teamGoalsForm.salesGoal}
+                      onChange={(e) =>
+                        setTeamGoalsForm({
+                          ...teamGoalsForm,
+                          salesGoal: parseInt(e.target.value) || 0,
+                        })
+                      }
                       className="w-full bg-slate-800 border border-white/20 rounded px-3 py-2 text-white"
                     />
                   </div>
@@ -4653,12 +4667,28 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                     </label>
                     <input
                       type="number"
-                      placeholder="25"
+                      value={teamGoalsForm.conversionGoal}
+                      onChange={(e) =>
+                        setTeamGoalsForm({
+                          ...teamGoalsForm,
+                          conversionGoal: parseInt(e.target.value) || 0,
+                        })
+                      }
                       className="w-full bg-slate-800 border border-white/20 rounded px-3 py-2 text-white"
                     />
                   </div>
                 </div>
-                <button className="mt-4 bg-green-600 hover:bg-green-700 px-4 py-2 rounded text-white">
+                <button
+                  onClick={async () => {
+                    try {
+                      await updateMyTeamGoals(teamGoalsForm);
+                      alert("Team goals updated successfully!");
+                    } catch (error) {
+                      alert("Error updating team goals: " + error.message);
+                    }
+                  }}
+                  className="mt-4 bg-green-600 hover:bg-green-700 px-4 py-2 rounded text-white"
+                >
                   Update Team Goals
                 </button>
               </div>
