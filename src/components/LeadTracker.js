@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import {
   Users,
@@ -2718,8 +2718,10 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   const [teamName, setTeamName] = useState("Sales Team Alpha");
   const [isEditingTeamName, setIsEditingTeamName] = useState(false);
   const [myTeamAgents, setMyTeamAgents] = useState([]);
-  const [teamGoalsForm, setTeamGoalsForm] = useState({ salesGoal: "50", conversionGoal: "25" });
-  const [teamGoalsInitialized, setTeamGoalsInitialized] = useState(false);
+
+  // Refs for team goals inputs (uncontrolled for reliable editing)
+  const salesGoalRef = useRef(null);
+  const conversionGoalRef = useRef(null);
 
   // Use Firebase for teams and agents data
   const { teams, agents: firebaseAgents, leads: firebaseLeads, createTeam, assignAgentToTeam, addToMyTeam, removeFromMyTeam, myTeamMemberIds, myTeamGoals, updateMyTeamGoals, refreshData, lastRefresh, loading: dataLoading } = useFirestore(user.email);
@@ -2757,16 +2759,17 @@ const ManagerDashboard = ({ user, onSignOut }) => {
     setMyTeamAgents(teamAgents);
   }, [firebaseAgents, myTeamMemberIds]);
 
-  // Sync team goals form with Firebase data (only on initial load)
+  // Set team goals input values when Firebase data loads
   useEffect(() => {
-    if (myTeamGoals && !teamGoalsInitialized) {
-      setTeamGoalsForm({
-        salesGoal: String(myTeamGoals.salesGoal ?? 50),
-        conversionGoal: String(myTeamGoals.conversionGoal ?? 25),
-      });
-      setTeamGoalsInitialized(true);
+    if (myTeamGoals) {
+      if (salesGoalRef.current) {
+        salesGoalRef.current.value = myTeamGoals.salesGoal ?? 50;
+      }
+      if (conversionGoalRef.current) {
+        conversionGoalRef.current.value = myTeamGoals.conversionGoal ?? 25;
+      }
     }
-  }, [myTeamGoals, teamGoalsInitialized]);
+  }, [myTeamGoals]);
 
   const handleAvatarUpload = (event) => {
     const file = event.target.files[0];
@@ -4655,16 +4658,11 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                       Team Sales Goal (Daily)
                     </label>
                     <input
+                      ref={salesGoalRef}
                       type="number"
                       min="0"
                       step="1"
-                      value={teamGoalsForm.salesGoal}
-                      onChange={(e) =>
-                        setTeamGoalsForm((prev) => ({
-                          ...prev,
-                          salesGoal: e.target.value,
-                        }))
-                      }
+                      defaultValue={myTeamGoals?.salesGoal ?? 50}
                       className="w-full bg-slate-800 border border-white/20 rounded px-3 py-2 text-white"
                     />
                   </div>
@@ -4673,17 +4671,12 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                       Team Conversion Goal (%)
                     </label>
                     <input
+                      ref={conversionGoalRef}
                       type="number"
                       min="0"
                       max="100"
                       step="1"
-                      value={teamGoalsForm.conversionGoal}
-                      onChange={(e) =>
-                        setTeamGoalsForm((prev) => ({
-                          ...prev,
-                          conversionGoal: e.target.value,
-                        }))
-                      }
+                      defaultValue={myTeamGoals?.conversionGoal ?? 25}
                       className="w-full bg-slate-800 border border-white/20 rounded px-3 py-2 text-white"
                     />
                   </div>
@@ -4692,15 +4685,10 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                   onClick={async () => {
                     try {
                       const goals = {
-                        salesGoal: parseInt(teamGoalsForm.salesGoal) || 0,
-                        conversionGoal: parseInt(teamGoalsForm.conversionGoal) || 0,
+                        salesGoal: parseInt(salesGoalRef.current?.value) || 0,
+                        conversionGoal: parseInt(conversionGoalRef.current?.value) || 0,
                       };
                       await updateMyTeamGoals(goals);
-                      // Update local form to match saved values
-                      setTeamGoalsForm({
-                        salesGoal: String(goals.salesGoal),
-                        conversionGoal: String(goals.conversionGoal),
-                      });
                       alert("Team goals updated successfully!");
                     } catch (error) {
                       alert("Error updating team goals: " + error.message);
