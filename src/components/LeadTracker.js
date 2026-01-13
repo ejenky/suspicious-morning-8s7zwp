@@ -6814,49 +6814,39 @@ const AdminDashboard = ({ user, onSignOut }) => {
     }
   };
 
-  // Filter leads for Denver only and by date range
-  const getDenverLeads = () => {
+  // Get all leads filtered by date range (company-wide)
+  const getFilteredLeads = () => {
     const { startDate, endDate } = getDateRange();
     return firebaseLeads.filter(lead => {
       const leadDate = lead.timestamp instanceof Date ? lead.timestamp : new Date(lead.timestamp);
-      const isInDateRange = leadDate >= startDate && leadDate < endDate;
-      // Get agent info to check if they're in Denver
-      const agent = firebaseAgents.find(a => a.email === lead.agentEmail || a.id === lead.agent);
-      const isDenver = agent?.center === "denver" || lead.center === "denver";
-      return isInDateRange && isDenver;
+      return leadDate >= startDate && leadDate < endDate;
     });
   };
 
-  // Calculate site performance stats
-  const getSitePerformance = () => {
-    const denverLeads = getDenverLeads();
-    const totalLeads = denverLeads.length;
-    const totalSales = denverLeads.filter(l => l.sale).length;
-    const referrals = denverLeads.filter(l => l.leadType?.startsWith("Referral Sale")).length;
-    const revenue = denverLeads.filter(l => l.sale).reduce(
+  // Calculate company-wide performance stats
+  const getCompanyPerformance = () => {
+    const leads = getFilteredLeads();
+    const totalLeads = leads.length;
+    const sales = leads.filter(l => l.sale);
+    const totalSales = sales.length;
+    const referrals = leads.filter(l => l.leadType?.startsWith("Referral Sale")).length;
+    const dashSales = leads.filter(l => l.leadType?.startsWith("Dash Sale")).length;
+    const revenue = sales.reduce(
       (sum, lead) => sum + (lead.commission || 115) + (lead.hra ? (lead.hraValue || 15) : 0),
       0
     );
     const conversionRate = totalLeads > 0 ? ((totalSales / totalLeads) * 100).toFixed(1) : "0.0";
     const refRate = totalLeads > 0 ? ((referrals / totalLeads) * 100).toFixed(1) : "0.0";
 
-    return {
-      totalLeads,
-      totalSales,
-      conversionRate,
-      revenue,
-      refRate,
-      newSalePercent: totalSales > 0 ? "85.8" : "0.0",
-      spaa: "3.9",
-    };
+    return { totalLeads, totalSales, conversionRate, revenue, refRate, referrals, dashSales };
   };
 
-  // Get top struggling lead types (excluding sales types)
+  // Get top struggling lead types
   const getStrugglingLeadTypes = () => {
-    const denverLeads = getDenverLeads();
+    const leads = getFilteredLeads();
     const leadTypeBreakdown = {};
 
-    denverLeads.forEach(lead => {
+    leads.forEach(lead => {
       const type = lead.leadType?.split(" - ")[0] || lead.leadType || "Unknown";
       const isSaleType = type.includes("Sale");
       if (!isSaleType) {
@@ -6867,299 +6857,284 @@ const AdminDashboard = ({ user, onSignOut }) => {
     });
 
     return Object.entries(leadTypeBreakdown)
-      .filter(([, data]) => data.total >= 3)
       .map(([type, data]) => ({
         type,
         count: data.total,
         conversion: data.total > 0 ? ((data.sales / data.total) * 100).toFixed(1) : "0.0"
       }))
-      .sort((a, b) => parseFloat(a.conversion) - parseFloat(b.conversion))
-      .slice(0, 10);
+      .sort((a, b) => a.count > 2 && b.count > 2 ? parseFloat(a.conversion) - parseFloat(b.conversion) : b.count - a.count)
+      .slice(0, 8);
   };
 
   // Get daily conversion data for chart
-  const getDailyConversionData = () => {
-    const denverLeads = getDenverLeads();
+  const getDailyData = () => {
+    const leads = getFilteredLeads();
     const dailyData = {};
 
-    denverLeads.forEach(lead => {
+    leads.forEach(lead => {
       const date = new Date(lead.timestamp);
       const dateKey = `${date.getMonth() + 1}/${date.getDate()}`;
-      if (!dailyData[dateKey]) dailyData[dateKey] = { leads: 0, sales: 0 };
+      if (!dailyData[dateKey]) dailyData[dateKey] = { leads: 0, sales: 0, date: date };
       dailyData[dateKey].leads++;
       if (lead.sale) dailyData[dateKey].sales++;
     });
 
     return Object.entries(dailyData)
+      .sort((a, b) => a[1].date - b[1].date)
       .map(([date, data]) => ({
         date,
-        conversion: data.leads > 0 ? ((data.sales / data.leads) * 100).toFixed(1) : 0
+        leads: data.leads,
+        sales: data.sales,
+        conversion: data.leads > 0 ? ((data.sales / data.leads) * 100).toFixed(1) : "0"
       }))
-      .slice(-14); // Last 14 days
+      .slice(-14);
   };
 
-  // Get agent performance for Denver
-  const getDenverAgentPerformance = () => {
-    const denverLeads = getDenverLeads();
-    const denverAgents = firebaseAgents.filter(a => a.center === "denver");
+  // Get agent performance
+  const getAgentPerformance = () => {
+    const leads = getFilteredLeads();
 
-    return denverAgents.map(agent => {
-      const agentLeads = denverLeads.filter(l => l.agentEmail === agent.email || l.agent === agent.id);
+    return firebaseAgents.map(agent => {
+      const agentLeads = leads.filter(l => l.agentEmail === agent.email || l.agent === agent.id);
       const sales = agentLeads.filter(l => l.sale).length;
-      const leads = agentLeads.length;
+      const leadCount = agentLeads.length;
+      const revenue = agentLeads.filter(l => l.sale).reduce(
+        (sum, lead) => sum + (lead.commission || 115) + (lead.hra ? (lead.hraValue || 15) : 0),
+        0
+      );
       return {
         ...agent,
-        leads,
+        leads: leadCount,
         sales,
-        conversionRate: leads > 0 ? ((sales / leads) * 100).toFixed(1) : "0.0"
+        revenue,
+        conversionRate: leadCount > 0 ? ((sales / leadCount) * 100).toFixed(1) : "0.0"
       };
-    }).sort((a, b) => parseFloat(a.conversionRate) - parseFloat(b.conversionRate));
+    })
+    .filter(a => a.leads > 0)
+    .sort((a, b) => parseFloat(a.conversionRate) - parseFloat(b.conversionRate));
   };
 
-  const sitePerformance = getSitePerformance();
+  const companyStats = getCompanyPerformance();
   const strugglingTypes = getStrugglingLeadTypes();
-  const conversionData = getDailyConversionData();
-  const denverAgents = getDenverAgentPerformance();
+  const dailyData = getDailyData();
+  const agentPerformance = getAgentPerformance();
+  const filteredLeads = getFilteredLeads();
 
   if (dataLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
-        <div className="text-white text-xl">Loading admin dashboard...</div>
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+        <div className="text-white text-xl">Loading...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-amber-900/20 to-slate-900 text-white">
+    <div className="min-h-screen bg-slate-900 text-white">
       {/* Header */}
-      <div className="bg-white/10 backdrop-blur-sm border-b border-white/20">
-        <div className="container mx-auto px-6 py-4">
+      <div className="bg-slate-800 border-b border-slate-700">
+        <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex justify-between items-center">
-            <div className="flex items-center gap-4">
-              <div className="bg-gradient-to-r from-amber-500 to-orange-600 p-3 rounded-xl">
-                <Building className="w-8 h-8 text-white" />
+            <div className="flex items-center gap-3">
+              <div className="bg-amber-500 p-2 rounded-lg">
+                <Building className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold">Admin Dashboard</h1>
-                <p className="text-gray-300">Denver Call Center Overview</p>
+                <h1 className="text-xl font-bold">Admin Dashboard</h1>
+                <p className="text-slate-400 text-sm">Company Overview</p>
               </div>
             </div>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <span className="text-gray-300">Filter:</span>
-                <select
-                  value={dateFilter}
-                  onChange={(e) => setDateFilter(e.target.value)}
-                  className="bg-slate-800 border border-white/20 rounded-lg px-3 py-2 text-white"
-                >
-                  <option value="today">Today</option>
-                  <option value="this_week">This Week</option>
-                  <option value="this_month">This Month</option>
-                  <option value="custom">Custom Range</option>
-                </select>
-                {dateFilter === "custom" && (
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="date"
-                      value={customStartDate}
-                      onChange={(e) => setCustomStartDate(e.target.value)}
-                      className="bg-slate-800 border border-white/20 rounded-lg px-2 py-2 text-white text-sm"
-                    />
-                    <span className="text-gray-400">to</span>
-                    <input
-                      type="date"
-                      value={customEndDate}
-                      onChange={(e) => setCustomEndDate(e.target.value)}
-                      className="bg-slate-800 border border-white/20 rounded-lg px-2 py-2 text-white text-sm"
-                    />
-                  </div>
-                )}
-              </div>
-              <div className="text-right">
-                <p className="text-sm text-gray-300">{user.name}</p>
-                <p className="text-xs text-amber-400">Administrator</p>
-              </div>
-              <button
-                onClick={onSignOut}
-                className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg text-white flex items-center gap-2"
+            <div className="flex items-center gap-3">
+              <select
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value)}
+                className="bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm"
               >
-                <LogOut className="w-4 h-4" />
-                Sign Out
+                <option value="today">Today</option>
+                <option value="this_week">This Week</option>
+                <option value="this_month">This Month</option>
+                <option value="custom">Custom</option>
+              </select>
+              {dateFilter === "custom" && (
+                <>
+                  <input type="date" value={customStartDate} onChange={(e) => setCustomStartDate(e.target.value)}
+                    className="bg-slate-700 border border-slate-600 rounded px-2 py-2 text-sm" />
+                  <input type="date" value={customEndDate} onChange={(e) => setCustomEndDate(e.target.value)}
+                    className="bg-slate-700 border border-slate-600 rounded px-2 py-2 text-sm" />
+                </>
+              )}
+              <span className="text-slate-400 text-sm">{user.name}</span>
+              <button onClick={onSignOut} className="bg-red-600 hover:bg-red-700 px-3 py-2 rounded text-sm flex items-center gap-1">
+                <LogOut className="w-4 h-4" /> Sign Out
               </button>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="container mx-auto px-6 py-6 space-y-6">
-        {/* Site Performance Section */}
-        <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
-          <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-            <BarChart3 className="w-6 h-6 text-amber-400" />
-            Site Performance - Denver
-          </h2>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-white/20">
-                  <th className="text-left py-3 px-4 text-gray-300">Site</th>
-                  <th className="text-center py-3 px-4 text-gray-300">Conv</th>
-                  <th className="text-center py-3 px-4 text-gray-300">Leads</th>
-                  <th className="text-center py-3 px-4 text-gray-300">Sales</th>
-                  <th className="text-center py-3 px-4 text-gray-300">New Sale %</th>
-                  <th className="text-center py-3 px-4 text-gray-300">Ref</th>
-                  <th className="text-center py-3 px-4 text-gray-300">Revenue</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="border-b border-white/10 bg-amber-500/10">
-                  <td className="py-3 px-4 font-medium text-white">Denver</td>
-                  <td className="py-3 px-4 text-center">
-                    <span className={`font-bold ${parseFloat(sitePerformance.conversionRate) >= 30 ? "text-green-400" : parseFloat(sitePerformance.conversionRate) >= 20 ? "text-yellow-400" : "text-red-400"}`}>
-                      {sitePerformance.conversionRate}%
-                    </span>
-                  </td>
-                  <td className="py-3 px-4 text-center text-white">{sitePerformance.totalLeads}</td>
-                  <td className="py-3 px-4 text-center text-green-400 font-bold">{sitePerformance.totalSales}</td>
-                  <td className="py-3 px-4 text-center text-white">{sitePerformance.newSalePercent}%</td>
-                  <td className="py-3 px-4 text-center text-white">{sitePerformance.refRate}%</td>
-                  <td className="py-3 px-4 text-center text-yellow-400 font-bold">${sitePerformance.revenue.toLocaleString()}</td>
-                </tr>
-              </tbody>
-            </table>
+      <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
+        {/* Key Metrics Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+          <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
+            <p className="text-slate-400 text-xs uppercase tracking-wide">Leads</p>
+            <p className="text-2xl font-bold text-blue-400">{companyStats.totalLeads}</p>
+          </div>
+          <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
+            <p className="text-slate-400 text-xs uppercase tracking-wide">Sales</p>
+            <p className="text-2xl font-bold text-green-400">{companyStats.totalSales}</p>
+          </div>
+          <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
+            <p className="text-slate-400 text-xs uppercase tracking-wide">Conv %</p>
+            <p className={`text-2xl font-bold ${parseFloat(companyStats.conversionRate) >= 25 ? "text-green-400" : parseFloat(companyStats.conversionRate) >= 15 ? "text-yellow-400" : "text-red-400"}`}>
+              {companyStats.conversionRate}%
+            </p>
+          </div>
+          <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
+            <p className="text-slate-400 text-xs uppercase tracking-wide">Revenue</p>
+            <p className="text-2xl font-bold text-yellow-400">${companyStats.revenue.toLocaleString()}</p>
+          </div>
+          <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
+            <p className="text-slate-400 text-xs uppercase tracking-wide">Referrals</p>
+            <p className="text-2xl font-bold text-pink-400">{companyStats.referrals}</p>
+          </div>
+          <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
+            <p className="text-slate-400 text-xs uppercase tracking-wide">Dash Sales</p>
+            <p className="text-2xl font-bold text-purple-400">{companyStats.dashSales}</p>
+          </div>
+          <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
+            <p className="text-slate-400 text-xs uppercase tracking-wide">Agents</p>
+            <p className="text-2xl font-bold text-cyan-400">{agentPerformance.length}</p>
           </div>
         </div>
 
-        {/* Top Struggling Lead Types */}
-        <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
-          <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-            <AlertTriangle className="w-6 h-6 text-red-400" />
-            Top Struggling Lead Types (Low Conversion)
-          </h2>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-white/20">
-                  <th className="text-left py-3 px-4 text-gray-300">Lead Type</th>
-                  <th className="text-center py-3 px-4 text-gray-300">Count</th>
-                  <th className="text-center py-3 px-4 text-gray-300">Conversion</th>
-                  <th className="text-left py-3 px-4 text-gray-300">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {strugglingTypes.length === 0 ? (
-                  <tr>
-                    <td colSpan="4" className="text-center py-8 text-gray-400">
-                      Not enough data to identify struggling lead types
-                    </td>
-                  </tr>
-                ) : (
-                  strugglingTypes.map((item, index) => (
-                    <tr key={item.type} className="border-b border-white/10 hover:bg-white/5">
-                      <td className="py-3 px-4 font-medium text-white">{item.type}</td>
-                      <td className="py-3 px-4 text-center text-gray-300">{item.count}</td>
-                      <td className="py-3 px-4 text-center">
-                        <span className={`font-bold ${parseFloat(item.conversion) >= 20 ? "text-yellow-400" : "text-red-400"}`}>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Top Struggling Lead Types */}
+          <div className="bg-slate-800 rounded-lg border border-slate-700">
+            <div className="px-4 py-3 border-b border-slate-700">
+              <h2 className="font-semibold flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-amber-400" />
+                Lead Type Breakdown
+              </h2>
+            </div>
+            <div className="p-4">
+              {strugglingTypes.length === 0 ? (
+                <p className="text-slate-500 text-center py-4">No lead data available</p>
+              ) : (
+                <div className="space-y-2">
+                  {strugglingTypes.map((item, index) => (
+                    <div key={item.type} className="flex items-center justify-between py-2 border-b border-slate-700 last:border-0">
+                      <div className="flex items-center gap-3">
+                        <span className={`w-6 h-6 rounded text-xs flex items-center justify-center font-bold ${
+                          parseFloat(item.conversion) < 10 ? "bg-red-500/20 text-red-400" :
+                          parseFloat(item.conversion) < 20 ? "bg-yellow-500/20 text-yellow-400" :
+                          "bg-green-500/20 text-green-400"
+                        }`}>
+                          {index + 1}
+                        </span>
+                        <span className="text-sm">{item.type}</span>
+                      </div>
+                      <div className="flex items-center gap-4 text-sm">
+                        <span className="text-slate-400">{item.count} leads</span>
+                        <span className={`font-medium w-16 text-right ${
+                          parseFloat(item.conversion) < 10 ? "text-red-400" :
+                          parseFloat(item.conversion) < 20 ? "text-yellow-400" :
+                          "text-green-400"
+                        }`}>
                           {item.conversion}%
                         </span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${
-                          index < 3 ? "bg-red-500/20 text-red-400" : "bg-yellow-500/20 text-yellow-400"
-                        }`}>
-                          {index < 3 ? "Critical" : "Needs Attention"}
-                        </span>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Conversion Performance Chart */}
-        <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
-          <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-            <TrendingUp className="w-6 h-6 text-blue-400" />
-            Conversion Performance
-          </h2>
-          <div className="h-64 flex items-end justify-between gap-2 px-4">
-            {conversionData.length === 0 ? (
-              <div className="w-full text-center text-gray-400 py-8">
-                No conversion data available for this period
-              </div>
-            ) : (
-              conversionData.map((day, index) => (
-                <div key={index} className="flex flex-col items-center flex-1">
-                  <div
-                    className="w-full bg-gradient-to-t from-blue-600 to-purple-500 rounded-t-lg transition-all hover:from-blue-500 hover:to-purple-400"
-                    style={{ height: `${Math.max(parseFloat(day.conversion) * 2, 10)}px` }}
-                    title={`${day.date}: ${day.conversion}%`}
-                  />
-                  <span className="text-xs text-gray-400 mt-2 transform -rotate-45 origin-top-left">
-                    {day.date}
-                  </span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))
-            )}
+              )}
+            </div>
           </div>
-          <div className="flex justify-center gap-4 mt-8">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-gradient-to-r from-blue-600 to-purple-500 rounded"></div>
-              <span className="text-sm text-gray-300">Denver Conversion %</span>
+
+          {/* Daily Performance Chart */}
+          <div className="bg-slate-800 rounded-lg border border-slate-700">
+            <div className="px-4 py-3 border-b border-slate-700">
+              <h2 className="font-semibold flex items-center gap-2">
+                <TrendingUp className="w-5 h-5 text-blue-400" />
+                Daily Performance
+              </h2>
+            </div>
+            <div className="p-4">
+              {dailyData.length === 0 ? (
+                <p className="text-slate-500 text-center py-4">No data for this period</p>
+              ) : (
+                <div className="h-48 flex items-end gap-1">
+                  {dailyData.map((day, index) => (
+                    <div key={index} className="flex-1 flex flex-col items-center gap-1">
+                      <span className="text-xs text-slate-400">{day.conversion}%</span>
+                      <div
+                        className="w-full bg-gradient-to-t from-blue-600 to-blue-400 rounded-t"
+                        style={{ height: `${Math.max(parseFloat(day.conversion) * 1.5, 8)}px` }}
+                        title={`${day.date}: ${day.sales}/${day.leads} sales`}
+                      />
+                      <span className="text-xs text-slate-500 -rotate-45 origin-top-left mt-2 whitespace-nowrap">
+                        {day.date}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
 
         {/* Agent Performance Table */}
-        <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
-          <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-            <Users className="w-6 h-6 text-purple-400" />
-            Denver Agent Performance (Ranked Worst to Best)
-          </h2>
+        <div className="bg-slate-800 rounded-lg border border-slate-700">
+          <div className="px-4 py-3 border-b border-slate-700">
+            <h2 className="font-semibold flex items-center gap-2">
+              <Users className="w-5 h-5 text-purple-400" />
+              Agent Performance (Ranked by Conversion)
+            </h2>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead>
-                <tr className="border-b border-white/20">
-                  <th className="text-left py-3 px-4 text-gray-300">Rank</th>
-                  <th className="text-left py-3 px-4 text-gray-300">Agent</th>
-                  <th className="text-center py-3 px-4 text-gray-300">Leads</th>
-                  <th className="text-center py-3 px-4 text-gray-300">Sales</th>
-                  <th className="text-center py-3 px-4 text-gray-300">Conv %</th>
-                  <th className="text-left py-3 px-4 text-gray-300">Status</th>
+              <thead className="bg-slate-700/50">
+                <tr>
+                  <th className="text-left py-3 px-4 text-xs uppercase tracking-wide text-slate-400">#</th>
+                  <th className="text-left py-3 px-4 text-xs uppercase tracking-wide text-slate-400">Agent</th>
+                  <th className="text-center py-3 px-4 text-xs uppercase tracking-wide text-slate-400">Leads</th>
+                  <th className="text-center py-3 px-4 text-xs uppercase tracking-wide text-slate-400">Sales</th>
+                  <th className="text-center py-3 px-4 text-xs uppercase tracking-wide text-slate-400">Conv %</th>
+                  <th className="text-center py-3 px-4 text-xs uppercase tracking-wide text-slate-400">Revenue</th>
+                  <th className="text-center py-3 px-4 text-xs uppercase tracking-wide text-slate-400">Status</th>
                 </tr>
               </thead>
               <tbody>
-                {denverAgents.length === 0 ? (
+                {agentPerformance.length === 0 ? (
                   <tr>
-                    <td colSpan="6" className="text-center py-8 text-gray-400">
-                      No Denver agents found
-                    </td>
+                    <td colSpan="7" className="text-center py-8 text-slate-500">No agent activity for this period</td>
                   </tr>
                 ) : (
-                  denverAgents.map((agent, index) => (
-                    <tr key={agent.id || agent.email} className="border-b border-white/10 hover:bg-white/5">
+                  agentPerformance.map((agent, index) => (
+                    <tr key={agent.id || agent.email} className="border-t border-slate-700 hover:bg-slate-700/30">
                       <td className="py-3 px-4">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold ${
-                          index < 3 ? "bg-red-500" : index < 6 ? "bg-yellow-500" : "bg-green-500"
+                        <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
+                          index < 3 ? "bg-red-500 text-white" : index < 6 ? "bg-yellow-500 text-white" : "bg-green-500 text-white"
                         }`}>
                           {index + 1}
-                        </div>
+                        </span>
                       </td>
-                      <td className="py-3 px-4 font-medium text-white">{agent.name}</td>
-                      <td className="py-3 px-4 text-center text-gray-300">{agent.leads}</td>
-                      <td className="py-3 px-4 text-center text-green-400 font-bold">{agent.sales}</td>
+                      <td className="py-3 px-4 font-medium">{agent.name}</td>
+                      <td className="py-3 px-4 text-center text-slate-300">{agent.leads}</td>
+                      <td className="py-3 px-4 text-center text-green-400 font-medium">{agent.sales}</td>
                       <td className="py-3 px-4 text-center">
-                        <span className={`font-bold ${parseFloat(agent.conversionRate) >= 30 ? "text-green-400" : parseFloat(agent.conversionRate) >= 20 ? "text-yellow-400" : "text-red-400"}`}>
+                        <span className={`font-bold ${
+                          parseFloat(agent.conversionRate) >= 25 ? "text-green-400" :
+                          parseFloat(agent.conversionRate) >= 15 ? "text-yellow-400" : "text-red-400"
+                        }`}>
                           {agent.conversionRate}%
                         </span>
                       </td>
-                      <td className="py-3 px-4">
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${
-                          index < 3 ? "bg-red-500/20 text-red-400" : index < 6 ? "bg-yellow-500/20 text-yellow-400" : "bg-green-500/20 text-green-400"
+                      <td className="py-3 px-4 text-center text-yellow-400">${agent.revenue}</td>
+                      <td className="py-3 px-4 text-center">
+                        <span className={`px-2 py-1 rounded text-xs ${
+                          index < 3 ? "bg-red-500/20 text-red-400" :
+                          index < 6 ? "bg-yellow-500/20 text-yellow-400" : "bg-green-500/20 text-green-400"
                         }`}>
-                          {index < 3 ? "Critical" : index < 6 ? "Needs Help" : "On Track"}
+                          {index < 3 ? "Needs Help" : index < 6 ? "Average" : "Good"}
                         </span>
                       </td>
                     </tr>
@@ -7171,8 +7146,7 @@ const AdminDashboard = ({ user, onSignOut }) => {
         </div>
       </div>
 
-      {/* AI Cat Assistant for Admin */}
-      <ManagerAICatAssistant leads={getDenverLeads()} agents={denverAgents} mode="all" />
+      <ManagerAICatAssistant leads={filteredLeads} agents={firebaseAgents} mode="all" />
     </div>
   );
 };
