@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import {
   Users,
@@ -2720,6 +2720,11 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   const [isEditingTeamName, setIsEditingTeamName] = useState(false);
   const [myTeamAgents, setMyTeamAgents] = useState([]);
 
+  // Refs for team goals to prevent React from resetting values on re-render
+  const salesGoalRef = useRef(null);
+  const conversionGoalRef = useRef(null);
+  const teamGoalsInitialized = useRef(false);
+
   // Use Firebase for teams and agents data
   const { teams, agents: firebaseAgents, leads: firebaseLeads, createTeam, assignAgentToTeam, addToMyTeam, removeFromMyTeam, myTeamMemberIds, myTeamGoals, updateMyTeamGoals, refreshData, lastRefresh, loading: dataLoading } = useFirestore(user.email);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -2755,6 +2760,21 @@ const ManagerDashboard = ({ user, onSignOut }) => {
     );
     setMyTeamAgents(teamAgents);
   }, [firebaseAgents, myTeamMemberIds]);
+
+  // Initialize team goals refs only once
+  useEffect(() => {
+    if (!teamGoalsInitialized.current && myTeamGoals) {
+      if (salesGoalRef.current) {
+        salesGoalRef.current.textContent = myTeamGoals.salesGoal ?? 50;
+      }
+      if (conversionGoalRef.current) {
+        conversionGoalRef.current.textContent = myTeamGoals.conversionGoal ?? 25;
+      }
+      globalTeamGoals.salesGoal = myTeamGoals.salesGoal ?? 50;
+      globalTeamGoals.conversionGoal = myTeamGoals.conversionGoal ?? 25;
+      teamGoalsInitialized.current = true;
+    }
+  }, [myTeamGoals]);
 
   const handleAvatarUpload = (event) => {
     const file = event.target.files[0];
@@ -4632,7 +4652,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                 )}
               </div>
 
-              {/* Team Goals - Using contentEditable for immediate visual updates */}
+              {/* Team Goals - Using refs to prevent React from resetting values */}
               <div className="mt-6 bg-white/10 rounded-lg p-4">
                 <h4 className="text-lg font-semibold text-white mb-4">
                   Team Goals
@@ -4643,41 +4663,35 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                       Team Sales Goal (Daily)
                     </label>
                     <div
-                      id="team-sales-goal"
+                      ref={salesGoalRef}
                       contentEditable
                       suppressContentEditableWarning
                       onInput={(e) => {
                         globalTeamGoals.salesGoal = e.currentTarget.textContent;
                       }}
                       className="w-full bg-slate-800 border border-white/20 rounded px-3 py-2 text-white min-h-[40px] focus:outline-none focus:ring-2 focus:ring-green-500"
-                    >
-                      {myTeamGoals?.salesGoal ?? 50}
-                    </div>
+                    />
                   </div>
                   <div>
                     <label className="block text-sm text-gray-300 mb-2">
                       Team Conversion Goal (%)
                     </label>
                     <div
-                      id="team-conversion-goal"
+                      ref={conversionGoalRef}
                       contentEditable
                       suppressContentEditableWarning
                       onInput={(e) => {
                         globalTeamGoals.conversionGoal = e.currentTarget.textContent;
                       }}
                       className="w-full bg-slate-800 border border-white/20 rounded px-3 py-2 text-white min-h-[40px] focus:outline-none focus:ring-2 focus:ring-green-500"
-                    >
-                      {myTeamGoals?.conversionGoal ?? 25}
-                    </div>
+                    />
                   </div>
                 </div>
                 <button
                   onClick={async () => {
-                    const salesEl = document.getElementById('team-sales-goal');
-                    const convEl = document.getElementById('team-conversion-goal');
                     const goals = {
-                      salesGoal: parseInt(salesEl?.textContent) || 0,
-                      conversionGoal: parseInt(convEl?.textContent) || 0,
+                      salesGoal: parseInt(salesGoalRef.current?.textContent) || 0,
+                      conversionGoal: parseInt(conversionGoalRef.current?.textContent) || 0,
                     };
                     try {
                       await updateMyTeamGoals(goals);
