@@ -2106,7 +2106,7 @@ const AgentDashboardView = ({ agent, onBack, user }) => {
               <div>
                 <h1 className="text-2xl font-bold">{agent.name}'s Dashboard</h1>
                 <p className="text-gray-300">
-                  {agent.team} • {agent.center.toUpperCase()}
+                  {agent.team}
                 </p>
               </div>
             </div>
@@ -2782,26 +2782,13 @@ const ManagerSupervisorHelp = ({ user }) => {
 
 // Enhanced Manager Dashboard with real data integration
 const ManagerDashboard = ({ user, onSignOut }) => {
-  console.log("=== DATE DEBUG ===");
-  const testDate = (() => {
-    const today = new Date();
-    console.log("Current Date object:", today);
-    console.log("getFullYear():", today.getFullYear());
-    console.log("getMonth():", today.getMonth()); // 0-indexed
-    console.log("getDate():", today.getDate());
+  // Fetch ALL leads and agents from Firebase
+  const { leads: allLeads, agents: allAgents, loading: dataLoading } = useFirestore(user.email);
 
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, "0");
-    const day = String(today.getDate()).padStart(2, "0");
-    const result = `${year}-${month}-${day}`;
-    console.log("Final formatted date:", result);
-    return result;
-  })();
   const [activeTab, setActiveTab] = useState("overview");
   const [selectedAgent, setSelectedAgent] = useState(null);
   const [viewingAgentDashboard, setViewingAgentDashboard] = useState(null);
   const [selectedTeam, setSelectedTeam] = useState("all");
-  const [selectedCenter, setSelectedCenter] = useState("all");
   const [dateFilter, setDateFilter] = useState(() => {
     const today = new Date();
     const year = today.getFullYear();
@@ -2817,24 +2804,81 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   const [myTeamAgents, setMyTeamAgents] = useState([]);
 
   const [teams] = useState([]);
-
   const [notifications] = useState([]);
+
+  // Process leads from Firebase with proper timestamps
+  const processedLeads = (allLeads || []).map(lead => ({
+    ...lead,
+    timestamp: lead.timestamp?.toDate ? lead.timestamp.toDate() : new Date(lead.timestamp || lead.createdAt)
+  }));
+
+  // Derive unique agents from leads data
+  const derivedAgents = (() => {
+    const agentEmails = [...new Set(processedLeads.map(lead => lead.agentEmail).filter(Boolean))];
+    return agentEmails.map((email, index) => {
+      const agentInfo = (allAgents || []).find(a => a.email === email);
+      return {
+        id: agentInfo?.id || `agent-${index}`,
+        name: agentInfo?.name || agentInfo?.displayName || email.split('@')[0].split('.').map(n => n.charAt(0).toUpperCase() + n.slice(1)).join(' '),
+        email: email,
+        team: agentInfo?.team || agentInfo?.teamId || 'Team A',
+        role: agentInfo?.role || 'agent'
+      };
+    });
+  })();
+
+  // Filter leads by date
+  const getFilteredLeadsByDate = (dateStr) => {
+    if (!dateStr) return processedLeads;
+    const filterDate = new Date(dateStr + 'T00:00:00');
+    const nextDay = new Date(filterDate);
+    nextDay.setDate(nextDay.getDate() + 1);
+
+    return processedLeads.filter(lead => {
+      const leadDate = new Date(lead.timestamp);
+      return leadDate >= filterDate && leadDate < nextDay;
+    });
+  };
+
+  // Calculate stats for an agent from filtered leads
+  const getAgentStatsFromLeads = (agentEmail, filteredLeads) => {
+    const agentLeads = filteredLeads.filter(
+      (lead) => lead.agentEmail === agentEmail || lead.agent === agentEmail
+    );
+
+    const sales = agentLeads.filter((lead) => lead.sale);
+    const nonFUSales = agentLeads.filter((lead) => lead.leadType !== "FU Sale");
+    const referrals = agentLeads.filter((lead) => lead.leadType === "Referral Sale");
+
+    return {
+      leads: nonFUSales.length,
+      sales: sales.length,
+      referrals: referrals.length,
+      conversionRate: nonFUSales.length > 0
+        ? ((sales.length / nonFUSales.length) * 100).toFixed(1)
+        : "0",
+      revenue: sales.reduce(
+        (sum, lead) => sum + (lead.commission || 115) + (lead.hra ? lead.hraValue || 15 : 0),
+        0
+      ),
+      leadsList: agentLeads,
+    };
+  };
 
   useEffect(() => {
     // Initialize team assignments
     if (!globalTeamAssignments[user.email]) {
-      // Default to agents with matching supervisor
-      const defaultTeamAgents = mockAgents.filter(
+      const defaultTeamAgents = derivedAgents.filter(
         (agent) => agent.supervisor === user.name
       );
       globalTeamAssignments[user.email] = defaultTeamAgents.map((a) => a.id);
     }
     setMyTeamAgents(
-      mockAgents.filter((agent) =>
+      derivedAgents.filter((agent) =>
         globalTeamAssignments[user.email]?.includes(agent.id)
       )
     );
-  }, [user.email, user.name]);
+  }, [user.email, user.name, derivedAgents]);
 
   const handleAvatarUpload = (event) => {
     const file = event.target.files[0];
@@ -2881,135 +2925,91 @@ const ManagerDashboard = ({ user, onSignOut }) => {
     globalAgentGoals[agentEmail][goalType] = value;
   };
 
-  // Get real team stats using global data
+  // Get filtered leads for current date filter
+  const filteredLeads = getFilteredLeadsByDate(dateFilter);
+
+  // Get team stats using Firebase data
   const getEnhancedTeamStats = (teamName) => {
-    const teamMembers = mockAgents.filter((agent) => agent.team === teamName);
+    const teamMembers = derivedAgents.filter((agent) => agent.team === teamName);
     const teamMemberStats = teamMembers.map((member) => ({
       ...member,
-      ...getRealAgentStats(member.email, dateFilter),
-      five9Data: mockFive9Data[member.email],
+      ...getAgentStatsFromLeads(member.email, filteredLeads),
     }));
 
-    const stats = getRealTeamStats(teamName, dateFilter);
-    const topNonSaleTypes = getTopNonSaleLeadTypes(teamName, dateFilter);
+    const totalSales = teamMemberStats.reduce((sum, m) => sum + m.sales, 0);
+    const totalLeads = teamMemberStats.reduce((sum, m) => sum + m.leads, 0);
+    const avgConversion = teamMembers.length > 0
+      ? (teamMemberStats.reduce((sum, m) => sum + parseFloat(m.conversionRate), 0) / teamMembers.length).toFixed(1)
+      : "0";
 
-    return { ...stats, members: teamMemberStats, topNonSaleTypes };
+    return { totalSales, totalLeads, avgConversion, members: teamMemberStats };
   };
 
+  // Get all teams with stats - derive teams from agents
   const getAllTeamsData = () => {
-    return teams
-      .map((team) => ({
-        ...team,
-        ...getEnhancedTeamStats(team.name),
+    const uniqueTeams = [...new Set(derivedAgents.map(a => a.team).filter(Boolean))];
+    return uniqueTeams
+      .map((teamName) => ({
+        id: teamName,
+        name: teamName,
+        ...getEnhancedTeamStats(teamName),
       }))
       .sort((a, b) => b.totalSales - a.totalSales);
   };
 
-  // Get struggling agents based on real data with location and performance filters
+  // Get struggling agents based on Firebase data - lowest sales and conversion
   const getStrugglingAgents = () => {
-    let agents = mockAgents.map((agent) => ({
+    const agentsWithStats = derivedAgents.map((agent) => ({
       ...agent,
-      ...getRealAgentStats(agent.email, dateFilter),
-      five9Data: mockFive9Data[agent.email],
+      ...getAgentStatsFromLeads(agent.email, filteredLeads),
     }));
 
-    if (selectedCenter !== "all") {
-      agents = agents.filter((agent) => agent.center === selectedCenter);
-    }
-
-    return agents
+    return agentsWithStats
       .sort((a, b) => {
-        // Sort by multiple criteria: sales, conversion rate, Five9 adherence
-        const scoreA =
-          a.sales * 0.4 +
-          parseFloat(a.conversionRate) * 0.3 +
-          (a.five9Data?.nrt || 0) * 0.3;
-        const scoreB =
-          b.sales * 0.4 +
-          parseFloat(b.conversionRate) * 0.3 +
-          (b.five9Data?.nrt || 0) * 0.3;
-        return scoreA - scoreB;
-      })
-      .slice(0, 10);
-  };
-
-  // Get worst Five9 adherence agents
-  const getWorstAdherenceAgents = () => {
-    let agents = mockAgents
-      .map((agent) => ({ ...agent, five9Data: mockFive9Data[agent.email] }))
-      .filter((agent) => agent.five9Data);
-
-    if (selectedCenter !== "all") {
-      agents = agents.filter((agent) => agent.center === selectedCenter);
-    }
-
-    return agents
-      .sort((a, b) => {
-        const scoreA = a.five9Data.talkTime - a.five9Data.nrt;
-        const scoreB = b.five9Data.talkTime - b.five9Data.nrt;
+        // Sort by sales first, then conversion rate (lowest first = most struggling)
+        const scoreA = a.sales * 10 + parseFloat(a.conversionRate);
+        const scoreB = b.sales * 10 + parseFloat(b.conversionRate);
         return scoreA - scoreB;
       })
       .slice(0, 10);
   };
 
   const strugglingAgents = getStrugglingAgents();
-  const worstAdherenceAgents = getWorstAdherenceAgents();
   const rankedTeams = getAllTeamsData();
   const currentThemeStyles = themes[currentTheme];
 
-  // Get overall company stats
+  // Get overall company stats from Firebase data
   const getCompanyStats = () => {
-    let agents = mockAgents;
-    if (selectedCenter !== "all") {
-      agents = agents.filter((agent) => agent.center === selectedCenter);
-    }
-
-    const allAgentStats = agents.map((agent) =>
-      getRealAgentStats(agent.email, dateFilter)
+    const allAgentStats = derivedAgents.map((agent) =>
+      getAgentStatsFromLeads(agent.email, filteredLeads)
     );
+
+    const totalAgents = derivedAgents.length;
+    const totalSales = allAgentStats.reduce((sum, stats) => sum + stats.sales, 0);
+    const totalLeads = allAgentStats.reduce((sum, stats) => sum + stats.leads, 0);
+    const totalReferrals = allAgentStats.reduce((sum, stats) => sum + stats.referrals, 0);
+    const totalRevenue = allAgentStats.reduce((sum, stats) => sum + stats.revenue, 0);
+
+    const avgConversion = totalAgents > 0
+      ? (allAgentStats.reduce((sum, stats) => sum + parseFloat(stats.conversionRate), 0) / totalAgents).toFixed(1)
+      : "0";
+
+    const referralRate = totalLeads > 0
+      ? ((totalReferrals / totalLeads) * 100).toFixed(1)
+      : "0";
+
     return {
-      totalAgents: agents.length,
-      totalSales: allAgentStats.reduce(
-        (sum, stats) => sum + parseInt(stats.sales),
-        0
-      ),
-      totalLeads: allAgentStats.reduce(
-        (sum, stats) => sum + parseInt(stats.leads),
-        0
-      ),
-      totalReferrals: allAgentStats.reduce(
-        (sum, stats) => sum + parseInt(stats.referrals),
-        0
-      ),
-      avgConversion: (
-        allAgentStats.reduce(
-          (sum, stats) => sum + parseFloat(stats.conversionRate),
-          0
-        ) / allAgentStats.length
-      ).toFixed(1),
-      referralRate:
-        allAgentStats.reduce((sum, stats) => sum + parseInt(stats.leads), 0) > 0
-          ? (
-              (allAgentStats.reduce(
-                (sum, stats) => sum + parseInt(stats.referrals),
-                0
-              ) /
-                allAgentStats.reduce(
-                  (sum, stats) => sum + parseInt(stats.leads),
-                  0
-                )) *
-              100
-            ).toFixed(1)
-          : 0,
-      totalRevenue: allAgentStats.reduce(
-        (sum, stats) => sum + stats.revenue,
-        0
-      ),
+      totalAgents,
+      totalSales,
+      totalLeads,
+      totalReferrals,
+      avgConversion: isNaN(parseFloat(avgConversion)) ? "0" : avgConversion,
+      referralRate,
+      totalRevenue,
     };
   };
 
   const companyStats = getCompanyStats();
-  const centers = ["all", "denver", "tampa", "orlando", "daytona"];
 
   const EnhancedAgentProfile = ({ agent, onClose }) => {
     const [editingGoals, setEditingGoals] = useState(false);
@@ -3042,7 +3042,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
               <div>
                 <h2 className="text-2xl font-bold text-white">{agent.name}</h2>
                 <p className="text-gray-300">
-                  {agent.team} • {agent.center.toUpperCase()}
+                  {agent.team}
                 </p>
               </div>
             </div>
@@ -3461,7 +3461,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
 
         {activeTab === "overview" && (
           <div className="space-y-6">
-            {/* Date and Location Filters */}
+            {/* Date Filter */}
             <div
               className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-6 border border-white/20`}
             >
@@ -3476,30 +3476,12 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                   onChange={(e) => setDateFilter(e.target.value)}
                   className="bg-slate-800 border border-white/20 rounded px-3 py-2 text-white"
                 />
-                <MapPin className="w-5 h-5 text-purple-400 ml-4" />
-                <label className="text-sm font-medium text-gray-300">
-                  Location:
-                </label>
-                <select
-                  value={selectedCenter}
-                  onChange={(e) => setSelectedCenter(e.target.value)}
-                  className="bg-slate-800 border border-white/20 rounded px-3 py-2 text-white"
-                >
-                  {centers.map((center) => (
-                    <option
-                      key={center}
-                      value={center}
-                      className="bg-slate-800"
-                    >
-                      {center === "all"
-                        ? "All Centers"
-                        : center.charAt(0).toUpperCase() + center.slice(1)}
-                    </option>
-                  ))}
-                </select>
                 <span className="text-sm text-gray-300 ml-4">
-                  Showing data for {new Date(dateFilter).toLocaleDateString()}
+                  Showing data for {dateFilter.split('-').slice(1).join('/') + '/' + dateFilter.split('-')[0]}
                 </span>
+                {dataLoading && (
+                  <span className="text-sm text-yellow-400 ml-4">Loading data...</span>
+                )}
               </div>
             </div>
 
@@ -3526,7 +3508,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                   {companyStats.totalSales}
                 </p>
                 <p className="text-xs text-green-400">
-                  For {new Date(dateFilter).toLocaleDateString()}
+                  For {dateFilter.split('-').slice(1).join('/') + '/' + dateFilter.split('-')[0]}
                 </p>
               </div>
               <div
@@ -3538,7 +3520,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                   {companyStats.totalLeads}
                 </p>
                 <p className="text-xs text-cyan-400">
-                  For {new Date(dateFilter).toLocaleDateString()}
+                  For {dateFilter.split('-').slice(1).join('/') + '/' + dateFilter.split('-')[0]}
                 </p>
               </div>
               <div
@@ -3572,7 +3554,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                   ${companyStats.totalRevenue.toLocaleString()}
                 </p>
                 <p className="text-xs text-yellow-400">
-                  For {new Date(dateFilter).toLocaleDateString()}
+                  For {dateFilter.split('-').slice(1).join('/') + '/' + dateFilter.split('-')[0]}
                 </p>
               </div>
             </div>
@@ -3633,6 +3615,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                 <h3 className="text-xl font-semibold mb-4">
                   Most Struggling Agents
                 </h3>
+                <p className="text-gray-400 text-sm mb-4">Agents with lowest sales and conversion rates - showing leads taken vs closed</p>
                 <div className="space-y-3 max-h-96 overflow-y-auto">
                   {strugglingAgents.length === 0 ? (
                     <p className="text-gray-300 text-center py-8">
@@ -3642,28 +3625,36 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                     strugglingAgents.map((agent, index) => (
                       <div
                         key={agent.id}
-                        className="flex items-center justify-between p-3 bg-red-500/10 rounded-lg border border-red-500/20"
+                        className="p-3 bg-red-500/10 rounded-lg border border-red-500/20 cursor-pointer hover:bg-red-500/20"
+                        onClick={() => setSelectedAgent(agent)}
                       >
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center text-white font-bold">
-                            {index + 1}
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center text-white font-bold">
+                              {index + 1}
+                            </div>
+                            <div>
+                              <p className="font-medium text-white">
+                                {agent.name}
+                              </p>
+                              <p className="text-xs text-gray-400">
+                                {agent.team}
+                              </p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="font-medium text-white">
-                              {agent.name}
+                          <div className="text-right">
+                            <p className="font-bold text-red-400">
+                              {agent.sales} sales
                             </p>
-                            <p className="text-xs text-gray-400">
-                              {agent.team} • {agent.center.toUpperCase()}
+                            <p className="text-xs text-yellow-400">
+                              {agent.conversionRate}% conv
                             </p>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <p className="font-bold text-red-400">
-                            {agent.sales} sales
-                          </p>
-                          <p className="text-xs text-yellow-400">
-                            {agent.conversionRate}% conv
-                          </p>
+                        <div className="flex items-center justify-between text-xs bg-white/5 rounded p-2">
+                          <span className="text-gray-400">Leads Taken: <span className="text-white font-medium">{agent.leads}</span></span>
+                          <span className="text-gray-400">Not Closed: <span className="text-red-400 font-medium">{agent.leads - agent.sales}</span></span>
+                          <span className="text-gray-400">Referrals: <span className="text-purple-400 font-medium">{agent.referrals}</span></span>
                         </div>
                       </div>
                     ))
@@ -3697,7 +3688,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                         <div>
                           <p className="font-medium text-white">{agent.name}</p>
                           <p className="text-xs text-gray-400">
-                            {agent.team} • {agent.center.toUpperCase()}
+                            {agent.team}
                           </p>
                         </div>
                       </div>
@@ -4297,7 +4288,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                               {agent.team || "No Team"}
                             </td>
                             <td className="py-3 px-4 text-gray-300 uppercase">
-                              {agent.center || "No Center"}
+                              {agent.team || "No Team"}
                             </td>
                             <td className="py-3 px-4">
                               <span
