@@ -62,7 +62,6 @@ import { useLeads } from "../hooks/useLeads";
 import { useFirestore } from "../hooks/useFirestore";
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "../firebase";
-import TeamGoals from "./TeamGoals";
 
 // Global state for leads data
 let globalLeadsData = [];
@@ -110,6 +109,7 @@ const themes = {
 let globalSupervisorRequests = [];
 let globalAgentGoals = {};
 let globalTeamAssignments = {};
+let globalTeamGoals = { salesGoal: 50, conversionGoal: 25 };
 let globalCallReviewForms = [];
 
 // Utility function to get real agent stats from global leads data
@@ -4434,10 +4434,10 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                       dateFilter
                     );
                     const memberGoals = globalAgentGoals[member.email] || {
-                      dailySales: myTeamGoals?.salesGoal || 10,
+                      dailySales: myTeamGoals?.salesGoal || globalTeamGoals.salesGoal || 10,
                       weeklySales: 50,
                       monthlyGoal: 120,
-                      conversionRate: myTeamGoals?.conversionGoal || 25,
+                      conversionRate: myTeamGoals?.conversionGoal || globalTeamGoals.conversionGoal || 25,
                       referralRate: 15,
                     };
                     return (
@@ -4632,11 +4632,53 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                 )}
               </div>
 
-              {/* Team Goals - Separate component to prevent re-render lag */}
-              <TeamGoals
-                initialGoals={myTeamGoals}
-                onSave={updateMyTeamGoals}
-              />
+              {/* Team Goals - Using global object like agent goals to avoid re-render lag */}
+              <div className="mt-6 bg-white/10 rounded-lg p-4">
+                <h4 className="text-lg font-semibold text-white mb-4">
+                  Team Goals
+                </h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm text-gray-300 mb-2">
+                      Team Sales Goal (Daily)
+                    </label>
+                    <input
+                      type="number"
+                      defaultValue={myTeamGoals?.salesGoal ?? globalTeamGoals.salesGoal}
+                      onChange={(e) => {
+                        globalTeamGoals.salesGoal = parseInt(e.target.value) || 0;
+                      }}
+                      className="w-full bg-slate-800 border border-white/20 rounded px-3 py-2 text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-300 mb-2">
+                      Team Conversion Goal (%)
+                    </label>
+                    <input
+                      type="number"
+                      defaultValue={myTeamGoals?.conversionGoal ?? globalTeamGoals.conversionGoal}
+                      onChange={(e) => {
+                        globalTeamGoals.conversionGoal = parseInt(e.target.value) || 0;
+                      }}
+                      className="w-full bg-slate-800 border border-white/20 rounded px-3 py-2 text-white"
+                    />
+                  </div>
+                </div>
+                <button
+                  onClick={async () => {
+                    try {
+                      await updateMyTeamGoals(globalTeamGoals);
+                      alert("Team goals updated successfully!");
+                    } catch (error) {
+                      alert("Error updating team goals: " + error.message);
+                    }
+                  }}
+                  className="mt-4 bg-green-600 hover:bg-green-700 px-4 py-2 rounded text-white"
+                >
+                  Update Team Goals
+                </button>
+              </div>
             </div>
           </div>
         )}
