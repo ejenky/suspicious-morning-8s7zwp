@@ -3761,6 +3761,9 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                           <p className="font-bold text-red-400">
                             {agent.sales} sales
                           </p>
+                          <p className="text-xs text-blue-400">
+                            {agent.leads} leads
+                          </p>
                           <p className="text-xs text-yellow-400">
                             {agent.conversionRate}% conv
                           </p>
