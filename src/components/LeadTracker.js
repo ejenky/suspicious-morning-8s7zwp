@@ -2817,6 +2817,15 @@ const ManagerDashboard = ({ user, onSignOut }) => {
     const day = String(today.getDate()).padStart(2, "0");
     return `${year}-${month}-${day}`;
   });
+  const [myTeamDateFilterType, setMyTeamDateFilterType] = useState("today");
+  const [myTeamCustomStartDate, setMyTeamCustomStartDate] = useState(() => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  });
+  const [myTeamCustomEndDate, setMyTeamCustomEndDate] = useState(() => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  });
   const [currentTheme, setCurrentTheme] = useState("forest");
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [userAvatar, setUserAvatar] = useState(null);
@@ -2868,6 +2877,70 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   const showToast = (message, type = "success") => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
+  };
+
+  // Helper function to get date range based on filter type for My Team
+  const getMyTeamDateRange = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    switch (myTeamDateFilterType) {
+      case "today": {
+        const endDate = new Date(today);
+        endDate.setDate(endDate.getDate() + 1);
+        return { startDate: today, endDate };
+      }
+      case "this_week": {
+        const startOfWeek = new Date(today);
+        startOfWeek.setDate(today.getDate() - today.getDay());
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 7);
+        return { startDate: startOfWeek, endDate: endOfWeek };
+      }
+      case "this_month": {
+        const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+        const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+        return { startDate: startOfMonth, endDate: endOfMonth };
+      }
+      case "custom": {
+        const [startYear, startMonth, startDay] = myTeamCustomStartDate.split("-").map(Number);
+        const [endYear, endMonth, endDay] = myTeamCustomEndDate.split("-").map(Number);
+        const startDate = new Date(startYear, startMonth - 1, startDay, 0, 0, 0, 0);
+        const endDate = new Date(endYear, endMonth - 1, endDay + 1, 0, 0, 0, 0);
+        return { startDate, endDate };
+      }
+      default:
+        return { startDate: today, endDate: new Date(today.getTime() + 86400000) };
+    }
+  };
+
+  // Get agent stats for a date range (for My Team)
+  const getAgentStatsForDateRange = (agentIdOrEmail) => {
+    const { startDate, endDate } = getMyTeamDateRange();
+
+    const agentLeads = firebaseLeads.filter(lead => {
+      if (lead.agent !== agentIdOrEmail && lead.agentEmail !== agentIdOrEmail) return false;
+      const leadDate = lead.timestamp instanceof Date ? lead.timestamp : new Date(lead.timestamp);
+      return leadDate >= startDate && leadDate < endDate;
+    });
+
+    const sales = agentLeads.filter(lead => lead.sale);
+    const referrals = agentLeads.filter(lead => lead.leadType?.startsWith("Referral Sale"));
+    const dashSales = agentLeads.filter(lead => lead.leadType?.startsWith("Dash Sale"));
+
+    const revenue = sales.reduce(
+      (sum, lead) => sum + (lead.commission || 115) + (lead.hra ? (lead.hraValue || 15) : 0),
+      0
+    );
+
+    return {
+      leads: agentLeads.length,
+      sales: sales.length,
+      conversionRate: agentLeads.length > 0 ? ((sales.length / agentLeads.length) * 100).toFixed(1) : "0.0",
+      referrals: referrals.length,
+      dashSales: dashSales.length,
+      revenue,
+    };
   };
 
   // Update myTeamAgents when Firebase data changes
@@ -4528,12 +4601,48 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                     </p>
                   </div>
                 </div>
-                <input
-                  type="date"
-                  value={dateFilter}
-                  onChange={(e) => setDateFilter(e.target.value)}
-                  className="bg-slate-800 border border-white/20 rounded-lg px-3 py-2 text-white"
-                />
+                <div className="flex items-center gap-2">
+                  <select
+                    value={myTeamDateFilterType}
+                    onChange={(e) => setMyTeamDateFilterType(e.target.value)}
+                    className="bg-slate-800 border border-white/20 rounded-lg px-3 py-2 text-white"
+                  >
+                    <option value="today">Today</option>
+                    <option value="this_week">This Week</option>
+                    <option value="this_month">This Month</option>
+                    <option value="custom">Custom Range</option>
+                  </select>
+                  {myTeamDateFilterType === "custom" && (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="date"
+                        value={myTeamCustomStartDate}
+                        onChange={(e) => setMyTeamCustomStartDate(e.target.value)}
+                        className="bg-slate-800 border border-white/20 rounded-lg px-2 py-2 text-white text-sm"
+                      />
+                      <span className="text-gray-400">to</span>
+                      <input
+                        type="date"
+                        value={myTeamCustomEndDate}
+                        onChange={(e) => setMyTeamCustomEndDate(e.target.value)}
+                        className="bg-slate-800 border border-white/20 rounded-lg px-2 py-2 text-white text-sm"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Date Range Indicator */}
+              <div className="mb-4 text-center">
+                <span className="text-gray-300 text-sm">
+                  Showing data for:{" "}
+                  <span className="text-white font-medium">
+                    {myTeamDateFilterType === "today" && "Today"}
+                    {myTeamDateFilterType === "this_week" && "This Week"}
+                    {myTeamDateFilterType === "this_month" && "This Month"}
+                    {myTeamDateFilterType === "custom" && `${myTeamCustomStartDate} to ${myTeamCustomEndDate}`}
+                  </span>
+                </span>
               </div>
 
               {/* My Team Overview */}
@@ -4549,7 +4658,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                   <p className="text-2xl font-bold text-white">
                     {myTeamAgents.reduce(
                       (sum, member) =>
-                        sum + getAgentStatsFromFirebase(member.id || member.email, dateFilter).sales,
+                        sum + getAgentStatsForDateRange(member.id || member.email).sales,
                       0
                     )}
                   </p>
@@ -4557,22 +4666,21 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                 <div className="bg-purple-500/20 rounded-lg p-4 text-center">
                   <p className="text-purple-300 text-sm">Conversion</p>
                   <p className="text-2xl font-bold text-white">
-{(() => {
+                    {(() => {
                       const totalLeads = myTeamAgents.reduce(
                         (sum, member) =>
-                          sum + getAgentStatsFromFirebase(member.id || member.email, dateFilter).leads,
+                          sum + getAgentStatsForDateRange(member.id || member.email).leads,
                         0
                       );
                       const totalSales = myTeamAgents.reduce(
                         (sum, member) =>
-                          sum + getAgentStatsFromFirebase(member.id || member.email, dateFilter).sales,
+                          sum + getAgentStatsForDateRange(member.id || member.email).sales,
                         0
                       );
                       return totalLeads > 0
                         ? ((totalSales / totalLeads) * 100).toFixed(1)
                         : 0;
-                    })()}
-                    %
+                    })()}%
                   </p>
                 </div>
                 <div className="bg-yellow-500/20 rounded-lg p-4 text-center">
@@ -4582,8 +4690,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                     {myTeamAgents
                       .reduce(
                         (sum, member) =>
-                          sum +
-                          getAgentStatsFromFirebase(member.id || member.email, dateFilter).revenue,
+                          sum + getAgentStatsForDateRange(member.id || member.email).revenue,
                         0
                       )
                       .toLocaleString()}
@@ -4636,10 +4743,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                   </p>
                 ) : (
                   myTeamAgents.map((member) => {
-                    const memberStats = getAgentStatsFromFirebase(
-                      member.email,
-                      dateFilter
-                    );
+                    const memberStats = getAgentStatsForDateRange(member.id || member.email);
                     const memberGoals = globalAgentGoals[member.email] || {
                       dailySales: teamSalesGoal || 10,
                       weeklySales: 50,
