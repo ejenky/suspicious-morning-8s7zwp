@@ -58,12 +58,13 @@ import {
 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { useLeads } from "../hooks/useLeads";
+import { useFirestore } from "../hooks/useFirestore";
 
 // Global state for leads data
 let globalLeadsData = [];
 
 // Agent and team data will be populated from real data
-const mockAgents = [];
+let mockAgents = [];
 
 const mockFive9Data = {};
 
@@ -765,7 +766,7 @@ const PvPChallenges = ({ user }) => {
 };
 
 // Enhanced Leaderboards
-const Leaderboards = () => {
+const Leaderboards = ({ allAgents = [], allLeads = [] }) => {
   const [selectedCenter, setSelectedCenter] = useState("all");
   const [selectedBoard, setSelectedBoard] = useState("sales");
   const centers = ["all", "denver", "tampa", "orlando", "daytona"];
@@ -790,9 +791,55 @@ const Leaderboards = () => {
     },
   ];
 
+  // Convert Firebase leads to proper format with timestamps
+  const processedLeads = allLeads.map(lead => ({
+    ...lead,
+    timestamp: lead.timestamp?.toDate ? lead.timestamp.toDate() : new Date(lead.timestamp || lead.createdAt)
+  }));
+
+  // Convert Firebase agents to proper format
+  const agents = allAgents.map(agent => ({
+    id: agent.id,
+    name: agent.name || agent.displayName || agent.email?.split('@')[0] || 'Unknown',
+    email: agent.email,
+    center: agent.center || agent.location || 'denver',
+    team: agent.team || agent.teamId || 'Team A',
+    role: agent.role || 'agent'
+  }));
+
+  // Calculate stats for an agent from the leads data
+  const getAgentStats = (agentEmail) => {
+    const agentLeads = processedLeads.filter(
+      (lead) => lead.agentEmail === agentEmail || lead.agent === agentEmail
+    );
+
+    const sales = agentLeads.filter((lead) => lead.sale);
+    const nonFUSales = agentLeads.filter(
+      (lead) => lead.leadType !== "FU Sale"
+    );
+    const referrals = agentLeads.filter(
+      (lead) => lead.leadType === "Referral Sale"
+    );
+
+    return {
+      leads: nonFUSales.length,
+      sales: sales.length,
+      referrals: referrals.length,
+      conversionRate:
+        nonFUSales.length > 0
+          ? ((sales.length / nonFUSales.length) * 100).toFixed(1)
+          : "0",
+      revenue: sales.reduce(
+        (sum, lead) =>
+          sum + (lead.commission || 115) + (lead.hra ? lead.hraValue || 15 : 0),
+        0
+      ),
+    };
+  };
+
   const getFilteredAgents = () => {
-    let agentsWithStats = mockAgents.map((agent) => {
-      const stats = getRealAgentStats(agent.email);
+    let agentsWithStats = agents.map((agent) => {
+      const stats = getAgentStats(agent.email);
       return { ...agent, ...stats };
     });
 
@@ -866,11 +913,11 @@ const Leaderboards = () => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {boards.map((board) => {
           const boardAgents = (() => {
-            let agentsWithStats = mockAgents.map((agent) => {
-              const stats = getRealAgentStats(agent.email);
+            let agentsWithStats = agents.map((agent) => {
+              const stats = getAgentStats(agent.email);
               return { ...agent, ...stats };
             });
-            let agents =
+            let filteredAgents =
               selectedCenter === "all"
                 ? agentsWithStats
                 : agentsWithStats.filter(
@@ -878,16 +925,16 @@ const Leaderboards = () => {
                   );
             switch (board.key) {
               case "sales":
-                return agents.sort((a, b) => b.sales - a.sales);
+                return filteredAgents.sort((a, b) => b.sales - a.sales);
               case "conversion":
-                return agents.sort(
+                return filteredAgents.sort(
                   (a, b) =>
                     parseFloat(b.conversionRate) - parseFloat(a.conversionRate)
                 );
               case "referrals":
-                return agents.sort((a, b) => b.referrals - a.referrals);
+                return filteredAgents.sort((a, b) => b.referrals - a.referrals);
               default:
-                return agents;
+                return filteredAgents;
             }
           })();
           return (
@@ -4712,6 +4759,33 @@ const AgentDashboard = ({ user, onSignOut }) => {
     addLead,
     calculateMetrics,
   } = useLeads(user.uid);
+
+  // Fetch ALL leads and agents from Firebase for leaderboard
+  const { leads: allLeads, agents: allAgents, loading: allDataLoading } = useFirestore(user.email);
+
+  // Sync all data to global state for leaderboards
+  useEffect(() => {
+    if (allLeads && allLeads.length > 0) {
+      globalLeadsData = allLeads.map(lead => ({
+        ...lead,
+        timestamp: lead.timestamp?.toDate ? lead.timestamp.toDate() : new Date(lead.timestamp || lead.createdAt)
+      }));
+    }
+  }, [allLeads]);
+
+  useEffect(() => {
+    if (allAgents && allAgents.length > 0) {
+      mockAgents = allAgents.map(agent => ({
+        id: agent.id,
+        name: agent.name || agent.displayName || agent.email?.split('@')[0] || 'Unknown',
+        email: agent.email,
+        center: agent.center || agent.location || 'denver',
+        team: agent.team || agent.teamId || 'Team A',
+        role: agent.role || 'agent'
+      }));
+    }
+  }, [allAgents]);
+
   const [activeTab, setActiveTab] = useState("dashboard");
   const [streak, setStreak] = useState(3);
   const [formErrors, setFormErrors] = useState({});
@@ -5615,7 +5689,7 @@ const AgentDashboard = ({ user, onSignOut }) => {
         {activeTab === "analytics" && (
           <AnalyticsDashboard leads={leads} user={user} theme={currentTheme} />
         )}
-        {activeTab === "leaderboards" && <Leaderboards />}
+        {activeTab === "leaderboards" && <Leaderboards allAgents={allAgents} allLeads={allLeads} />}
         {activeTab === "notifications" && (
           <div
             className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-6 border border-white/20`}
