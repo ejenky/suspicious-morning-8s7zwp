@@ -5635,6 +5635,7 @@ const AgentDashboard = ({ user, onSignOut }) => {
     leads,
     loading: leadsLoading,
     addLead,
+    updateLead,
     calculateMetrics,
   } = useLeads(user.uid);
   const { fetchAgentGoals, leads: allLeads } = useFirestore(user.email);
@@ -5643,6 +5644,7 @@ const AgentDashboard = ({ user, onSignOut }) => {
   const [streak, setStreak] = useState(3);
   const [formErrors, setFormErrors] = useState({});
   const [userAvatar, setUserAvatar] = useState(null);
+  const [editingLead, setEditingLead] = useState(null);
   const [selectedDate, setSelectedDate] = useState(() => {
     const today = new Date();
     const year = today.getFullYear();
@@ -6490,19 +6492,24 @@ const AgentDashboard = ({ user, onSignOut }) => {
                 className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-6 border border-white/20`}
               >
                 <h3 className="text-xl font-semibold mb-4 text-white">
-                  Leads for {new Date(selectedDate).toLocaleDateString()}
+                  Leads for {(() => {
+                    const [year, month, day] = selectedDate.split("-").map(Number);
+                    return new Date(year, month - 1, day).toLocaleDateString();
+                  })()}
                 </h3>
                 <div className="space-y-3 max-h-96 overflow-y-auto">
                   {selectedDateLeads.length === 0 ? (
                     <p className="text-gray-300 text-center py-8">
-                      No leads for {new Date(selectedDate).toLocaleDateString()}
-                      . Add your first lead!
+                      No leads for {(() => {
+                        const [year, month, day] = selectedDate.split("-").map(Number);
+                        return new Date(year, month - 1, day).toLocaleDateString();
+                      })()}. Add your first lead!
                     </p>
                   ) : (
                     selectedDateLeads.slice(0, 10).map((lead) => (
                       <div key={lead.id} className="bg-white/5 rounded-lg p-3">
                         <div className="flex justify-between items-start">
-                          <div>
+                          <div className="flex-1">
                             <span
                               className={`inline-block px-2 py-1 rounded text-xs font-medium ${
                                 lead.sale
@@ -6530,9 +6537,17 @@ const AgentDashboard = ({ user, onSignOut }) => {
                               </span>
                             )}
                           </div>
-                          <span className="text-xs text-gray-400">
-                            {new Date(lead.timestamp).toLocaleTimeString()}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => setEditingLead(lead)}
+                              className="text-blue-400 hover:text-blue-300 text-xs"
+                            >
+                              Edit
+                            </button>
+                            <span className="text-xs text-gray-400">
+                              {new Date(lead.timestamp).toLocaleTimeString()}
+                            </span>
+                          </div>
                         </div>
                         {lead.notes && (
                           <p className="text-gray-300 text-sm mt-2">
@@ -6578,6 +6593,113 @@ const AgentDashboard = ({ user, onSignOut }) => {
         {activeTab === "supervisor" && <SupervisorHelp user={user} />}
         {activeTab === "pvp" && <PvPChallenges user={user} />}
       </div>
+
+      {/* Edit Lead Modal */}
+      {editingLead && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-slate-900 rounded-xl p-6 max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-semibold text-white">Edit Lead</h3>
+              <button
+                onClick={() => setEditingLead(null)}
+                className="text-gray-400 hover:text-white"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Lead Type</label>
+                <select
+                  value={editingLead.leadType}
+                  onChange={(e) => setEditingLead({ ...editingLead, leadType: e.target.value })}
+                  className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white"
+                >
+                  {leadTypes.map((type) => (
+                    <option key={type} value={type}>
+                      {type.split(" - ")[0]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {editingLead.sale && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1">Client Name</label>
+                    <input
+                      type="text"
+                      value={editingLead.clientName || ""}
+                      onChange={(e) => setEditingLead({ ...editingLead, clientName: e.target.value })}
+                      className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1">Carrier</label>
+                    <select
+                      value={editingLead.carrier || ""}
+                      onChange={(e) => setEditingLead({ ...editingLead, carrier: e.target.value })}
+                      className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white"
+                    >
+                      <option value="">Select Carrier</option>
+                      {carriers.map((carrier) => (
+                        <option key={carrier} value={carrier}>{carrier}</option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              )}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Notes/Description</label>
+                <textarea
+                  value={editingLead.notes || ""}
+                  onChange={(e) => setEditingLead({ ...editingLead, notes: e.target.value })}
+                  rows={3}
+                  className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white"
+                  placeholder="Update notes..."
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">CRM Link</label>
+                <input
+                  type="url"
+                  value={editingLead.crmLink || ""}
+                  onChange={(e) => setEditingLead({ ...editingLead, crmLink: e.target.value })}
+                  className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white"
+                  placeholder="https://crm.example.com/lead/..."
+                />
+              </div>
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={() => setEditingLead(null)}
+                  className="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-2 rounded-lg"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={async () => {
+                    const result = await updateLead(editingLead.id, {
+                      leadType: editingLead.leadType,
+                      notes: editingLead.notes,
+                      crmLink: editingLead.crmLink,
+                      clientName: editingLead.clientName,
+                      carrier: editingLead.carrier,
+                    });
+                    if (result.success) {
+                      showToast("Lead updated successfully!", "success");
+                      setEditingLead(null);
+                    } else {
+                      showToast("Failed to update lead", "error");
+                    }
+                  }}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

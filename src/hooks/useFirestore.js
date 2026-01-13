@@ -183,6 +183,24 @@ export const useFirestore = (userEmail) => {
     }
   };
 
+  // Update lead function
+  const updateLead = async (leadId, updateData) => {
+    try {
+      const leadDocRef = doc(db, "leads", leadId);
+      await updateDoc(leadDocRef, {
+        ...updateData,
+        updatedAt: new Date(),
+      });
+      console.log("Lead updated:", leadId);
+      // Refresh leads after update
+      await fetchLeads();
+      return true;
+    } catch (error) {
+      console.error("Error updating lead:", error);
+      throw error;
+    }
+  };
+
   // Update agent settings
   const updateAgentSettings = async (agentId, settings) => {
     try {
@@ -383,6 +401,7 @@ export const useFirestore = (userEmail) => {
     loading,
     lastRefresh,
     addLead,
+    updateLead,
     updateAgentSettings,
     createTeam,
     assignAgentToTeam,

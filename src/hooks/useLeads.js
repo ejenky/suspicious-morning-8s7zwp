@@ -5,6 +5,8 @@ import {
   query,
   where,
   getDocs,
+  doc,
+  updateDoc,
   serverTimestamp,
   Timestamp,
 } from "firebase/firestore";
@@ -151,22 +153,32 @@ export const useLeads = (userId) => {
       return leadDate >= selectedDateObj && leadDate < nextDay;
     });
 
+    // Exclude Dash Sale and Referral Sale from lead count (these are sales, not leads taken)
+    const actualLeads = dayLeads.filter((lead) => {
+      const leadType = lead.leadType || "";
+      return !leadType.startsWith("Dash Sale") && !leadType.startsWith("Referral Sale");
+    });
+
     const sales = dayLeads.filter((lead) => lead.sale);
     const referrals = dayLeads.filter(
-      (lead) => lead.leadType === "Referral Sale"
+      (lead) => lead.leadType?.startsWith("Referral Sale")
+    );
+    const dashSales = dayLeads.filter(
+      (lead) => lead.leadType?.startsWith("Dash Sale")
     );
 
     const metrics = {
-      totalLeads: dayLeads.length,
+      totalLeads: actualLeads.length,
       totalSales: sales.length,
       totalReferrals: referrals.length,
+      totalDashSales: dashSales.length,
       conversionRate:
-        dayLeads.length > 0
-          ? ((sales.length / dayLeads.length) * 100).toFixed(1)
+        actualLeads.length > 0
+          ? ((sales.filter(s => !s.leadType?.startsWith("Dash Sale") && !s.leadType?.startsWith("Referral Sale")).length / actualLeads.length) * 100).toFixed(1)
           : "0",
       referralRate:
-        dayLeads.length > 0
-          ? ((referrals.length / dayLeads.length) * 100).toFixed(1)
+        actualLeads.length > 0
+          ? ((referrals.length / actualLeads.length) * 100).toFixed(1)
           : "0",
       totalRevenue: sales.reduce(
         (sum, lead) =>
@@ -179,8 +191,27 @@ export const useLeads = (userId) => {
     return metrics;
   };
 
+  // Update existing lead
+  const updateLead = async (leadId, updateData) => {
+    try {
+      console.log("Updating lead:", leadId, "with data:", updateData);
+      const leadDocRef = doc(db, "leads", leadId);
+      await updateDoc(leadDocRef, {
+        ...updateData,
+        updatedAt: new Date().toISOString(),
+      });
+      console.log("Lead updated successfully");
+      // Refresh leads to show updated data
+      await fetchLeads(false);
+      return { success: true };
+    } catch (error) {
+      console.error("Error updating lead:", error);
+      return { success: false, error: error.message };
+    }
+  };
+
   // Manual refresh function (in case agent wants to force refresh)
   const refreshLeads = useCallback(() => fetchLeads(false), [fetchLeads]);
 
-  return { leads, loading, error, addLead, calculateMetrics, refreshLeads };
+  return { leads, loading, error, addLead, updateLead, calculateMetrics, refreshLeads };
 };
