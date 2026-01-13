@@ -2769,7 +2769,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   const teamGoalsInitialized = useRef(false);
 
   // Use Firebase for teams and agents data
-  const { teams, agents: firebaseAgents, leads: firebaseLeads, createTeam, assignAgentToTeam, addToMyTeam, removeFromMyTeam, myTeamMemberIds, myTeamGoals, updateMyTeamGoals, updateAgentGoals, refreshData, lastRefresh, loading: dataLoading } = useFirestore(user.email);
+  const { teams, agents: firebaseAgents, leads: firebaseLeads, createTeam, assignAgentToTeam, addToMyTeam, removeFromMyTeam, myTeamMemberIds, myTeamGoals, updateMyTeamGoals, updateAgentGoals, fetchAgentGoals, refreshData, lastRefresh, loading: dataLoading } = useFirestore(user.email);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Handle manual data refresh
