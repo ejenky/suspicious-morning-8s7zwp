@@ -6778,6 +6778,8 @@ const AdminDashboard = ({ user, onSignOut }) => {
     const today = new Date();
     return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
   });
+  const [selectedAgent, setSelectedAgent] = useState(null);
+  const [viewingAgentDashboard, setViewingAgentDashboard] = useState(null);
 
   // Get date range based on filter
   const getDateRange = () => {
@@ -6841,9 +6843,10 @@ const AdminDashboard = ({ user, onSignOut }) => {
     return { totalLeads, totalSales, conversionRate, revenue, refRate, referrals, dashSales };
   };
 
-  // Get top struggling lead types
-  const getStrugglingLeadTypes = () => {
+  // Get lead type breakdown with % of total
+  const getLeadTypeBreakdown = () => {
     const leads = getFilteredLeads();
+    const totalLeads = leads.length;
     const leadTypeBreakdown = {};
 
     leads.forEach(lead => {
@@ -6856,14 +6859,17 @@ const AdminDashboard = ({ user, onSignOut }) => {
       }
     });
 
+    const nonSaleLeads = Object.values(leadTypeBreakdown).reduce((sum, d) => sum + d.total, 0);
+
     return Object.entries(leadTypeBreakdown)
       .map(([type, data]) => ({
         type,
         count: data.total,
+        percentage: nonSaleLeads > 0 ? ((data.total / nonSaleLeads) * 100).toFixed(1) : "0.0",
         conversion: data.total > 0 ? ((data.sales / data.total) * 100).toFixed(1) : "0.0"
       }))
-      .sort((a, b) => a.count > 2 && b.count > 2 ? parseFloat(a.conversion) - parseFloat(b.conversion) : b.count - a.count)
-      .slice(0, 8);
+      .sort((a, b) => parseFloat(b.percentage) - parseFloat(a.percentage))
+      .slice(0, 10);
   };
 
   // Get daily conversion data for chart
@@ -6914,17 +6920,101 @@ const AdminDashboard = ({ user, onSignOut }) => {
     .sort((a, b) => parseFloat(a.conversionRate) - parseFloat(b.conversionRate));
   };
 
+  // Get team breakdown with stats and lead type distribution
+  const getTeamBreakdown = () => {
+    const leads = getFilteredLeads();
+    const teamGroups = {};
+
+    // Group agents by team
+    firebaseAgents.forEach(agent => {
+      const teamName = agent.team || "Unassigned";
+      if (!teamGroups[teamName]) {
+        teamGroups[teamName] = {
+          name: teamName,
+          agents: [],
+          leads: [],
+          leadTypes: {}
+        };
+      }
+      teamGroups[teamName].agents.push(agent);
+    });
+
+    // Assign leads to teams
+    leads.forEach(lead => {
+      const agent = firebaseAgents.find(a => a.email === lead.agentEmail || a.id === lead.agent);
+      const teamName = agent?.team || "Unassigned";
+      if (teamGroups[teamName]) {
+        teamGroups[teamName].leads.push(lead);
+        // Track lead types for pie chart
+        const leadType = lead.leadType?.split(" - ")[0] || lead.leadType || "Unknown";
+        if (!leadType.includes("Sale")) {
+          teamGroups[teamName].leadTypes[leadType] = (teamGroups[teamName].leadTypes[leadType] || 0) + 1;
+        }
+      }
+    });
+
+    // Calculate stats for each team
+    return Object.values(teamGroups)
+      .filter(team => team.leads.length > 0)
+      .map(team => {
+        const totalLeads = team.leads.length;
+        const sales = team.leads.filter(l => l.sale).length;
+        const revenue = team.leads.filter(l => l.sale).reduce(
+          (sum, lead) => sum + (lead.commission || 115) + (lead.hra ? (lead.hraValue || 15) : 0), 0
+        );
+        const conversionRate = totalLeads > 0 ? ((sales / totalLeads) * 100).toFixed(1) : "0.0";
+
+        // Get top lead types for pie chart
+        const totalNonSaleLeads = Object.values(team.leadTypes).reduce((sum, count) => sum + count, 0);
+        const leadTypeDistribution = Object.entries(team.leadTypes)
+          .map(([type, count]) => ({
+            type,
+            count,
+            percentage: totalNonSaleLeads > 0 ? ((count / totalNonSaleLeads) * 100).toFixed(1) : "0.0"
+          }))
+          .sort((a, b) => b.count - a.count)
+          .slice(0, 5);
+
+        return {
+          name: team.name,
+          agentCount: team.agents.length,
+          totalLeads,
+          sales,
+          revenue,
+          conversionRate,
+          leadTypeDistribution
+        };
+      })
+      .sort((a, b) => b.sales - a.sales);
+  };
+
   const companyStats = getCompanyPerformance();
-  const strugglingTypes = getStrugglingLeadTypes();
+  const leadTypeData = getLeadTypeBreakdown();
   const dailyData = getDailyData();
   const agentPerformance = getAgentPerformance();
   const filteredLeads = getFilteredLeads();
+  const teamBreakdown = getTeamBreakdown();
+
+  // Pie chart colors
+  const pieColors = ["#3b82f6", "#22c55e", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#14b8a6", "#6366f1"];
 
   if (dataLoading) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
         <div className="text-white text-xl">Loading...</div>
       </div>
+    );
+  }
+
+  // Show agent dashboard view when selected
+  if (viewingAgentDashboard) {
+    return (
+      <AgentDashboardView
+        agent={viewingAgentDashboard}
+        onBack={() => setViewingAgentDashboard(null)}
+        user={user}
+        leads={firebaseLeads}
+      />
     );
   }
 
@@ -7007,40 +7097,39 @@ const AdminDashboard = ({ user, onSignOut }) => {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Top Struggling Lead Types */}
+          {/* Lead Type Breakdown by % */}
           <div className="bg-slate-800 rounded-lg border border-slate-700">
             <div className="px-4 py-3 border-b border-slate-700">
               <h2 className="font-semibold flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5 text-amber-400" />
-                Lead Type Breakdown
+                <BarChart3 className="w-5 h-5 text-blue-400" />
+                Lead Type Distribution
               </h2>
             </div>
             <div className="p-4">
-              {strugglingTypes.length === 0 ? (
+              {leadTypeData.length === 0 ? (
                 <p className="text-slate-500 text-center py-4">No lead data available</p>
               ) : (
                 <div className="space-y-2">
-                  {strugglingTypes.map((item, index) => (
-                    <div key={item.type} className="flex items-center justify-between py-2 border-b border-slate-700 last:border-0">
-                      <div className="flex items-center gap-3">
-                        <span className={`w-6 h-6 rounded text-xs flex items-center justify-center font-bold ${
-                          parseFloat(item.conversion) < 10 ? "bg-red-500/20 text-red-400" :
-                          parseFloat(item.conversion) < 20 ? "bg-yellow-500/20 text-yellow-400" :
-                          "bg-green-500/20 text-green-400"
-                        }`}>
-                          {index + 1}
-                        </span>
-                        <span className="text-sm">{item.type}</span>
+                  {leadTypeData.map((item, index) => (
+                    <div key={item.type} className="py-2 border-b border-slate-700 last:border-0">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm font-medium">{item.type}</span>
+                        <div className="flex items-center gap-3 text-sm">
+                          <span className="text-slate-400">{item.count}</span>
+                          <span className="text-blue-400 font-bold w-14 text-right">{item.percentage}%</span>
+                          <span className={`w-14 text-right font-medium ${
+                            parseFloat(item.conversion) < 10 ? "text-red-400" :
+                            parseFloat(item.conversion) < 25 ? "text-yellow-400" : "text-green-400"
+                          }`}>
+                            {item.conversion}% conv
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-4 text-sm">
-                        <span className="text-slate-400">{item.count} leads</span>
-                        <span className={`font-medium w-16 text-right ${
-                          parseFloat(item.conversion) < 10 ? "text-red-400" :
-                          parseFloat(item.conversion) < 20 ? "text-yellow-400" :
-                          "text-green-400"
-                        }`}>
-                          {item.conversion}%
-                        </span>
+                      <div className="w-full bg-slate-700 rounded-full h-2">
+                        <div
+                          className="bg-blue-500 h-2 rounded-full"
+                          style={{ width: `${Math.min(parseFloat(item.percentage), 100)}%` }}
+                        />
                       </div>
                     </div>
                   ))}
@@ -7049,33 +7138,103 @@ const AdminDashboard = ({ user, onSignOut }) => {
             </div>
           </div>
 
-          {/* Daily Performance Chart */}
+          {/* Daily Performance Line Chart */}
           <div className="bg-slate-800 rounded-lg border border-slate-700">
             <div className="px-4 py-3 border-b border-slate-700">
               <h2 className="font-semibold flex items-center gap-2">
-                <TrendingUp className="w-5 h-5 text-blue-400" />
-                Daily Performance
+                <TrendingUp className="w-5 h-5 text-green-400" />
+                Daily Performance (Leads vs Sales)
               </h2>
             </div>
             <div className="p-4">
               {dailyData.length === 0 ? (
                 <p className="text-slate-500 text-center py-4">No data for this period</p>
               ) : (
-                <div className="h-48 flex items-end gap-1">
-                  {dailyData.map((day, index) => (
-                    <div key={index} className="flex-1 flex flex-col items-center gap-1">
-                      <span className="text-xs text-slate-400">{day.conversion}%</span>
-                      <div
-                        className="w-full bg-gradient-to-t from-blue-600 to-blue-400 rounded-t"
-                        style={{ height: `${Math.max(parseFloat(day.conversion) * 1.5, 8)}px` }}
-                        title={`${day.date}: ${day.sales}/${day.leads} sales`}
-                      />
-                      <span className="text-xs text-slate-500 -rotate-45 origin-top-left mt-2 whitespace-nowrap">
-                        {day.date}
-                      </span>
+                <>
+                  <div className="relative h-48">
+                    {/* Y-axis labels */}
+                    <div className="absolute left-0 top-0 bottom-8 w-8 flex flex-col justify-between text-xs text-slate-500">
+                      <span>{Math.max(...dailyData.map(d => d.leads))}</span>
+                      <span>{Math.round(Math.max(...dailyData.map(d => d.leads)) / 2)}</span>
+                      <span>0</span>
                     </div>
-                  ))}
-                </div>
+                    {/* Chart area */}
+                    <div className="ml-10 h-40 relative">
+                      {/* Grid lines */}
+                      <div className="absolute inset-0 flex flex-col justify-between">
+                        <div className="border-b border-slate-700/50" />
+                        <div className="border-b border-slate-700/50" />
+                        <div className="border-b border-slate-700/50" />
+                      </div>
+                      {/* Line chart using SVG */}
+                      <svg className="w-full h-full" preserveAspectRatio="none">
+                        {/* Leads line (blue) */}
+                        <polyline
+                          fill="none"
+                          stroke="#3b82f6"
+                          strokeWidth="2"
+                          points={dailyData.map((day, i) => {
+                            const x = (i / (dailyData.length - 1)) * 100;
+                            const maxLeads = Math.max(...dailyData.map(d => d.leads), 1);
+                            const y = 100 - (day.leads / maxLeads) * 100;
+                            return `${x}%,${y}%`;
+                          }).join(' ')}
+                        />
+                        {/* Sales line (green) */}
+                        <polyline
+                          fill="none"
+                          stroke="#22c55e"
+                          strokeWidth="2"
+                          points={dailyData.map((day, i) => {
+                            const x = (i / (dailyData.length - 1)) * 100;
+                            const maxLeads = Math.max(...dailyData.map(d => d.leads), 1);
+                            const y = 100 - (day.sales / maxLeads) * 100;
+                            return `${x}%,${y}%`;
+                          }).join(' ')}
+                        />
+                        {/* Data points for leads */}
+                        {dailyData.map((day, i) => {
+                          const x = (i / (dailyData.length - 1)) * 100;
+                          const maxLeads = Math.max(...dailyData.map(d => d.leads), 1);
+                          const y = 100 - (day.leads / maxLeads) * 100;
+                          return (
+                            <circle key={`lead-${i}`} cx={`${x}%`} cy={`${y}%`} r="4" fill="#3b82f6">
+                              <title>{day.date}: {day.leads} leads</title>
+                            </circle>
+                          );
+                        })}
+                        {/* Data points for sales */}
+                        {dailyData.map((day, i) => {
+                          const x = (i / (dailyData.length - 1)) * 100;
+                          const maxLeads = Math.max(...dailyData.map(d => d.leads), 1);
+                          const y = 100 - (day.sales / maxLeads) * 100;
+                          return (
+                            <circle key={`sale-${i}`} cx={`${x}%`} cy={`${y}%`} r="4" fill="#22c55e">
+                              <title>{day.date}: {day.sales} sales</title>
+                            </circle>
+                          );
+                        })}
+                      </svg>
+                    </div>
+                    {/* X-axis labels */}
+                    <div className="ml-10 flex justify-between text-xs text-slate-500 mt-1">
+                      {dailyData.filter((_, i) => i === 0 || i === dailyData.length - 1 || i === Math.floor(dailyData.length / 2)).map((day, i) => (
+                        <span key={i}>{day.date}</span>
+                      ))}
+                    </div>
+                  </div>
+                  {/* Legend */}
+                  <div className="flex justify-center gap-6 mt-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 bg-blue-500 rounded-full" />
+                      <span className="text-sm text-slate-400">Leads</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 bg-green-500 rounded-full" />
+                      <span className="text-sm text-slate-400">Sales</span>
+                    </div>
+                  </div>
+                </>
               )}
             </div>
           </div>
@@ -7100,12 +7259,13 @@ const AdminDashboard = ({ user, onSignOut }) => {
                   <th className="text-center py-3 px-4 text-xs uppercase tracking-wide text-slate-400">Conv %</th>
                   <th className="text-center py-3 px-4 text-xs uppercase tracking-wide text-slate-400">Revenue</th>
                   <th className="text-center py-3 px-4 text-xs uppercase tracking-wide text-slate-400">Status</th>
+                  <th className="text-center py-3 px-4 text-xs uppercase tracking-wide text-slate-400">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {agentPerformance.length === 0 ? (
                   <tr>
-                    <td colSpan="7" className="text-center py-8 text-slate-500">No agent activity for this period</td>
+                    <td colSpan="8" className="text-center py-8 text-slate-500">No agent activity for this period</td>
                   </tr>
                 ) : (
                   agentPerformance.map((agent, index) => (
@@ -7137,6 +7297,25 @@ const AdminDashboard = ({ user, onSignOut }) => {
                           {index < 3 ? "Needs Help" : index < 6 ? "Average" : "Good"}
                         </span>
                       </td>
+                      <td className="py-3 px-4 text-center">
+                        <div className="flex justify-center gap-2">
+                          <button
+                            onClick={() => setSelectedAgent({
+                              ...agent,
+                              leadsList: filteredLeads.filter(l => l.agentEmail === agent.email || l.agent === agent.id)
+                            })}
+                            className="text-blue-400 hover:text-blue-300 text-sm"
+                          >
+                            Profile
+                          </button>
+                          <button
+                            onClick={() => setViewingAgentDashboard(agent)}
+                            className="bg-blue-600 hover:bg-blue-700 px-2 py-1 rounded text-white text-xs"
+                          >
+                            Dashboard
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   ))
                 )}
@@ -7144,8 +7323,108 @@ const AdminDashboard = ({ user, onSignOut }) => {
             </table>
           </div>
         </div>
+
+        {/* Team Breakdown Section */}
+        <div className="bg-slate-800 rounded-lg border border-slate-700">
+          <div className="px-4 py-3 border-b border-slate-700">
+            <h2 className="font-semibold flex items-center gap-2">
+              <Users className="w-5 h-5 text-cyan-400" />
+              Team Breakdown
+            </h2>
+          </div>
+          <div className="p-4">
+            {teamBreakdown.length === 0 ? (
+              <p className="text-slate-500 text-center py-8">No team data available for this period</p>
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {teamBreakdown.map((team, teamIndex) => (
+                  <div key={team.name} className="bg-slate-700/50 rounded-lg p-4 border border-slate-600">
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <h3 className="font-bold text-lg text-white">{team.name}</h3>
+                        <p className="text-slate-400 text-sm">{team.agentCount} agents</p>
+                      </div>
+                      <div className={`px-3 py-1 rounded text-sm font-medium ${
+                        parseFloat(team.conversionRate) >= 25 ? "bg-green-500/20 text-green-400" :
+                        parseFloat(team.conversionRate) >= 15 ? "bg-yellow-500/20 text-yellow-400" :
+                        "bg-red-500/20 text-red-400"
+                      }`}>
+                        {team.conversionRate}% Conv
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-3 mb-4">
+                      <div className="text-center p-2 bg-slate-800 rounded">
+                        <p className="text-slate-400 text-xs">Leads</p>
+                        <p className="text-blue-400 font-bold text-lg">{team.totalLeads}</p>
+                      </div>
+                      <div className="text-center p-2 bg-slate-800 rounded">
+                        <p className="text-slate-400 text-xs">Sales</p>
+                        <p className="text-green-400 font-bold text-lg">{team.sales}</p>
+                      </div>
+                      <div className="text-center p-2 bg-slate-800 rounded">
+                        <p className="text-slate-400 text-xs">Revenue</p>
+                        <p className="text-yellow-400 font-bold text-lg">${team.revenue}</p>
+                      </div>
+                    </div>
+
+                    {/* Pie Chart */}
+                    {team.leadTypeDistribution.length > 0 && (
+                      <div className="flex items-center gap-4">
+                        <div className="relative w-24 h-24 flex-shrink-0">
+                          <svg viewBox="0 0 32 32" className="w-full h-full -rotate-90">
+                            {(() => {
+                              let cumulativePercent = 0;
+                              return team.leadTypeDistribution.map((item, index) => {
+                                const percent = parseFloat(item.percentage);
+                                const startPercent = cumulativePercent;
+                                cumulativePercent += percent;
+                                const largeArcFlag = percent > 50 ? 1 : 0;
+                                const startX = 16 + 14 * Math.cos(2 * Math.PI * startPercent / 100);
+                                const startY = 16 + 14 * Math.sin(2 * Math.PI * startPercent / 100);
+                                const endX = 16 + 14 * Math.cos(2 * Math.PI * cumulativePercent / 100);
+                                const endY = 16 + 14 * Math.sin(2 * Math.PI * cumulativePercent / 100);
+                                return (
+                                  <path
+                                    key={item.type}
+                                    d={`M 16 16 L ${startX} ${startY} A 14 14 0 ${largeArcFlag} 1 ${endX} ${endY} Z`}
+                                    fill={pieColors[index % pieColors.length]}
+                                  >
+                                    <title>{item.type}: {item.percentage}%</title>
+                                  </path>
+                                );
+                              });
+                            })()}
+                          </svg>
+                        </div>
+                        <div className="flex-1 space-y-1">
+                          {team.leadTypeDistribution.map((item, index) => (
+                            <div key={item.type} className="flex items-center gap-2 text-xs">
+                              <div
+                                className="w-3 h-3 rounded-sm flex-shrink-0"
+                                style={{ backgroundColor: pieColors[index % pieColors.length] }}
+                              />
+                              <span className="text-slate-300 truncate flex-1">{item.type}</span>
+                              <span className="text-slate-400 font-medium">{item.percentage}%</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
+      {selectedAgent && (
+        <EnhancedAgentProfile
+          agent={selectedAgent}
+          onClose={() => setSelectedAgent(null)}
+        />
+      )}
       <ManagerAICatAssistant leads={filteredLeads} agents={firebaseAgents} mode="all" />
     </div>
   );
