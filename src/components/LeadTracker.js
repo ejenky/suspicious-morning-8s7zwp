@@ -2958,13 +2958,16 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   };
 
   // Get struggling agents based on Firebase data - lowest sales and conversion
+  // Only include agents who have actually recorded leads (leads > 0)
   const getStrugglingAgents = () => {
     const agentsWithStats = derivedAgents.map((agent) => ({
       ...agent,
       ...getAgentStatsFromLeads(agent.email, filteredLeads),
     }));
 
+    // Filter to only agents who have recorded leads - agents with 0 leads are not "struggling", they just haven't logged data
     return agentsWithStats
+      .filter((agent) => agent.leads > 0)
       .sort((a, b) => {
         // Sort by sales first, then conversion rate (lowest first = most struggling)
         const scoreA = a.sales * 10 + parseFloat(a.conversionRate);
@@ -2980,19 +2983,25 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   const currentThemeStyles = themes[currentTheme];
 
   // Get overall company stats from Firebase data
+  // Only count agents who have actually recorded leads for the selected date
   const getCompanyStats = () => {
-    const allAgentStats = derivedAgents.map((agent) =>
-      getAgentStatsFromLeads(agent.email, filteredLeads)
-    );
+    const allAgentStats = derivedAgents.map((agent) => ({
+      ...agent,
+      ...getAgentStatsFromLeads(agent.email, filteredLeads)
+    }));
 
-    const totalAgents = derivedAgents.length;
-    const totalSales = allAgentStats.reduce((sum, stats) => sum + stats.sales, 0);
-    const totalLeads = allAgentStats.reduce((sum, stats) => sum + stats.leads, 0);
-    const totalReferrals = allAgentStats.reduce((sum, stats) => sum + stats.referrals, 0);
-    const totalRevenue = allAgentStats.reduce((sum, stats) => sum + stats.revenue, 0);
+    // Only count agents who have recorded leads as "active"
+    const activeAgents = allAgentStats.filter((agent) => agent.leads > 0);
 
+    const totalAgents = activeAgents.length;
+    const totalSales = activeAgents.reduce((sum, agent) => sum + agent.sales, 0);
+    const totalLeads = activeAgents.reduce((sum, agent) => sum + agent.leads, 0);
+    const totalReferrals = activeAgents.reduce((sum, agent) => sum + agent.referrals, 0);
+    const totalRevenue = activeAgents.reduce((sum, agent) => sum + agent.revenue, 0);
+
+    // Only calculate conversion from agents who have leads
     const avgConversion = totalAgents > 0
-      ? (allAgentStats.reduce((sum, stats) => sum + parseFloat(stats.conversionRate), 0) / totalAgents).toFixed(1)
+      ? (activeAgents.reduce((sum, agent) => sum + parseFloat(agent.conversionRate), 0) / totalAgents).toFixed(1)
       : "0";
 
     const referralRate = totalLeads > 0
