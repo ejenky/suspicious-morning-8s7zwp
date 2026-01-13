@@ -3176,6 +3176,9 @@ const ManagerDashboard = ({ user, onSignOut }) => {
       agents = agents.filter((agent) => agent.center === selectedCenter);
     }
 
+    // Only include agents who have recorded at least 1 lead
+    agents = agents.filter((agent) => agent.leads > 0);
+
     return agents
       .sort((a, b) => {
         // Sort by multiple criteria: sales, conversion rate
