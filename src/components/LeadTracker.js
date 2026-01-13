@@ -4632,7 +4632,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                 )}
               </div>
 
-              {/* Team Goals - Direct DOM manipulation for immediate updates */}
+              {/* Team Goals - Using contentEditable for immediate visual updates */}
               <div className="mt-6 bg-white/10 rounded-lg p-4">
                 <h4 className="text-lg font-semibold text-white mb-4">
                   Team Goals
@@ -4642,40 +4642,42 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                     <label className="block text-sm text-gray-300 mb-2">
                       Team Sales Goal (Daily)
                     </label>
-                    <input
+                    <div
                       id="team-sales-goal"
-                      type="text"
-                      inputMode="numeric"
-                      defaultValue={myTeamGoals?.salesGoal ?? 50}
+                      contentEditable
+                      suppressContentEditableWarning
                       onInput={(e) => {
-                        globalTeamGoals.salesGoal = e.target.value;
+                        globalTeamGoals.salesGoal = e.currentTarget.textContent;
                       }}
-                      className="w-full bg-slate-800 border border-white/20 rounded px-3 py-2 text-white"
-                    />
+                      className="w-full bg-slate-800 border border-white/20 rounded px-3 py-2 text-white min-h-[40px] focus:outline-none focus:ring-2 focus:ring-green-500"
+                    >
+                      {myTeamGoals?.salesGoal ?? 50}
+                    </div>
                   </div>
                   <div>
                     <label className="block text-sm text-gray-300 mb-2">
                       Team Conversion Goal (%)
                     </label>
-                    <input
+                    <div
                       id="team-conversion-goal"
-                      type="text"
-                      inputMode="numeric"
-                      defaultValue={myTeamGoals?.conversionGoal ?? 25}
+                      contentEditable
+                      suppressContentEditableWarning
                       onInput={(e) => {
-                        globalTeamGoals.conversionGoal = e.target.value;
+                        globalTeamGoals.conversionGoal = e.currentTarget.textContent;
                       }}
-                      className="w-full bg-slate-800 border border-white/20 rounded px-3 py-2 text-white"
-                    />
+                      className="w-full bg-slate-800 border border-white/20 rounded px-3 py-2 text-white min-h-[40px] focus:outline-none focus:ring-2 focus:ring-green-500"
+                    >
+                      {myTeamGoals?.conversionGoal ?? 25}
+                    </div>
                   </div>
                 </div>
                 <button
                   onClick={async () => {
-                    const salesInput = document.getElementById('team-sales-goal');
-                    const convInput = document.getElementById('team-conversion-goal');
+                    const salesEl = document.getElementById('team-sales-goal');
+                    const convEl = document.getElementById('team-conversion-goal');
                     const goals = {
-                      salesGoal: parseInt(salesInput?.value) || 0,
-                      conversionGoal: parseInt(convInput?.value) || 0,
+                      salesGoal: parseInt(salesEl?.textContent) || 0,
+                      conversionGoal: parseInt(convEl?.textContent) || 0,
                     };
                     try {
                       await updateMyTeamGoals(goals);
