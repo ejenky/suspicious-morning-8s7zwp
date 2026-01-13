@@ -767,9 +767,11 @@ const PvPChallenges = ({ user }) => {
 
 // Enhanced Leaderboards
 const Leaderboards = ({ allAgents = [], allLeads = [] }) => {
-  const [selectedCenter, setSelectedCenter] = useState("all");
   const [selectedBoard, setSelectedBoard] = useState("sales");
-  const centers = ["all", "denver", "tampa", "orlando", "daytona"];
+  const [dateRange, setDateRange] = useState("all");
+  const [customStartDate, setCustomStartDate] = useState("");
+  const [customEndDate, setCustomEndDate] = useState("");
+
   const boards = [
     {
       key: "sales",
@@ -791,25 +793,85 @@ const Leaderboards = ({ allAgents = [], allLeads = [] }) => {
     },
   ];
 
+  const dateRanges = [
+    { key: "today", label: "Today" },
+    { key: "week", label: "This Week" },
+    { key: "month", label: "This Month" },
+    { key: "all", label: "All Time" },
+    { key: "custom", label: "Custom Range" },
+  ];
+
   // Convert Firebase leads to proper format with timestamps
   const processedLeads = allLeads.map(lead => ({
     ...lead,
     timestamp: lead.timestamp?.toDate ? lead.timestamp.toDate() : new Date(lead.timestamp || lead.createdAt)
   }));
 
-  // Convert Firebase agents to proper format
-  const agents = allAgents.map(agent => ({
-    id: agent.id,
-    name: agent.name || agent.displayName || agent.email?.split('@')[0] || 'Unknown',
-    email: agent.email,
-    center: agent.center || agent.location || 'denver',
-    team: agent.team || agent.teamId || 'Team A',
-    role: agent.role || 'agent'
-  }));
+  // Get date range boundaries
+  const getDateBoundaries = () => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-  // Calculate stats for an agent from the leads data
+    switch (dateRange) {
+      case "today":
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        return { start: today, end: tomorrow };
+      case "week":
+        const weekStart = new Date(today);
+        weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekEnd.getDate() + 7);
+        return { start: weekStart, end: weekEnd };
+      case "month":
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+        return { start: monthStart, end: monthEnd };
+      case "custom":
+        if (customStartDate && customEndDate) {
+          const start = new Date(customStartDate);
+          const end = new Date(customEndDate);
+          end.setDate(end.getDate() + 1);
+          return { start, end };
+        }
+        return null;
+      default:
+        return null;
+    }
+  };
+
+  // Filter leads by date range
+  const getFilteredLeads = () => {
+    const boundaries = getDateBoundaries();
+    if (!boundaries) return processedLeads;
+
+    return processedLeads.filter(lead => {
+      const leadDate = new Date(lead.timestamp);
+      return leadDate >= boundaries.start && leadDate < boundaries.end;
+    });
+  };
+
+  const filteredLeads = getFilteredLeads();
+
+  // Derive unique agents from leads data
+  const agents = (() => {
+    const agentEmails = [...new Set(processedLeads.map(lead => lead.agentEmail).filter(Boolean))];
+    return agentEmails.map((email, index) => {
+      // Try to find agent info from allAgents if available
+      const agentInfo = allAgents.find(a => a.email === email);
+      return {
+        id: agentInfo?.id || `agent-${index}`,
+        name: agentInfo?.name || agentInfo?.displayName || email.split('@')[0].split('.').map(n => n.charAt(0).toUpperCase() + n.slice(1)).join(' '),
+        email: email,
+        team: agentInfo?.team || agentInfo?.teamId || 'Team A',
+        role: agentInfo?.role || 'agent'
+      };
+    });
+  })();
+
+  // Calculate stats for an agent from the filtered leads data
   const getAgentStats = (agentEmail) => {
-    const agentLeads = processedLeads.filter(
+    const agentLeads = filteredLeads.filter(
       (lead) => lead.agentEmail === agentEmail || lead.agent === agentEmail
     );
 
@@ -837,30 +899,6 @@ const Leaderboards = ({ allAgents = [], allLeads = [] }) => {
     };
   };
 
-  const getFilteredAgents = () => {
-    let agentsWithStats = agents.map((agent) => {
-      const stats = getAgentStats(agent.email);
-      return { ...agent, ...stats };
-    });
-
-    let filtered =
-      selectedCenter === "all"
-        ? agentsWithStats
-        : agentsWithStats.filter((agent) => agent.center === selectedCenter);
-    switch (selectedBoard) {
-      case "sales":
-        return filtered.sort((a, b) => b.sales - a.sales);
-      case "conversion":
-        return filtered.sort(
-          (a, b) => parseFloat(b.conversionRate) - parseFloat(a.conversionRate)
-        );
-      case "referrals":
-        return filtered.sort((a, b) => b.referrals - a.referrals);
-      default:
-        return filtered;
-    }
-  };
-
   const currentBoard = boards.find((b) => b.key === selectedBoard);
 
   return (
@@ -881,15 +919,13 @@ const Leaderboards = ({ allAgents = [], allLeads = [] }) => {
         </div>
         <div className="grid grid-cols-2 gap-4">
           <select
-            value={selectedCenter}
-            onChange={(e) => setSelectedCenter(e.target.value)}
+            value={dateRange}
+            onChange={(e) => setDateRange(e.target.value)}
             className="bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white"
           >
-            {centers.map((center) => (
-              <option key={center} value={center} className="bg-slate-800">
-                {center === "all"
-                  ? "All Centers"
-                  : center.charAt(0).toUpperCase() + center.slice(1)}
+            {dateRanges.map((range) => (
+              <option key={range.key} value={range.key} className="bg-slate-800">
+                {range.label}
               </option>
             ))}
           </select>
@@ -909,6 +945,28 @@ const Leaderboards = ({ allAgents = [], allLeads = [] }) => {
             ))}
           </select>
         </div>
+        {dateRange === "custom" && (
+          <div className="grid grid-cols-2 gap-4 mt-4">
+            <div>
+              <label className="text-gray-300 text-sm mb-1 block">Start Date</label>
+              <input
+                type="date"
+                value={customStartDate}
+                onChange={(e) => setCustomStartDate(e.target.value)}
+                className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white"
+              />
+            </div>
+            <div>
+              <label className="text-gray-300 text-sm mb-1 block">End Date</label>
+              <input
+                type="date"
+                value={customEndDate}
+                onChange={(e) => setCustomEndDate(e.target.value)}
+                className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white"
+              />
+            </div>
+          </div>
+        )}
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {boards.map((board) => {
@@ -917,24 +975,18 @@ const Leaderboards = ({ allAgents = [], allLeads = [] }) => {
               const stats = getAgentStats(agent.email);
               return { ...agent, ...stats };
             });
-            let filteredAgents =
-              selectedCenter === "all"
-                ? agentsWithStats
-                : agentsWithStats.filter(
-                    (agent) => agent.center === selectedCenter
-                  );
             switch (board.key) {
               case "sales":
-                return filteredAgents.sort((a, b) => b.sales - a.sales);
+                return agentsWithStats.sort((a, b) => b.sales - a.sales);
               case "conversion":
-                return filteredAgents.sort(
+                return agentsWithStats.sort(
                   (a, b) =>
                     parseFloat(b.conversionRate) - parseFloat(a.conversionRate)
                 );
               case "referrals":
-                return filteredAgents.sort((a, b) => b.referrals - a.referrals);
+                return agentsWithStats.sort((a, b) => b.referrals - a.referrals);
               default:
-                return filteredAgents;
+                return agentsWithStats;
             }
           })();
           return (
@@ -949,69 +1001,71 @@ const Leaderboards = ({ allAgents = [], allLeads = [] }) => {
                 </h4>
               </div>
               <div className="space-y-3">
-                {boardAgents.slice(0, 5).map((agent, index) => {
-                  const profileColors = [
-                    "bg-red-500",
-                    "bg-blue-500",
-                    "bg-green-500",
-                    "bg-purple-500",
-                    "bg-pink-500",
-                  ];
-                  const medalColors = [
-                    "bg-gradient-to-r from-yellow-400 to-yellow-600",
-                    "bg-gradient-to-r from-gray-300 to-gray-500",
-                    "bg-gradient-to-r from-orange-400 to-orange-600",
-                    "bg-slate-600",
-                    "bg-slate-600",
-                  ];
-                  return (
-                    <div
-                      key={agent.id}
-                      className="flex items-center justify-between p-3 bg-white/5 rounded-lg"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold ${medalColors[index]}`}
-                        >
-                          {index + 1}
-                        </div>
-                        <div
-                          className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold ${profileColors[index]}`}
-                        >
-                          {agent.name
-                            .split(" ")
-                            .map((n) => n[0])
-                            .join("")}
-                        </div>
-                        <div>
-                          <span className="font-medium text-white">
-                            {agent.name}
-                          </span>
-                          <div className="text-xs text-gray-400 uppercase">
-                            {agent.center}
+                {boardAgents.length === 0 ? (
+                  <p className="text-gray-400 text-center py-4">No data for this period</p>
+                ) : (
+                  boardAgents.slice(0, 5).map((agent, index) => {
+                    const profileColors = [
+                      "bg-red-500",
+                      "bg-blue-500",
+                      "bg-green-500",
+                      "bg-purple-500",
+                      "bg-pink-500",
+                    ];
+                    const medalColors = [
+                      "bg-gradient-to-r from-yellow-400 to-yellow-600",
+                      "bg-gradient-to-r from-gray-300 to-gray-500",
+                      "bg-gradient-to-r from-orange-400 to-orange-600",
+                      "bg-slate-600",
+                      "bg-slate-600",
+                    ];
+                    return (
+                      <div
+                        key={agent.id}
+                        className="flex items-center justify-between p-3 bg-white/5 rounded-lg"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold ${medalColors[index]}`}
+                          >
+                            {index + 1}
+                          </div>
+                          <div
+                            className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold ${profileColors[index % 5]}`}
+                          >
+                            {agent.name
+                              .split(" ")
+                              .map((n) => n[0])
+                              .join("")
+                              .substring(0, 2)}
+                          </div>
+                          <div>
+                            <span className="font-medium text-white">
+                              {agent.name}
+                            </span>
                           </div>
                         </div>
+                        <div className="text-right">
+                          {board.key === "sales" && (
+                            <span className="text-white font-bold">
+                              {agent.sales}
+                            </span>
+                          )}
+                          {board.key === "conversion" && (
+                            <span className="text-white font-bold">
+                              {agent.conversionRate}%
+                            </span>
+                          )}
+                          {board.key === "referrals" && (
+                            <span className="text-white font-bold">
+                              {agent.referrals}
+                            </span>
+                          )}
+                        </div>
                       </div>
-                      <div className="text-right">
-                        {board.key === "sales" && (
-                          <span className="text-white font-bold">
-                            {agent.sales}
-                          </span>
-                        )}
-                        {board.key === "conversion" && (
-                          <span className="text-white font-bold">
-                            {agent.conversionRate}%
-                          </span>
-                        )}
-                        {board.key === "referrals" && (
-                          <span className="text-white font-bold">
-                            {agent.referrals}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                )}
               </div>
             </div>
           );
