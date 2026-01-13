@@ -62,10 +62,61 @@ import { useLeads } from "../hooks/useLeads";
 // Global state for leads data
 let globalLeadsData = [];
 
-// Agent and team data will be populated from real data
-const mockAgents = [];
+// Agent and team data for leaderboard display
+const mockAgents = [
+  { id: 1, name: "Evelyn Price", email: "evelyn.price@company.com", team: "Alpha", role: "agent" },
+  { id: 2, name: "Marcus Chen", email: "marcus.chen@company.com", team: "Alpha", role: "agent" },
+  { id: 3, name: "Sarah Johnson", email: "sarah.johnson@company.com", team: "Beta", role: "agent" },
+  { id: 4, name: "David Kim", email: "david.kim@company.com", team: "Beta", role: "agent" },
+  { id: 5, name: "Emily Rodriguez", email: "emily.rodriguez@company.com", team: "Alpha", role: "agent" },
+  { id: 6, name: "James Wilson", email: "james.wilson@company.com", team: "Gamma", role: "agent" },
+  { id: 7, name: "Lisa Thompson", email: "lisa.thompson@company.com", team: "Gamma", role: "agent" },
+  { id: 8, name: "Michael Brown", email: "michael.brown@company.com", team: "Beta", role: "agent" },
+];
 
-const mockFive9Data = {};
+// Initialize mock leads data for testing
+const initializeMockLeadsData = () => {
+  const today = new Date();
+  const mockLeads = [];
+
+  // Generate sample leads for each agent
+  mockAgents.forEach((agent, agentIndex) => {
+    const numLeads = 10 + Math.floor(Math.random() * 15); // 10-25 leads per agent
+
+    for (let i = 0; i < numLeads; i++) {
+      const isSale = Math.random() > 0.4; // 60% conversion rate roughly
+      const leadTypes = ["Direct Sale", "Referral Sale", "Callback", "FU Sale", "Transfer"];
+      const leadType = isSale
+        ? (Math.random() > 0.7 ? "Referral Sale" : "Direct Sale")
+        : leadTypes[Math.floor(Math.random() * leadTypes.length)];
+
+      mockLeads.push({
+        id: `mock-${agentIndex}-${i}`,
+        agentEmail: agent.email,
+        agent: agent.email,
+        leadType: leadType,
+        sale: isSale || leadType === "Referral Sale" || leadType === "Direct Sale",
+        commission: isSale ? 115 : 0,
+        hra: Math.random() > 0.5,
+        hraValue: 15,
+        timestamp: new Date(today.getTime() - Math.random() * 7 * 24 * 60 * 60 * 1000), // Random time in last 7 days
+      });
+    }
+  });
+
+  return mockLeads;
+};
+
+// Populate global leads data with mock data for testing
+globalLeadsData = initializeMockLeadsData();
+
+const mockFive9Data = {
+  "evelyn.price@company.com": { acw: 5, pers: 3, ie: 45, ob: 25, forced: 2, absences: 1, nrt: 85, calls: 42, sma: 92, talkTime: 180 },
+  "marcus.chen@company.com": { acw: 8, pers: 4, ie: 40, ob: 30, forced: 1, absences: 0, nrt: 78, calls: 38, sma: 88, talkTime: 165 },
+  "sarah.johnson@company.com": { acw: 6, pers: 2, ie: 50, ob: 20, forced: 3, absences: 2, nrt: 82, calls: 45, sma: 90, talkTime: 195 },
+  "david.kim@company.com": { acw: 4, pers: 5, ie: 42, ob: 28, forced: 1, absences: 1, nrt: 88, calls: 50, sma: 94, talkTime: 210 },
+  "emily.rodriguez@company.com": { acw: 7, pers: 3, ie: 48, ob: 22, forced: 2, absences: 0, nrt: 80, calls: 35, sma: 86, talkTime: 150 },
+};
 
 // Theme system
 const themes = {
