@@ -5440,7 +5440,7 @@ const AgentDashboard = ({ user, onSignOut }) => {
     addLead,
     calculateMetrics,
   } = useLeads(user.uid);
-  const { fetchAgentGoals } = useFirestore(user.email);
+  const { fetchAgentGoals, leads: allLeads } = useFirestore(user.email);
   const [goalsLoaded, setGoalsLoaded] = useState(false);
   const [activeTab, setActiveTab] = useState("dashboard");
   const [streak, setStreak] = useState(3);
@@ -6363,7 +6363,7 @@ const AgentDashboard = ({ user, onSignOut }) => {
         {activeTab === "analytics" && (
           <AnalyticsDashboard leads={leads} user={user} theme={currentTheme} />
         )}
-        {activeTab === "leaderboards" && <Leaderboards leads={leads} />}
+        {activeTab === "leaderboards" && <Leaderboards leads={allLeads} />}
         {activeTab === "notifications" && (
           <div
             className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-6 border border-white/20`}
