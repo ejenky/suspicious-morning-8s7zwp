@@ -2792,6 +2792,8 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   const [editTeamName, setEditTeamName] = useState("");
   const [editTeamSupervisor, setEditTeamSupervisor] = useState("");
   const [editSelectedAgents, setEditSelectedAgents] = useState([]);
+  const [editTeamSalesGoal, setEditTeamSalesGoal] = useState(3);
+  const [editTeamConversionGoal, setEditTeamConversionGoal] = useState(30);
 
   const [notifications] = useState([]);
 
@@ -2932,6 +2934,8 @@ const ManagerDashboard = ({ user, onSignOut }) => {
     setEditTeamName(team.name || "");
     setEditTeamSupervisor(team.supervisor || "");
     setEditSelectedAgents(team.memberIds || team.members?.map(m => m.id) || []);
+    setEditTeamSalesGoal(team.salesGoal || 3);
+    setEditTeamConversionGoal(team.conversionGoal || 30);
     setShowEditTeamModal(true);
   };
 
@@ -2964,6 +2968,8 @@ const ManagerDashboard = ({ user, onSignOut }) => {
         supervisor: editTeamSupervisor.trim() || user.name,
         members: selectedAgentDetails,
         memberIds: editSelectedAgents,
+        salesGoal: parseInt(editTeamSalesGoal) || 3,
+        conversionGoal: parseInt(editTeamConversionGoal) || 30,
         updatedAt: new Date(),
       });
 
@@ -4174,6 +4180,36 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                       </div>
                     </div>
 
+                    {/* Team Goals Section */}
+                    <div className="border-t border-white/10 pt-4 mt-4">
+                      <h4 className="text-sm font-semibold text-white mb-3">Team Performance Goals</h4>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm text-gray-300 mb-2">Daily Sales Goal</label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={editTeamSalesGoal}
+                            onChange={(e) => setEditTeamSalesGoal(e.target.value)}
+                            className="w-full bg-slate-700 border border-white/20 rounded-lg px-4 py-2 text-white"
+                          />
+                          <p className="text-xs text-gray-400 mt-1">Red &lt; 70% | Yellow 70-99% | Green ≥ goal</p>
+                        </div>
+                        <div>
+                          <label className="block text-sm text-gray-300 mb-2">Conversion Goal %</label>
+                          <input
+                            type="number"
+                            min="1"
+                            max="100"
+                            value={editTeamConversionGoal}
+                            onChange={(e) => setEditTeamConversionGoal(e.target.value)}
+                            className="w-full bg-slate-700 border border-white/20 rounded-lg px-4 py-2 text-white"
+                          />
+                          <p className="text-xs text-gray-400 mt-1">Red &lt; 80% | Yellow 80-99% | Green ≥ goal</p>
+                        </div>
+                      </div>
+                    </div>
+
                     <div className="flex gap-3 pt-4">
                       <button
                         onClick={() => setShowEditTeamModal(false)}
@@ -4263,34 +4299,22 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                     )
                     .map((team) => {
                       const enhancedStats = getEnhancedTeamStats(team);
+                      const salesGoal = team.salesGoal || 3;
+                      const conversionGoal = team.conversionGoal || 30;
 
-                      // Helper function for color-coding metrics
+                      // Helper function for color-coding metrics (text colors only)
+                      const getSalesColor = (sales) => {
+                        const val = parseInt(sales);
+                        if (val >= salesGoal) return "text-green-400";
+                        if (val >= salesGoal * 0.7) return "text-yellow-400";
+                        return "text-red-400";
+                      };
+
                       const getConversionColor = (rate) => {
                         const val = parseFloat(rate);
-                        if (val >= 35) return "bg-green-500";
-                        if (val >= 25) return "bg-yellow-500";
-                        return "bg-red-500";
-                      };
-
-                      const getRefColor = (rate) => {
-                        const val = parseFloat(rate);
-                        if (val <= 5) return "bg-green-500";
-                        if (val <= 10) return "bg-yellow-500";
-                        return "bg-red-500";
-                      };
-
-                      const getHraColor = (rate) => {
-                        const val = parseFloat(rate);
-                        if (val >= 80) return "bg-green-500";
-                        if (val >= 50) return "bg-yellow-500";
-                        return "bg-red-500";
-                      };
-
-                      const getEffectivenessColor = (rate) => {
-                        const val = parseFloat(rate);
-                        if (val >= 80) return "bg-green-500";
-                        if (val >= 60) return "bg-yellow-500";
-                        return "bg-red-500";
+                        if (val >= conversionGoal) return "text-green-400";
+                        if (val >= conversionGoal * 0.8) return "text-yellow-400";
+                        return "text-red-400";
                       };
 
                       return (
@@ -4306,6 +4330,9 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                               </h4>
                               <span className="bg-white/20 px-2 py-0.5 rounded text-xs text-white">
                                 {enhancedStats.memberCount} agents
+                              </span>
+                              <span className="bg-white/10 px-2 py-0.5 rounded text-xs text-white/70">
+                                Goals: {salesGoal} sales | {conversionGoal}% conv
                               </span>
                             </div>
                             <div className="flex items-center gap-2">
@@ -4349,11 +4376,11 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                                           {member.name || member.email?.split('@')[0] || 'Unknown'}
                                         </td>
                                         <td className="text-center px-3 py-2 text-white">{member.leads}</td>
-                                        <td className="text-center px-3 py-2 text-white font-semibold">{member.sales}</td>
-                                        <td className={`text-center px-3 py-2 text-white ${getConversionColor(member.conversionRate)}`}>
+                                        <td className={`text-center px-3 py-2 font-semibold ${getSalesColor(member.sales)}`}>{member.sales}</td>
+                                        <td className={`text-center px-3 py-2 font-semibold ${getConversionColor(member.conversionRate)}`}>
                                           {member.conversionRate}%
                                         </td>
-                                        <td className={`text-center px-3 py-2 text-white ${getRefColor(member.referralRate)}`}>
+                                        <td className="text-center px-3 py-2 text-white">
                                           {member.referralRate}%
                                         </td>
                                         <td className="text-center px-3 py-2 text-white">{member.referrals}</td>
@@ -4367,11 +4394,11 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                                         Team {team.name} Totals
                                       </td>
                                       <td className="text-center px-3 py-2 text-white">{enhancedStats.totalLeads}</td>
-                                      <td className="text-center px-3 py-2 text-white">{enhancedStats.totalSales}</td>
-                                      <td className={`text-center px-3 py-2 text-white ${getConversionColor(enhancedStats.avgConversion)}`}>
+                                      <td className={`text-center px-3 py-2 ${getSalesColor(enhancedStats.totalSales)}`}>{enhancedStats.totalSales}</td>
+                                      <td className={`text-center px-3 py-2 ${getConversionColor(enhancedStats.avgConversion)}`}>
                                         {enhancedStats.avgConversion}%
                                       </td>
-                                      <td className={`text-center px-3 py-2 text-white ${getRefColor(enhancedStats.avgRefRate)}`}>
+                                      <td className="text-center px-3 py-2 text-white">
                                         {enhancedStats.avgRefRate}%
                                       </td>
                                       <td className="text-center px-3 py-2 text-white">{enhancedStats.totalReferrals}</td>
