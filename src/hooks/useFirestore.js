@@ -196,12 +196,16 @@ export const useFirestore = (userEmail) => {
   // Create team
   const createTeam = async (teamData) => {
     try {
+      console.log("Creating team with data:", teamData);
       const teamsCollection = collection(db, "teams");
       const docRef = await addDoc(teamsCollection, {
         ...teamData,
+        members: teamData.members || [],
         createdAt: new Date(),
       });
       console.log("Team created with ID:", docRef.id);
+      // Refresh teams list after creating
+      await fetchTeams();
       return docRef.id;
     } catch (error) {
       console.error("Error creating team:", error);

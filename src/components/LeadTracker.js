@@ -2804,15 +2804,23 @@ const ManagerDashboard = ({ user, onSignOut }) => {
 
     setIsCreatingTeam(true);
     try {
+      // Get selected agent details to store with team
+      const selectedAgentDetails = firebaseAgents
+        .filter(agent => selectedAgentsForTeam.includes(agent.id))
+        .map(agent => ({
+          id: agent.id,
+          name: agent.name,
+          email: agent.email,
+        }));
+
       const teamId = await createTeam({
         name: newTeamName.trim(),
         supervisor: newTeamSupervisor.trim() || user.name,
+        members: selectedAgentDetails,
+        memberIds: selectedAgentsForTeam,
       });
 
-      // Assign selected agents to the new team
-      for (const agentId of selectedAgentsForTeam) {
-        await assignAgentToTeam(agentId, teamId);
-      }
+      console.log("Team created successfully:", teamId);
 
       // Reset form
       setNewTeamName("");
@@ -2821,6 +2829,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
       setShowCreateTeamModal(false);
     } catch (error) {
       console.error("Error creating team:", error);
+      alert("Error creating team: " + error.message);
     } finally {
       setIsCreatingTeam(false);
     }
