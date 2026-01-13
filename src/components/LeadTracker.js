@@ -4632,14 +4632,14 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                 )}
               </div>
 
-              {/* Team Goals - Pure DOM approach, no React state */}
+              {/* Team Goals - Direct DOM manipulation for immediate updates */}
               <div className="mt-6 bg-white/10 rounded-lg p-4">
                 <h4 className="text-lg font-semibold text-white mb-4">
                   Team Goals
                 </h4>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label htmlFor="team-sales-goal" className="block text-sm text-gray-300 mb-2">
+                    <label className="block text-sm text-gray-300 mb-2">
                       Team Sales Goal (Daily)
                     </label>
                     <input
@@ -4647,12 +4647,14 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                       type="text"
                       inputMode="numeric"
                       defaultValue={myTeamGoals?.salesGoal ?? 50}
+                      onInput={(e) => {
+                        globalTeamGoals.salesGoal = e.target.value;
+                      }}
                       className="w-full bg-slate-800 border border-white/20 rounded px-3 py-2 text-white"
-                      style={{ WebkitAppearance: 'none', MozAppearance: 'textfield' }}
                     />
                   </div>
                   <div>
-                    <label htmlFor="team-conversion-goal" className="block text-sm text-gray-300 mb-2">
+                    <label className="block text-sm text-gray-300 mb-2">
                       Team Conversion Goal (%)
                     </label>
                     <input
@@ -4660,14 +4662,15 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                       type="text"
                       inputMode="numeric"
                       defaultValue={myTeamGoals?.conversionGoal ?? 25}
+                      onInput={(e) => {
+                        globalTeamGoals.conversionGoal = e.target.value;
+                      }}
                       className="w-full bg-slate-800 border border-white/20 rounded px-3 py-2 text-white"
-                      style={{ WebkitAppearance: 'none', MozAppearance: 'textfield' }}
                     />
                   </div>
                 </div>
                 <button
                   onClick={async () => {
-                    // Read directly from DOM
                     const salesInput = document.getElementById('team-sales-goal');
                     const convInput = document.getElementById('team-conversion-goal');
                     const goals = {
