@@ -138,11 +138,15 @@ const getRealAgentStats = (agentEmail, dateFilter = null) => {
   const referrals = filteredLeads.filter(
     (lead) => lead.leadType?.startsWith("Referral Sale")
   );
+  const dashSales = filteredLeads.filter(
+    (lead) => lead.leadType?.startsWith("Dash Sale")
+  );
 
   return {
     leads: nonDashSales.length,
     sales: sales.length,
     referrals: referrals.length,
+    dashSales: dashSales.length,
     conversionRate:
       nonDashSales.length > 0
         ? ((sales.length / nonDashSales.length) * 100).toFixed(1)
@@ -1980,14 +1984,21 @@ const AnalyticsDashboard = ({ leads, user, theme }) => {
 
 // Agent Dashboard View Component for Manager
 const AgentDashboardView = ({ agent, onBack, user, leads = [] }) => {
-  const [selectedDate, setSelectedDate] = useState(() => {
+  const [dateFilterType, setDateFilterType] = useState("today");
+  const [customStartDate, setCustomStartDate] = useState(() => {
     const today = new Date();
     const year = today.getFullYear();
     const month = String(today.getMonth() + 1).padStart(2, "0");
     const day = String(today.getDate()).padStart(2, "0");
     return `${year}-${month}-${day}`;
   });
-  console.log("AgentDashboard selectedDate initialized to:", selectedDate);
+  const [customEndDate, setCustomEndDate] = useState(() => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, "0");
+    const day = String(today.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  });
   const [editingGoal, setEditingGoal] = useState(false);
   const [monthlyGoal, setMonthlyGoal] = useState(120);
 
@@ -1996,37 +2007,69 @@ const AgentDashboardView = ({ agent, onBack, user, leads = [] }) => {
     (lead) => lead.agentEmail === agent.email || lead.agent === agent.id
   );
 
-  // Calculate agent stats from the leads
-  const getAgentStats = () => {
-    const [year, month, day] = selectedDate.split("-").map(Number);
-    const filterDate = new Date(year, month - 1, day, 0, 0, 0, 0);
-    const nextDay = new Date(year, month - 1, day + 1, 0, 0, 0, 0);
+  // Get date range based on filter type
+  const getDateRange = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-    const dayLeads = agentLeads.filter(lead => {
+    switch (dateFilterType) {
+      case "today": {
+        const endDate = new Date(today);
+        endDate.setDate(endDate.getDate() + 1);
+        return { startDate: today, endDate };
+      }
+      case "this_week": {
+        const startOfWeek = new Date(today);
+        startOfWeek.setDate(today.getDate() - today.getDay());
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 7);
+        return { startDate: startOfWeek, endDate: endOfWeek };
+      }
+      case "this_month": {
+        const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+        const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+        return { startDate: startOfMonth, endDate: endOfMonth };
+      }
+      case "custom": {
+        const [startYear, startMonth, startDay] = customStartDate.split("-").map(Number);
+        const [endYear, endMonth, endDay] = customEndDate.split("-").map(Number);
+        const startDate = new Date(startYear, startMonth - 1, startDay, 0, 0, 0, 0);
+        const endDate = new Date(endYear, endMonth - 1, endDay + 1, 0, 0, 0, 0);
+        return { startDate, endDate };
+      }
+      default:
+        return { startDate: today, endDate: new Date(today.getTime() + 86400000) };
+    }
+  };
+
+  // Calculate agent stats from the leads based on date range
+  const getAgentStats = () => {
+    const { startDate, endDate } = getDateRange();
+
+    const filteredLeads = agentLeads.filter(lead => {
       const leadDate = lead.timestamp instanceof Date ? lead.timestamp : new Date(lead.timestamp);
-      return leadDate >= filterDate && leadDate < nextDay;
+      return leadDate >= startDate && leadDate < endDate;
     });
 
-    const sales = dayLeads.filter(lead => lead.sale);
-    const referrals = dayLeads.filter(lead => lead.leadType?.startsWith("Referral Sale"));
+    const sales = filteredLeads.filter(lead => lead.sale);
+    const referrals = filteredLeads.filter(lead => lead.leadType?.startsWith("Referral Sale"));
+    const dashSales = filteredLeads.filter(lead => lead.leadType?.startsWith("Dash Sale"));
 
     return {
-      leads: dayLeads.length,
+      leads: filteredLeads.length,
       sales: sales.length,
-      conversionRate: dayLeads.length > 0 ? ((sales.length / dayLeads.length) * 100).toFixed(1) : "0.0",
+      conversionRate: filteredLeads.length > 0 ? ((sales.length / filteredLeads.length) * 100).toFixed(1) : "0.0",
       referrals: referrals.length,
+      dashSales: dashSales.length,
       revenue: sales.reduce((sum, lead) => sum + (lead.commission || 115) + (lead.hra ? (lead.hraValue || 15) : 0), 0),
     };
   };
 
   const agentStats = getAgentStats();
+  const { startDate, endDate } = getDateRange();
   const selectedDateLeads = agentLeads.filter((lead) => {
-    const leadDate = new Date(lead.timestamp);
-    const selDate = new Date(selectedDate);
-    selDate.setHours(0, 0, 0, 0);
-    const nextDay = new Date(selDate);
-    nextDay.setDate(nextDay.getDate() + 1);
-    return leadDate >= selDate && leadDate < nextDay;
+    const leadDate = lead.timestamp instanceof Date ? lead.timestamp : new Date(lead.timestamp);
+    return leadDate >= startDate && leadDate < endDate;
   });
 
   const getThermostatProgress = () => {
@@ -2087,17 +2130,54 @@ const AgentDashboardView = ({ agent, onBack, user, leads = [] }) => {
       </div>
 
       <div className="container mx-auto px-6 py-6">
+        {/* Date Filter Section */}
+        <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 mb-6 border border-white/20">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-gray-300">Filter by:</span>
+              <select
+                value={dateFilterType}
+                onChange={(e) => setDateFilterType(e.target.value)}
+                className="bg-slate-800 border border-white/20 rounded-lg px-3 py-2 text-white"
+              >
+                <option value="today">Today</option>
+                <option value="this_week">This Week</option>
+                <option value="this_month">This Month</option>
+                <option value="custom">Custom Range</option>
+              </select>
+              {dateFilterType === "custom" && (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="date"
+                    value={customStartDate}
+                    onChange={(e) => setCustomStartDate(e.target.value)}
+                    className="bg-slate-800 border border-white/20 rounded-lg px-2 py-2 text-white text-sm"
+                  />
+                  <span className="text-gray-400">to</span>
+                  <input
+                    type="date"
+                    value={customEndDate}
+                    onChange={(e) => setCustomEndDate(e.target.value)}
+                    className="bg-slate-800 border border-white/20 rounded-lg px-2 py-2 text-white text-sm"
+                  />
+                </div>
+              )}
+            </div>
+            <div className="text-gray-300 text-sm">
+              Showing data for:{" "}
+              <span className="text-white font-medium">
+                {dateFilterType === "today" && "Today"}
+                {dateFilterType === "this_week" && "This Week"}
+                {dateFilterType === "this_month" && "This Month"}
+                {dateFilterType === "custom" && `${customStartDate} to ${customEndDate}`}
+              </span>
+            </div>
+          </div>
+        </div>
+
         {/* Goals Section */}
         <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 mb-6 border border-white/20">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-xl font-semibold">Performance Goals</h3>
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="bg-slate-800 border border-white/20 rounded px-3 py-2 text-white"
-            />
-          </div>
+          <h3 className="text-xl font-semibold mb-4">Performance Goals</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="text-center">
               <p className="text-gray-300 text-sm">Daily Sales Goal</p>
@@ -2221,13 +2301,13 @@ const AgentDashboardView = ({ agent, onBack, user, leads = [] }) => {
         {/* Metrics Grid */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
           <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
-            <p className="text-gray-300 text-sm">Leads Today</p>
+            <p className="text-gray-300 text-sm">Leads</p>
             <p className="text-2xl font-bold text-cyan-400">
               {agentStats.leads}
             </p>
           </div>
           <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
-            <p className="text-gray-300 text-sm">Sales Today</p>
+            <p className="text-gray-300 text-sm">Sales</p>
             <p className="text-2xl font-bold text-green-400">
               {agentStats.sales}
             </p>
@@ -2239,7 +2319,7 @@ const AgentDashboardView = ({ agent, onBack, user, leads = [] }) => {
             </p>
           </div>
           <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
-            <p className="text-gray-300 text-sm">Revenue Today</p>
+            <p className="text-gray-300 text-sm">Revenue</p>
             <p className="text-2xl font-bold text-yellow-400">
               ${agentStats.revenue}
             </p>
@@ -2251,9 +2331,9 @@ const AgentDashboardView = ({ agent, onBack, user, leads = [] }) => {
             </p>
           </div>
           <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
-            <p className="text-gray-300 text-sm">Five9 NRT</p>
+            <p className="text-gray-300 text-sm">Dash Sales</p>
             <p className="text-2xl font-bold text-purple-400">
-              {mockFive9Data[agent.email]?.nrt || 0}%
+              {agentStats.dashSales}
             </p>
           </div>
         </div>
@@ -2261,7 +2341,7 @@ const AgentDashboardView = ({ agent, onBack, user, leads = [] }) => {
         {/* Individual Lead Entries */}
         <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
           <h3 className="text-xl font-semibold mb-4 text-white">
-            Lead Entries for {new Date(selectedDate).toLocaleDateString()}
+            Lead Entries ({selectedDateLeads.length} total)
           </h3>
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -2282,7 +2362,7 @@ const AgentDashboardView = ({ agent, onBack, user, leads = [] }) => {
                 {selectedDateLeads.length === 0 ? (
                   <tr>
                     <td colSpan="7" className="text-center py-8 text-gray-300">
-                      No leads for this date
+                      No leads for this date range
                     </td>
                   </tr>
                 ) : (
@@ -2362,7 +2442,7 @@ const AgentDashboardView = ({ agent, onBack, user, leads = [] }) => {
             if (pieData.length === 0) {
               return (
                 <p className="text-center text-gray-300 py-8">
-                  No lead data available for this date
+                  No lead data available for this date range
                 </p>
               );
             }
@@ -2845,6 +2925,13 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   const { teams, agents: firebaseAgents, leads: firebaseLeads, createTeam, assignAgentToTeam, addToMyTeam, removeFromMyTeam, myTeamMemberIds, myTeamGoals, updateMyTeamGoals, updateAgentGoals, fetchAgentGoals, refreshData, lastRefresh, loading: dataLoading } = useFirestore(user.email);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  // Sync Firebase leads to global data for legacy functions
+  useEffect(() => {
+    if (firebaseLeads && firebaseLeads.length > 0) {
+      globalLeadsData = firebaseLeads;
+    }
+  }, [firebaseLeads]);
+
   // Handle manual data refresh
   const handleRefreshData = async () => {
     setIsRefreshing(true);
@@ -2940,6 +3027,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
       referrals: referrals.length,
       dashSales: dashSales.length,
       revenue,
+      leadsList: agentLeads,
     };
   };
 
@@ -3405,21 +3493,18 @@ const ManagerDashboard = ({ user, onSignOut }) => {
 
     const totalLeads = allAgentStats.reduce((sum, stats) => sum + parseInt(stats.leads || 0), 0);
     const totalReferrals = allAgentStats.reduce((sum, stats) => sum + parseInt(stats.referrals || 0), 0);
+    const totalSales = allAgentStats.reduce(
+      (sum, stats) => sum + parseInt(stats.sales || 0),
+      0
+    );
 
     return {
       totalAgents: agents.length,
-      totalSales: allAgentStats.reduce(
-        (sum, stats) => sum + parseInt(stats.sales || 0),
-        0
-      ),
+      totalSales,
       totalLeads,
       totalReferrals,
-      avgConversion: agents.length > 0 ? (
-        allAgentStats.reduce(
-          (sum, stats) => sum + parseFloat(stats.conversionRate || 0),
-          0
-        ) / agents.length
-      ).toFixed(1) : "0.0",
+      // True conversion rate: total sales / total leads (not average of individual rates)
+      avgConversion: totalLeads > 0 ? ((totalSales / totalLeads) * 100).toFixed(1) : "0.0",
       referralRate: totalLeads > 0
         ? ((totalReferrals / totalLeads) * 100).toFixed(1)
         : "0.0",
@@ -3434,22 +3519,6 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   const centers = ["all", "denver", "tampa", "orlando", "daytona"];
 
   const EnhancedAgentProfile = ({ agent, onClose }) => {
-    const [editingGoals, setEditingGoals] = useState(false);
-    const [goals, setGoals] = useState(
-      globalAgentGoals[agent.email] || {
-        dailySales: 10,
-        weeklySales: 50,
-        monthlyGoal: 120,
-        conversionRate: 25,
-        referralRate: 15,
-      }
-    );
-
-    const handleSaveGoals = () => {
-      globalAgentGoals[agent.email] = goals;
-      setEditingGoals(false);
-    };
-
     return (
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
         <div className="bg-slate-900 rounded-xl p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
@@ -3485,157 +3554,39 @@ const ManagerDashboard = ({ user, onSignOut }) => {
             </div>
           </div>
 
-          {/* Goals Section */}
-          <div className="bg-white/5 rounded-lg p-4 mb-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-white font-semibold">Performance Goals</h3>
-              {editingGoals ? (
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleSaveGoals}
-                    className="bg-green-600 hover:bg-green-700 px-3 py-1 rounded text-white text-sm"
-                  >
-                    Save
-                  </button>
-                  <button
-                    onClick={() => setEditingGoals(false)}
-                    className="bg-gray-600 hover:bg-gray-700 px-3 py-1 rounded text-white text-sm"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={() => setEditingGoals(true)}
-                  className="bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded text-white text-sm"
-                >
-                  Edit Goals
-                </button>
-              )}
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-              <div>
-                <p className="text-gray-300 text-sm">Daily Sales</p>
-                {editingGoals ? (
-                  <input
-                    type="number"
-                    value={goals.dailySales}
-                    onChange={(e) =>
-                      setGoals((prev) => ({
-                        ...prev,
-                        dailySales: parseInt(e.target.value),
-                      }))
-                    }
-                    className="w-full bg-slate-800 border border-white/20 rounded px-2 py-1 text-white"
-                  />
-                ) : (
-                  <p className="text-xl font-bold text-white">
-                    {goals.dailySales}
-                  </p>
-                )}
-              </div>
-              <div>
-                <p className="text-gray-300 text-sm">Weekly Sales</p>
-                {editingGoals ? (
-                  <input
-                    type="number"
-                    value={goals.weeklySales}
-                    onChange={(e) =>
-                      setGoals((prev) => ({
-                        ...prev,
-                        weeklySales: parseInt(e.target.value),
-                      }))
-                    }
-                    className="w-full bg-slate-800 border border-white/20 rounded px-2 py-1 text-white"
-                  />
-                ) : (
-                  <p className="text-xl font-bold text-white">
-                    {goals.weeklySales}
-                  </p>
-                )}
-              </div>
-              <div>
-                <p className="text-gray-300 text-sm">Monthly Sales</p>
-                {editingGoals ? (
-                  <input
-                    type="number"
-                    value={goals.monthlyGoal}
-                    onChange={(e) =>
-                      setGoals((prev) => ({
-                        ...prev,
-                        monthlyGoal: parseInt(e.target.value),
-                      }))
-                    }
-                    className="w-full bg-slate-800 border border-white/20 rounded px-2 py-1 text-white"
-                  />
-                ) : (
-                  <p className="text-xl font-bold text-white">
-                    {goals.monthlyGoal}
-                  </p>
-                )}
-              </div>
-              <div>
-                <p className="text-gray-300 text-sm">Conversion Goal %</p>
-                {editingGoals ? (
-                  <input
-                    type="number"
-                    value={goals.conversionRate}
-                    onChange={(e) =>
-                      setGoals((prev) => ({
-                        ...prev,
-                        conversionRate: parseInt(e.target.value),
-                      }))
-                    }
-                    className="w-full bg-slate-800 border border-white/20 rounded px-2 py-1 text-white"
-                  />
-                ) : (
-                  <p className="text-xl font-bold text-white">
-                    {goals.conversionRate}%
-                  </p>
-                )}
-              </div>
-              <div>
-                <p className="text-gray-300 text-sm">Referral Goal %</p>
-                {editingGoals ? (
-                  <input
-                    type="number"
-                    value={goals.referralRate}
-                    onChange={(e) =>
-                      setGoals((prev) => ({
-                        ...prev,
-                        referralRate: parseInt(e.target.value),
-                      }))
-                    }
-                    className="w-full bg-slate-800 border border-white/20 rounded px-2 py-1 text-white"
-                  />
-                ) : (
-                  <p className="text-xl font-bold text-white">
-                    {goals.referralRate}%
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Current Day Performance */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          {/* Current Performance Metrics */}
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-6">
             <div className="bg-blue-500/20 rounded-lg p-4 text-center">
-              <p className="text-blue-300 text-sm">Leads Today</p>
-              <p className="text-2xl font-bold text-white">{agent.leads}</p>
+              <p className="text-blue-300 text-sm">Leads</p>
+              <p className="text-2xl font-bold text-white">{agent.leads || 0}</p>
             </div>
             <div className="bg-green-500/20 rounded-lg p-4 text-center">
-              <p className="text-green-300 text-sm">Sales Today</p>
-              <p className="text-2xl font-bold text-white">{agent.sales}</p>
+              <p className="text-green-300 text-sm">Sales</p>
+              <p className="text-2xl font-bold text-white">{agent.sales || 0}</p>
             </div>
             <div className="bg-purple-500/20 rounded-lg p-4 text-center">
-              <p className="text-purple-300 text-sm">Conversion Rate</p>
+              <p className="text-purple-300 text-sm">Conv %</p>
               <p className="text-2xl font-bold text-white">
-                {agent.conversionRate}%
+                {agent.conversionRate || 0}%
               </p>
             </div>
+            <div className="bg-pink-500/20 rounded-lg p-4 text-center">
+              <p className="text-pink-300 text-sm">Referrals</p>
+              <p className="text-2xl font-bold text-white">{agent.referrals || 0}</p>
+            </div>
+            <div className="bg-cyan-500/20 rounded-lg p-4 text-center">
+              <p className="text-cyan-300 text-sm">Dash Sales</p>
+              <p className="text-2xl font-bold text-white">{agent.dashSales || 0}</p>
+            </div>
             <div className="bg-yellow-500/20 rounded-lg p-4 text-center">
-              <p className="text-yellow-300 text-sm">Referrals Today</p>
-              <p className="text-2xl font-bold text-white">{agent.referrals}</p>
+              <p className="text-yellow-300 text-sm">Revenue</p>
+              <p className="text-2xl font-bold text-white">${agent.revenue || 0}</p>
+            </div>
+            <div className="bg-orange-500/20 rounded-lg p-4 text-center">
+              <p className="text-orange-300 text-sm">Ref %</p>
+              <p className="text-2xl font-bold text-white">
+                {agent.leads > 0 ? ((agent.referrals / agent.leads) * 100).toFixed(1) : 0}%
+              </p>
             </div>
           </div>
 
@@ -3643,7 +3594,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
             <div className="bg-white/5 rounded-lg p-4">
               <h3 className="text-white font-semibold mb-3">
-                Today's Lead Breakdown
+                Lead Breakdown
               </h3>
               <div className="space-y-2">
                 {Object.entries(
@@ -3709,7 +3660,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
           {/* Individual Lead Entries */}
           <div className="bg-white/5 rounded-lg p-4">
             <h3 className="text-white font-semibold mb-3">
-              Today's Lead Entries
+              Lead Entries ({agent.leadsList?.length || 0} total)
             </h3>
             <div className="max-h-64 overflow-y-auto">
               {agent.leadsList && agent.leadsList.length > 0 ? (
@@ -4007,7 +3958,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                 className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-4 border border-white/20 text-center`}
               >
                 <TrendingUp className="w-6 h-6 text-purple-400 mx-auto mb-2" />
-                <p className="text-gray-300 text-sm">Avg Conversion</p>
+                <p className="text-gray-300 text-sm">Conversion Rate</p>
                 <p className="text-xl font-bold text-white">
                   {companyStats.avgConversion}%
                 </p>
@@ -5569,7 +5520,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                               </span>
                             </div>
                             <div className="flex justify-between">
-                              <span className="text-gray-300">Avg Conv:</span>
+                              <span className="text-gray-300">Conv Rate:</span>
                               <span className="text-purple-400">
                                 {centerTotals.conversion}%
                               </span>
