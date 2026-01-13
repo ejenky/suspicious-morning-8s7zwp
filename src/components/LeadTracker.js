@@ -989,7 +989,7 @@ const PvPChallenges = ({ user }) => {
 const Leaderboards = ({ leads = [] }) => {
   const [selectedCenter, setSelectedCenter] = useState("all");
   const [selectedBoard, setSelectedBoard] = useState("sales");
-  const centers = ["all", "denver", "tampa", "orlando", "daytona"];
+  const centers = ["denver"];
   const boards = [
     {
       key: "sales",
@@ -3742,7 +3742,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   };
 
   const companyStats = getCompanyStats();
-  const centers = ["all", "denver", "tampa", "orlando", "daytona"];
+  const centers = ["denver"];
 
   const EnhancedAgentProfile = ({ agent, onClose }) => {
     return (
@@ -3838,49 +3838,6 @@ const ManagerDashboard = ({ user, onSignOut }) => {
               </div>
             </div>
 
-            {agent.five9Data && (
-              <div className="bg-white/5 rounded-lg p-4">
-                <h3 className="text-white font-semibold mb-3">Five9 Metrics</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-gray-300 text-sm">Ready Time</p>
-                    <p
-                      className={`font-bold ${
-                        agent.five9Data.nrt >= 80
-                          ? "text-green-400"
-                          : "text-red-400"
-                      }`}
-                    >
-                      {agent.five9Data.nrt}%
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-gray-300 text-sm">Total Calls</p>
-                    <p className="text-white font-bold">
-                      {agent.five9Data.calls}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-gray-300 text-sm">ACW</p>
-                    <p
-                      className={`font-bold ${
-                        agent.five9Data.acw <= 3
-                          ? "text-green-400"
-                          : "text-red-400"
-                      }`}
-                    >
-                      {agent.five9Data.acw}%
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-gray-300 text-sm">SMA</p>
-                    <p className="text-white font-bold">
-                      {agent.five9Data.sma}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Individual Lead Entries */}
@@ -4314,48 +4271,6 @@ const ManagerDashboard = ({ user, onSignOut }) => {
               </div>
             </div>
 
-            {/* Five9 Adherence Worst Offenders */}
-            <div
-              className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-6 border border-white/20`}
-            >
-              <h3 className="text-xl font-semibold mb-4">
-                Worst Five9 Adherence
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {worstAdherenceAgents.length === 0 ? (
-                  <p className="text-gray-300 text-center py-8 col-span-2">
-                    No Five9 data available yet
-                  </p>
-                ) : (
-                  worstAdherenceAgents.map((agent, index) => (
-                    <div
-                      key={agent.id}
-                      className="flex items-center justify-between p-3 bg-orange-500/10 rounded-lg border border-orange-500/20"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center text-white font-bold">
-                          {index + 1}
-                        </div>
-                        <div>
-                          <p className="font-medium text-white">{agent.name}</p>
-                          <p className="text-xs text-gray-400">
-                            {agent.team} • {agent.center?.toUpperCase() || "N/A"}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-bold text-orange-400">
-                          Talk: {agent.five9Data?.talkTime || 0}h
-                        </p>
-                        <p className="text-xs text-red-400">
-                          NRT: {agent.five9Data?.nrt || 0}%
-                        </p>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
           </div>
         )}
 
@@ -5243,9 +5158,6 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                         Lead Ratio
                       </th>
                       <th className="text-left py-3 px-4 text-gray-300">
-                        Five9 Ready
-                      </th>
-                      <th className="text-left py-3 px-4 text-gray-300">
                         Status
                       </th>
                       <th className="text-left py-3 px-4 text-gray-300">
@@ -5257,7 +5169,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                     {strugglingAgents.length === 0 ? (
                       <tr>
                         <td
-                          colSpan="10"
+                          colSpan="9"
                           className="text-center py-8 text-gray-300"
                         >
                           No agent data available yet
@@ -5269,7 +5181,6 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                           agent.email,
                           dateFilter
                         );
-                        const five9Data = mockFive9Data[agent.email];
                         const leadRatio =
                           agentStats.leads > 0
                             ? (
@@ -5346,19 +5257,6 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                             </td>
                             <td className="py-3 px-4">
                               <span
-                                className={`font-bold ${
-                                  five9Data?.nrt >= 80
-                                    ? "text-green-400"
-                                    : five9Data?.nrt >= 70
-                                    ? "text-yellow-400"
-                                    : "text-red-400"
-                                }`}
-                              >
-                                {five9Data?.nrt || 0}%
-                              </span>
-                            </td>
-                            <td className="py-3 px-4">
-                              <span
                                 className={`px-2 py-1 rounded text-xs font-medium ${
                                   index < 3
                                     ? "bg-red-500/20 text-red-400"
@@ -5380,7 +5278,6 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                                   setSelectedAgent({
                                     ...agent,
                                     ...agentStats,
-                                    five9Data,
                                     leadsList: agentStats.leadsList,
                                   })
                                 }
@@ -5642,15 +5539,6 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                         {companyStats.totalAgents} agents
                       </p>
                     </div>
-                    <div className="p-3 bg-red-500/20 border border-red-500/30 rounded">
-                      <p className="text-red-400 font-medium">
-                        Five9 Adherence
-                      </p>
-                      <p className="text-white text-sm">
-                        {worstAdherenceAgents.length} agents need immediate
-                        attention
-                      </p>
-                    </div>
                   </div>
                 </div>
                 <div>
@@ -5688,76 +5576,6 @@ const ManagerDashboard = ({ user, onSignOut }) => {
               </div>
             </div>
 
-            {/* Performance by Center */}
-            {selectedCenter === "all" && (
-              <div
-                className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-6 border border-white/20`}
-              >
-                <h3 className="text-xl font-semibold text-white mb-4">
-                  Performance by Center
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {centers
-                    .filter((c) => c !== "all")
-                    .map((center) => {
-                      const centerAgents = mockAgents.filter(
-                        (a) => a.center === center
-                      );
-                      const centerStats = centerAgents.map((a) =>
-                        getRealAgentStats(a.email, dateFilter)
-                      );
-                      const centerTotals = {
-                        agents: centerAgents.length,
-                        sales: centerStats.reduce((sum, s) => sum + s.sales, 0),
-                        leads: centerStats.reduce((sum, s) => sum + s.leads, 0),
-                        conversion:
-                          centerStats.length > 0
-                            ? (
-                                centerStats.reduce(
-                                  (sum, s) =>
-                                    sum + parseFloat(s.conversionRate),
-                                  0
-                                ) / centerStats.length
-                              ).toFixed(1)
-                            : 0,
-                      };
-                      return (
-                        <div key={center} className="bg-white/5 rounded-lg p-4">
-                          <h4 className="font-semibold text-white mb-2">
-                            {center.toUpperCase()}
-                          </h4>
-                          <div className="space-y-2 text-sm">
-                            <div className="flex justify-between">
-                              <span className="text-gray-300">Agents:</span>
-                              <span className="text-white">
-                                {centerTotals.agents}
-                              </span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-300">Sales:</span>
-                              <span className="text-green-400">
-                                {centerTotals.sales}
-                              </span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-300">Leads:</span>
-                              <span className="text-blue-400">
-                                {centerTotals.leads}
-                              </span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-300">Conv Rate:</span>
-                              <span className="text-purple-400">
-                                {centerTotals.conversion}%
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                </div>
-              </div>
-            )}
           </div>
         )}
 
@@ -6186,7 +6004,6 @@ const AgentDashboard = ({ user, onSignOut }) => {
             { key: "leaderboards", label: "Leaderboard", icon: Crown },
             { key: "notifications", label: "Notifications", icon: Bell },
             { key: "supervisor", label: "Supervisor Help", icon: Headphones },
-            { key: "five9", label: "Five9", icon: Clock },
             { key: "pvp", label: "PvP", icon: Sword },
           ].map((tab) => (
             <button
@@ -6759,7 +6576,6 @@ const AgentDashboard = ({ user, onSignOut }) => {
           </div>
         )}
         {activeTab === "supervisor" && <SupervisorHelp user={user} />}
-        {activeTab === "five9" && <Five9Dashboard user={user} />}
         {activeTab === "pvp" && <PvPChallenges user={user} />}
       </div>
     </div>
@@ -7630,9 +7446,6 @@ const AuthComponent = () => {
                         className="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                       >
                         <option value="denver">Denver</option>
-                        <option value="tampa">Tampa</option>
-                        <option value="orlando">Orlando</option>
-                        <option value="daytona">Daytona</option>
                       </select>
                     </div>
                   )}
