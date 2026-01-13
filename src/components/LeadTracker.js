@@ -1979,7 +1979,7 @@ const AnalyticsDashboard = ({ leads, user, theme }) => {
 };
 
 // Agent Dashboard View Component for Manager
-const AgentDashboardView = ({ agent, onBack, user }) => {
+const AgentDashboardView = ({ agent, onBack, user, leads = [] }) => {
   const [selectedDate, setSelectedDate] = useState(() => {
     const today = new Date();
     const year = today.getFullYear();
@@ -1991,10 +1991,35 @@ const AgentDashboardView = ({ agent, onBack, user }) => {
   const [editingGoal, setEditingGoal] = useState(false);
   const [monthlyGoal, setMonthlyGoal] = useState(120);
 
-  const agentStats = getRealAgentStats(agent.email, selectedDate);
-  const agentLeads = globalLeadsData.filter(
-    (lead) => lead.agentEmail === agent.email
+  // Filter leads for this specific agent
+  const agentLeads = leads.filter(
+    (lead) => lead.agentEmail === agent.email || lead.agent === agent.id
   );
+
+  // Calculate agent stats from the leads
+  const getAgentStats = () => {
+    const [year, month, day] = selectedDate.split("-").map(Number);
+    const filterDate = new Date(year, month - 1, day, 0, 0, 0, 0);
+    const nextDay = new Date(year, month - 1, day + 1, 0, 0, 0, 0);
+
+    const dayLeads = agentLeads.filter(lead => {
+      const leadDate = lead.timestamp instanceof Date ? lead.timestamp : new Date(lead.timestamp);
+      return leadDate >= filterDate && leadDate < nextDay;
+    });
+
+    const sales = dayLeads.filter(lead => lead.sale);
+    const referrals = dayLeads.filter(lead => lead.leadType?.startsWith("Referral Sale"));
+
+    return {
+      leads: dayLeads.length,
+      sales: sales.length,
+      conversionRate: dayLeads.length > 0 ? ((sales.length / dayLeads.length) * 100).toFixed(1) : "0.0",
+      referrals: referrals.length,
+      revenue: sales.reduce((sum, lead) => sum + (lead.commission || 115) + (lead.hra ? (lead.hraValue || 15) : 0), 0),
+    };
+  };
+
+  const agentStats = getAgentStats();
   const selectedDateLeads = agentLeads.filter((lead) => {
     const leadDate = new Date(lead.timestamp);
     const selDate = new Date(selectedDate);
@@ -3631,6 +3656,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
         agent={viewingAgentDashboard}
         onBack={() => setViewingAgentDashboard(null)}
         user={user}
+        leads={firebaseLeads}
       />
     );
   }
