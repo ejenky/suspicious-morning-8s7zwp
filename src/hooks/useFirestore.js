@@ -48,67 +48,33 @@ export const useFirestore = (userEmail) => {
     return () => unsubscribe();
   }, [userEmail]);
 
-  // Fetch agents - get all users who are agents (or all users if role not set)
+  // Derive agents from leads data - extract unique agents who have submitted leads
   useEffect(() => {
-    if (!userEmail) return;
+    if (leads.length === 0) {
+      setAgents([]);
+      return;
+    }
 
-    // First try to get from "agents" collection if it exists
-    const agentsCollection = collection(db, "agents");
+    // Extract unique agents from leads data
+    const agentMap = new Map();
 
-    const unsubscribeAgents = onSnapshot(
-      agentsCollection,
-      (snapshot) => {
-        if (snapshot.docs.length > 0) {
-          // If agents collection has data, use it
-          const agentsData = snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          }));
-          setAgents(agentsData);
-        } else {
-          // Fall back to users collection - get all users except managers
-          const usersCollection = collection(db, "users");
-          onSnapshot(
-            usersCollection,
-            (userSnapshot) => {
-              const agentsData = userSnapshot.docs
-                .map((doc) => ({
-                  id: doc.id,
-                  ...doc.data(),
-                }))
-                .filter((user) => user.role !== "manager"); // Include all non-managers
-              setAgents(agentsData);
-            },
-            (error) => {
-              console.error("Error fetching users:", error);
-            }
-          );
-        }
-      },
-      (error) => {
-        console.error("Error fetching agents collection:", error);
-        // Fall back to users collection
-        const usersCollection = collection(db, "users");
-        onSnapshot(
-          usersCollection,
-          (userSnapshot) => {
-            const agentsData = userSnapshot.docs
-              .map((doc) => ({
-                id: doc.id,
-                ...doc.data(),
-              }))
-              .filter((user) => user.role !== "manager");
-            setAgents(agentsData);
-          },
-          (error) => {
-            console.error("Error fetching users:", error);
-          }
-        );
+    leads.forEach((lead) => {
+      const agentEmail = lead.agentEmail || lead.agent;
+      if (agentEmail && !agentMap.has(agentEmail)) {
+        agentMap.set(agentEmail, {
+          id: lead.agent || agentEmail, // Use agent ID if available, otherwise email
+          email: agentEmail,
+          name: lead.agentName || agentEmail.split('@')[0] || 'Unknown Agent',
+          teamId: lead.teamId || null,
+          team: lead.team || null,
+          center: lead.center || null,
+        });
       }
-    );
+    });
 
-    return () => unsubscribeAgents();
-  }, [userEmail]);
+    const agentsData = Array.from(agentMap.values());
+    setAgents(agentsData);
+  }, [leads]);
 
   // Fetch teams
   useEffect(() => {
