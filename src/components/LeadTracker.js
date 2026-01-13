@@ -58,6 +58,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { useLeads } from "../hooks/useLeads";
+import { useFirestore } from "../hooks/useFirestore";
 
 // Global state for leads data
 let globalLeadsData = [];
@@ -2715,7 +2716,15 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   const [isEditingTeamName, setIsEditingTeamName] = useState(false);
   const [myTeamAgents, setMyTeamAgents] = useState([]);
 
-  const [teams] = useState([]);
+  // Use Firebase for teams and agents data
+  const { teams, agents: firebaseAgents, leads: firebaseLeads, createTeam, assignAgentToTeam } = useFirestore(user.email);
+
+  // Create Team Modal state
+  const [showCreateTeamModal, setShowCreateTeamModal] = useState(false);
+  const [newTeamName, setNewTeamName] = useState("");
+  const [newTeamSupervisor, setNewTeamSupervisor] = useState("");
+  const [selectedAgentsForTeam, setSelectedAgentsForTeam] = useState([]);
+  const [isCreatingTeam, setIsCreatingTeam] = useState(false);
 
   const [notifications] = useState([]);
 
@@ -2780,26 +2789,201 @@ const ManagerDashboard = ({ user, onSignOut }) => {
     globalAgentGoals[agentEmail][goalType] = value;
   };
 
-  // Get real team stats using global data
-  const getEnhancedTeamStats = (teamName) => {
-    const teamMembers = mockAgents.filter((agent) => agent.team === teamName);
-    const teamMemberStats = teamMembers.map((member) => ({
+  // Handle Create Team
+  const handleCreateTeam = async () => {
+    if (!newTeamName.trim()) return;
+
+    setIsCreatingTeam(true);
+    try {
+      const teamId = await createTeam({
+        name: newTeamName.trim(),
+        supervisor: newTeamSupervisor.trim() || user.name,
+      });
+
+      // Assign selected agents to the new team
+      for (const agentId of selectedAgentsForTeam) {
+        await assignAgentToTeam(agentId, teamId);
+      }
+
+      // Reset form
+      setNewTeamName("");
+      setNewTeamSupervisor("");
+      setSelectedAgentsForTeam([]);
+      setShowCreateTeamModal(false);
+    } catch (error) {
+      console.error("Error creating team:", error);
+    } finally {
+      setIsCreatingTeam(false);
+    }
+  };
+
+  // Toggle agent selection for new team
+  const toggleAgentForTeam = (agentId) => {
+    setSelectedAgentsForTeam(prev =>
+      prev.includes(agentId)
+        ? prev.filter(id => id !== agentId)
+        : [...prev, agentId]
+    );
+  };
+
+  // Calculate agent stats from Firebase leads
+  const getAgentStatsFromFirebase = (agentEmail, dateFilterValue = null) => {
+    let agentLeads = firebaseLeads.filter(lead => lead.agentEmail === agentEmail);
+
+    if (dateFilterValue) {
+      const [year, month, day] = dateFilterValue.split("-").map(Number);
+      const filterDate = new Date(year, month - 1, day, 0, 0, 0, 0);
+      const nextDay = new Date(year, month - 1, day + 1, 0, 0, 0, 0);
+
+      agentLeads = agentLeads.filter(lead => {
+        const leadDate = lead.timestamp instanceof Date ? lead.timestamp : new Date(lead.timestamp);
+        return leadDate >= filterDate && leadDate < nextDay;
+      });
+    }
+
+    const sales = agentLeads.filter(lead => lead.sale);
+    const referrals = agentLeads.filter(lead => lead.leadType === "Referral Sale" || lead.leadType === "Referral");
+    const newSales = agentLeads.filter(lead => lead.sale && lead.leadType !== "Referral Sale");
+    const unassigned = agentLeads.filter(lead => !lead.sale && lead.leadType === "Unassigned");
+    const openActivities = agentLeads.filter(lead => !lead.sale && lead.status === "open");
+    const pd15Plus = agentLeads.filter(lead => lead.pdDays && lead.pdDays >= 15);
+    const hraEligible = agentLeads.filter(lead => lead.hraEligible);
+    const hraSubmitted = agentLeads.filter(lead => lead.hra);
+
+    const leads = agentLeads.length;
+    const conversionRate = leads > 0 ? ((sales.length / leads) * 100).toFixed(1) : "0.0";
+    const referralRate = leads > 0 ? ((referrals.length / leads) * 100).toFixed(2) : "0.00";
+    const spd = sales.length > 0 ? (sales.length / 1).toFixed(1) : "0.0"; // Sales per day
+    const newSalePercent = leads > 0 ? ((newSales.length / leads) * 100).toFixed(1) : "0.0";
+    const effectiveness = leads > 0 ? ((sales.length / Math.max(leads, 1)) * 100).toFixed(1) : "0.0";
+    const unassignedPercent = leads > 0 ? ((unassigned.length / leads) * 100).toFixed(2) : "0.00";
+    const pdPercent = leads > 0 ? ((pd15Plus.length / leads) * 100).toFixed(2) : "0.00";
+    const hraPercent = hraEligible.length > 0 ? ((hraSubmitted.length / hraEligible.length) * 100).toFixed(2) : "0.00";
+
+    const revenue = sales.reduce(
+      (sum, lead) => sum + (lead.commission || 115) + (lead.hra ? (lead.hraValue || 15) : 0),
+      0
+    );
+
+    return {
+      leads,
+      sales: sales.length,
+      conversionRate,
+      referrals: referrals.length,
+      referralRate,
+      spd: parseFloat(spd),
+      newSalePercent: parseFloat(newSalePercent),
+      effectiveness: parseFloat(effectiveness),
+      unassigned: unassigned.length,
+      unassignedPercent: parseFloat(unassignedPercent),
+      openActivities: openActivities.length,
+      pd15Plus: pd15Plus.length,
+      pdPercent: parseFloat(pdPercent),
+      hraEligible: hraEligible.length,
+      hraSubmitted: hraSubmitted.length,
+      hraPercent: parseFloat(hraPercent),
+      revenue,
+      tpvNt: 0, // Placeholder for TPV NT
+      tpv: 100, // Placeholder for TPV %
+      nrt: 0, // Placeholder for NRT
+      acw: 0, // Placeholder for ACW
+    };
+  };
+
+  // Get team members from Firebase
+  const getTeamMembers = (teamId) => {
+    return firebaseAgents.filter(agent => agent.teamId === teamId);
+  };
+
+  // Get real team stats using Firebase data
+  const getEnhancedTeamStats = (teamId, teamName) => {
+    // Get team members from Firebase
+    const teamMembers = firebaseAgents.filter(agent => agent.teamId === teamId);
+
+    // Calculate stats for each member
+    const teamMemberStats = teamMembers.map(member => ({
       ...member,
-      ...getRealAgentStats(member.email, dateFilter),
-      five9Data: mockFive9Data[member.email],
+      ...getAgentStatsFromFirebase(member.email, dateFilter),
     }));
 
-    const stats = getRealTeamStats(teamName, dateFilter);
-    const topNonSaleTypes = getTopNonSaleLeadTypes(teamName, dateFilter);
+    // Calculate team totals
+    const totals = teamMemberStats.reduce((acc, member) => ({
+      leads: acc.leads + member.leads,
+      sales: acc.sales + member.sales,
+      referrals: acc.referrals + member.referrals,
+      unassigned: acc.unassigned + member.unassigned,
+      openActivities: acc.openActivities + member.openActivities,
+      pd15Plus: acc.pd15Plus + member.pd15Plus,
+      hraEligible: acc.hraEligible + member.hraEligible,
+      hraSubmitted: acc.hraSubmitted + member.hraSubmitted,
+      revenue: acc.revenue + member.revenue,
+    }), {
+      leads: 0,
+      sales: 0,
+      referrals: 0,
+      unassigned: 0,
+      openActivities: 0,
+      pd15Plus: 0,
+      hraEligible: 0,
+      hraSubmitted: 0,
+      revenue: 0,
+    });
 
-    return { ...stats, members: teamMemberStats, topNonSaleTypes };
+    // Calculate aggregate percentages
+    const avgConversion = teamMemberStats.length > 0
+      ? (teamMemberStats.reduce((sum, m) => sum + parseFloat(m.conversionRate), 0) / teamMemberStats.length).toFixed(1)
+      : "0.0";
+
+    const avgRefRate = totals.leads > 0
+      ? ((totals.referrals / totals.leads) * 100).toFixed(2)
+      : "0.00";
+
+    const avgSpd = teamMemberStats.length > 0
+      ? (teamMemberStats.reduce((sum, m) => sum + m.spd, 0) / teamMemberStats.length).toFixed(1)
+      : "0.0";
+
+    const avgEffectiveness = totals.leads > 0
+      ? ((totals.sales / totals.leads) * 100).toFixed(1)
+      : "0.0";
+
+    const avgUnassignedPercent = totals.leads > 0
+      ? ((totals.unassigned / totals.leads) * 100).toFixed(2)
+      : "0.00";
+
+    const avgPdPercent = totals.leads > 0
+      ? ((totals.pd15Plus / totals.leads) * 100).toFixed(2)
+      : "0.00";
+
+    const avgHraPercent = totals.hraEligible > 0
+      ? ((totals.hraSubmitted / totals.hraEligible) * 100).toFixed(2)
+      : "0.00";
+
+    return {
+      totalLeads: totals.leads,
+      totalSales: totals.sales,
+      totalReferrals: totals.referrals,
+      totalRevenue: totals.revenue,
+      avgConversion,
+      avgRefRate,
+      avgSpd,
+      avgEffectiveness,
+      avgUnassignedPercent,
+      totalOpenActivities: totals.openActivities,
+      totalPd15Plus: totals.pd15Plus,
+      avgPdPercent,
+      totalHraEligible: totals.hraEligible,
+      totalHraSubmitted: totals.hraSubmitted,
+      avgHraPercent,
+      members: teamMemberStats,
+      memberCount: teamMembers.length,
+    };
   };
 
   const getAllTeamsData = () => {
     return teams
       .map((team) => ({
         ...team,
-        ...getEnhancedTeamStats(team.name),
+        ...getEnhancedTeamStats(team.id, team.name),
       }))
       .sort((a, b) => b.totalSales - a.totalSales);
   };
@@ -3618,10 +3802,105 @@ const ManagerDashboard = ({ user, onSignOut }) => {
 
         {activeTab === "teams" && (
           <div className="space-y-6">
+            {/* Create Team Modal */}
+            {showCreateTeamModal && createPortal(
+              <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+                <div className="bg-slate-800 rounded-xl p-6 w-full max-w-lg border border-white/20 max-h-[90vh] overflow-y-auto">
+                  <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-xl font-semibold text-white">Create New Team</h3>
+                    <button
+                      onClick={() => setShowCreateTeamModal(false)}
+                      className="text-gray-400 hover:text-white"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm text-gray-300 mb-2">Team Name</label>
+                      <input
+                        type="text"
+                        value={newTeamName}
+                        onChange={(e) => setNewTeamName(e.target.value)}
+                        placeholder="Enter team name..."
+                        className="w-full bg-slate-700 border border-white/20 rounded-lg px-4 py-2 text-white placeholder-gray-400"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm text-gray-300 mb-2">Supervisor Name</label>
+                      <input
+                        type="text"
+                        value={newTeamSupervisor}
+                        onChange={(e) => setNewTeamSupervisor(e.target.value)}
+                        placeholder="Enter supervisor name..."
+                        className="w-full bg-slate-700 border border-white/20 rounded-lg px-4 py-2 text-white placeholder-gray-400"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm text-gray-300 mb-2">
+                        Select Agents ({selectedAgentsForTeam.length} selected)
+                      </label>
+                      <div className="bg-slate-700 rounded-lg p-3 max-h-48 overflow-y-auto">
+                        {firebaseAgents.length === 0 ? (
+                          <p className="text-gray-400 text-sm">No agents available</p>
+                        ) : (
+                          firebaseAgents.map((agent) => (
+                            <label
+                              key={agent.id}
+                              className="flex items-center gap-3 p-2 hover:bg-slate-600 rounded-lg cursor-pointer"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selectedAgentsForTeam.includes(agent.id)}
+                                onChange={() => toggleAgentForTeam(agent.id)}
+                                className="w-4 h-4 rounded border-gray-400"
+                              />
+                              <span className="text-white">{agent.name || agent.email}</span>
+                            </label>
+                          ))
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex gap-3 pt-4">
+                      <button
+                        onClick={() => setShowCreateTeamModal(false)}
+                        className="flex-1 bg-slate-600 hover:bg-slate-500 px-4 py-2 rounded-lg text-white"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleCreateTeam}
+                        disabled={!newTeamName.trim() || isCreatingTeam}
+                        className={`flex-1 bg-gradient-to-r ${currentThemeStyles.accent} hover:shadow-lg px-4 py-2 rounded-lg text-white flex items-center justify-center gap-2 disabled:opacity-50`}
+                      >
+                        {isCreatingTeam ? (
+                          <>
+                            <Loader className="w-4 h-4 animate-spin" />
+                            Creating...
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="w-4 h-4" />
+                            Create Team
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>,
+              document.body
+            )}
+
+            {/* Filter Bar */}
             <div
               className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-4 border border-white/20`}
             >
-              <div className="flex gap-4 items-center">
+              <div className="flex gap-4 items-center flex-wrap">
                 <select
                   value={selectedTeam}
                   onChange={(e) => setSelectedTeam(e.target.value)}
@@ -3633,7 +3912,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                   {teams.map((team) => (
                     <option
                       key={team.id}
-                      value={team.name}
+                      value={team.id}
                       className="bg-slate-800"
                     >
                       {team.name}
@@ -3651,6 +3930,8 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                 </span>
               </div>
             </div>
+
+            {/* Team Management Header */}
             <div
               className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-6 border border-white/20`}
             >
@@ -3659,13 +3940,16 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                   Enhanced Team Management
                 </h3>
                 <button
+                  onClick={() => setShowCreateTeamModal(true)}
                   className={`bg-gradient-to-r ${currentThemeStyles.accent} hover:shadow-lg px-4 py-2 rounded-lg flex items-center gap-2`}
                 >
                   <Plus className="w-4 h-4" />
                   Create Team
                 </button>
               </div>
-              <div className="grid gap-6">
+
+              {/* Teams List with Metrics */}
+              <div className="space-y-6">
                 {teams.length === 0 ? (
                   <p className="text-gray-300 text-center py-8">
                     No teams configured yet. Create your first team to get
@@ -3675,30 +3959,160 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                   teams
                     .filter(
                       (team) =>
-                        selectedTeam === "all" || team.name === selectedTeam
+                        selectedTeam === "all" || team.id === selectedTeam
                     )
                     .map((team) => {
-                      const enhancedStats = getEnhancedTeamStats(team.name);
+                      const enhancedStats = getEnhancedTeamStats(team.id, team.name);
+
+                      // Helper function for color-coding metrics
+                      const getConversionColor = (rate) => {
+                        const val = parseFloat(rate);
+                        if (val >= 35) return "bg-green-500";
+                        if (val >= 25) return "bg-yellow-500";
+                        return "bg-red-500";
+                      };
+
+                      const getRefColor = (rate) => {
+                        const val = parseFloat(rate);
+                        if (val <= 5) return "bg-green-500";
+                        if (val <= 10) return "bg-yellow-500";
+                        return "bg-red-500";
+                      };
+
+                      const getHraColor = (rate) => {
+                        const val = parseFloat(rate);
+                        if (val >= 80) return "bg-green-500";
+                        if (val >= 50) return "bg-yellow-500";
+                        return "bg-red-500";
+                      };
+
+                      const getEffectivenessColor = (rate) => {
+                        const val = parseFloat(rate);
+                        if (val >= 80) return "bg-green-500";
+                        if (val >= 60) return "bg-yellow-500";
+                        return "bg-red-500";
+                      };
+
                       return (
                         <div
                           key={team.id}
-                          className="bg-white/5 rounded-lg p-6"
+                          className="bg-white/5 rounded-lg overflow-hidden"
                         >
-                          <div className="flex justify-between items-start mb-4">
-                            <div>
+                          {/* Team Header */}
+                          <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-3 flex justify-between items-center">
+                            <div className="flex items-center gap-3">
                               <h4 className="text-lg font-semibold text-white">
                                 {team.name}
                               </h4>
-                              <p className="text-gray-300">
-                                {enhancedStats.members.length} members •{" "}
-                                {team.supervisor}
-                              </p>
+                              <span className="bg-white/20 px-2 py-0.5 rounded text-xs text-white">
+                                {enhancedStats.memberCount} agents
+                              </span>
                             </div>
-                            <button className="text-gray-400 hover:text-white">
-                              <Edit className="w-4 h-4" />
-                            </button>
+                            <div className="flex items-center gap-2">
+                              <span className="text-white/80 text-sm">{team.supervisor}</span>
+                              <button className="text-white/60 hover:text-white">
+                                <Edit className="w-4 h-4" />
+                              </button>
+                            </div>
                           </div>
-                          {/* Team stats display would go here */}
+
+                          {/* Metrics Table */}
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="bg-slate-700/50">
+                                  <th className="text-left px-3 py-2 text-gray-300 font-medium sticky left-0 bg-slate-700/50">Agent</th>
+                                  <th className="text-center px-2 py-2 text-gray-300 font-medium">Leads</th>
+                                  <th className="text-center px-2 py-2 text-gray-300 font-medium">Sales</th>
+                                  <th className="text-center px-2 py-2 text-gray-300 font-medium">Conv.%</th>
+                                  <th className="text-center px-2 py-2 text-gray-300 font-medium">% Ref</th>
+                                  <th className="text-center px-2 py-2 text-gray-300 font-medium">SPD</th>
+                                  <th className="text-center px-2 py-2 text-gray-300 font-medium">New Sale%</th>
+                                  <th className="text-center px-2 py-2 text-gray-300 font-medium">Effect.%</th>
+                                  <th className="text-center px-2 py-2 text-gray-300 font-medium">% Unassign</th>
+                                  <th className="text-center px-2 py-2 text-gray-300 font-medium">Open Act</th>
+                                  <th className="text-center px-2 py-2 text-gray-300 font-medium">PD 15+</th>
+                                  <th className="text-center px-2 py-2 text-gray-300 font-medium">PD %</th>
+                                  <th className="text-center px-2 py-2 text-gray-300 font-medium">HRA Elig.</th>
+                                  <th className="text-center px-2 py-2 text-gray-300 font-medium">HRA Sub</th>
+                                  <th className="text-center px-2 py-2 text-gray-300 font-medium">HRA %</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {enhancedStats.members.length === 0 ? (
+                                  <tr>
+                                    <td colSpan="15" className="text-center py-4 text-gray-400">
+                                      No agents assigned to this team yet
+                                    </td>
+                                  </tr>
+                                ) : (
+                                  <>
+                                    {enhancedStats.members.map((member) => (
+                                      <tr key={member.id} className="border-t border-slate-600/30 hover:bg-slate-700/30">
+                                        <td className="px-3 py-2 text-white font-medium sticky left-0 bg-slate-800/80">
+                                          {member.name || member.email?.split('@')[0] || 'Unknown'}
+                                        </td>
+                                        <td className="text-center px-2 py-2 text-white">{member.leads}</td>
+                                        <td className="text-center px-2 py-2 text-white font-semibold">{member.sales}</td>
+                                        <td className={`text-center px-2 py-2 text-white ${getConversionColor(member.conversionRate)}`}>
+                                          {member.conversionRate}%
+                                        </td>
+                                        <td className={`text-center px-2 py-2 text-white ${getRefColor(member.referralRate)}`}>
+                                          {member.referralRate}%
+                                        </td>
+                                        <td className="text-center px-2 py-2 text-white">{member.spd}</td>
+                                        <td className="text-center px-2 py-2 text-white">{member.newSalePercent}%</td>
+                                        <td className={`text-center px-2 py-2 text-white ${getEffectivenessColor(member.effectiveness)}`}>
+                                          {member.effectiveness}%
+                                        </td>
+                                        <td className="text-center px-2 py-2 text-white">{member.unassignedPercent}%</td>
+                                        <td className="text-center px-2 py-2 text-white">{member.openActivities}</td>
+                                        <td className={`text-center px-2 py-2 text-white ${member.pd15Plus > 0 ? 'bg-red-500' : ''}`}>
+                                          {member.pd15Plus}
+                                        </td>
+                                        <td className="text-center px-2 py-2 text-white">{member.pdPercent}%</td>
+                                        <td className="text-center px-2 py-2 text-white">{member.hraEligible}</td>
+                                        <td className="text-center px-2 py-2 text-white">{member.hraSubmitted}</td>
+                                        <td className={`text-center px-2 py-2 text-white ${getHraColor(member.hraPercent)}`}>
+                                          {member.hraPercent}%
+                                        </td>
+                                      </tr>
+                                    ))}
+                                    {/* Team Totals Row */}
+                                    <tr className="bg-blue-600/30 border-t-2 border-blue-400 font-semibold">
+                                      <td className="px-3 py-2 text-white sticky left-0 bg-blue-600/50">
+                                        Team {team.name} Totals
+                                      </td>
+                                      <td className="text-center px-2 py-2 text-white">{enhancedStats.totalLeads}</td>
+                                      <td className="text-center px-2 py-2 text-white">{enhancedStats.totalSales}</td>
+                                      <td className={`text-center px-2 py-2 text-white ${getConversionColor(enhancedStats.avgConversion)}`}>
+                                        {enhancedStats.avgConversion}%
+                                      </td>
+                                      <td className={`text-center px-2 py-2 text-white ${getRefColor(enhancedStats.avgRefRate)}`}>
+                                        {enhancedStats.avgRefRate}%
+                                      </td>
+                                      <td className="text-center px-2 py-2 text-white">{enhancedStats.avgSpd}</td>
+                                      <td className="text-center px-2 py-2 text-white">-</td>
+                                      <td className={`text-center px-2 py-2 text-white ${getEffectivenessColor(enhancedStats.avgEffectiveness)}`}>
+                                        {enhancedStats.avgEffectiveness}%
+                                      </td>
+                                      <td className="text-center px-2 py-2 text-white">{enhancedStats.avgUnassignedPercent}%</td>
+                                      <td className="text-center px-2 py-2 text-white">{enhancedStats.totalOpenActivities}</td>
+                                      <td className={`text-center px-2 py-2 text-white ${enhancedStats.totalPd15Plus > 0 ? 'bg-red-500' : ''}`}>
+                                        {enhancedStats.totalPd15Plus}
+                                      </td>
+                                      <td className="text-center px-2 py-2 text-white">{enhancedStats.avgPdPercent}%</td>
+                                      <td className="text-center px-2 py-2 text-white">{enhancedStats.totalHraEligible}</td>
+                                      <td className="text-center px-2 py-2 text-white">{enhancedStats.totalHraSubmitted}</td>
+                                      <td className={`text-center px-2 py-2 text-white ${getHraColor(enhancedStats.avgHraPercent)}`}>
+                                        {enhancedStats.avgHraPercent}%
+                                      </td>
+                                    </tr>
+                                  </>
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
                         </div>
                       );
                     })
