@@ -8,11 +8,107 @@ import {
   getDoc,
   setDoc,
   Timestamp,
+  query,
+  limit,
+  orderBy,
 } from "firebase/firestore";
 import { db } from "../firebase";
 
-// Polling interval in milliseconds (60 seconds = controlled, predictable reads)
-const POLLING_INTERVAL = 60000;
+// =============================================================================
+// OPTIMIZATION: Increased polling interval to reduce reads (5 minutes)
+// Previous: 60 seconds = ~1440 reads/day per user just from polling
+// New: 5 minutes = ~288 reads/day per user (80% reduction)
+// =============================================================================
+const POLLING_INTERVAL = 300000; // 5 minutes
+
+// =============================================================================
+// OPTIMIZATION: Minimum time before refresh on visibility change (2 minutes)
+// Prevents excessive reads when switching tabs frequently
+// =============================================================================
+const MIN_REFRESH_INTERVAL = 120000; // 2 minutes
+
+// =============================================================================
+// OPTIMIZATION: Global cache for agent goals with 24-hour expiration
+// Agent goals rarely change, so caching prevents redundant reads
+// =============================================================================
+const agentGoalsCache = new Map();
+const AGENT_GOALS_CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+
+// =============================================================================
+// OPTIMIZATION: In-flight request tracking to prevent duplicate fetches
+// If a fetch is in progress, subsequent requests wait for it instead of
+// making new Firebase calls
+// =============================================================================
+const inFlightRequests = new Map();
+
+// =============================================================================
+// STANDALONE EXPORT: fetchAgentGoalsStandalone
+// Use this to fetch agent goals WITHOUT instantiating the full useFirestore hook
+// This is perfect for AgentDashboard which only needs goals, not all leads
+// =============================================================================
+export const fetchAgentGoalsStandalone = async (agentEmail) => {
+  if (!agentEmail) return null;
+
+  // OPTIMIZATION 1: Check cache first (24-hour TTL)
+  const cached = agentGoalsCache.get(agentEmail);
+  if (cached && (Date.now() - cached.timestamp) < AGENT_GOALS_CACHE_DURATION) {
+    console.log("fetchAgentGoalsStandalone: Cache hit for:", agentEmail);
+    return cached.goals;
+  }
+
+  // OPTIMIZATION 2: Request deduplication - wait for in-flight request
+  const requestKey = `agentGoals_${agentEmail}`;
+  if (inFlightRequests.has(requestKey)) {
+    console.log("fetchAgentGoalsStandalone: Waiting for in-flight request:", agentEmail);
+    return inFlightRequests.get(requestKey);
+  }
+
+  console.log("fetchAgentGoalsStandalone: Fetching from Firebase for:", agentEmail);
+
+  const fetchPromise = (async () => {
+    try {
+      const docId = agentEmail.replace(/\./g, '_');
+      const agentGoalsRef = doc(db, "agentGoals", docId);
+      const goalsDoc = await getDoc(agentGoalsRef);
+
+      if (goalsDoc.exists()) {
+        const data = goalsDoc.data();
+        // Store in cache
+        agentGoalsCache.set(agentEmail, {
+          goals: data.goals,
+          timestamp: Date.now()
+        });
+        console.log("fetchAgentGoalsStandalone: Cached goals for:", agentEmail);
+        return data.goals;
+      }
+      // Cache null result to avoid repeated lookups
+      agentGoalsCache.set(agentEmail, {
+        goals: null,
+        timestamp: Date.now()
+      });
+      return null;
+    } catch (error) {
+      console.error("Error fetching agent goals:", error);
+      return null;
+    } finally {
+      inFlightRequests.delete(requestKey);
+    }
+  })();
+
+  inFlightRequests.set(requestKey, fetchPromise);
+  return fetchPromise;
+};
+
+// =============================================================================
+// UTILITY: Clear agent goals cache (useful after goals are updated)
+// =============================================================================
+export const clearAgentGoalsCache = (agentEmail) => {
+  if (agentEmail) {
+    agentGoalsCache.delete(agentEmail);
+  } else {
+    agentGoalsCache.clear();
+  }
+};
 
 export const useFirestore = (userEmail) => {
   const [leads, setLeads] = useState([]);
@@ -24,45 +120,68 @@ export const useFirestore = (userEmail) => {
   const [lastRefresh, setLastRefresh] = useState(null);
   const pollingRef = useRef(null);
   const isVisibleRef = useRef(true);
+  const lastFetchTimeRef = useRef(0); // Track last fetch timestamp for smart refresh
 
-  // One-time fetch for leads (much more efficient than real-time listener)
-  const fetchLeads = useCallback(async () => {
+  // One-time fetch for leads with request deduplication
+  const fetchLeads = useCallback(async (forceRefresh = false) => {
     if (!userEmail) {
       setLoading(false);
       return;
     }
 
-    setLoading(true);
-    console.log("useFirestore: Fetching leads (one-time)");
-
-    try {
-      const leadsCollection = collection(db, "leads");
-      const snapshot = await getDocs(leadsCollection);
-
-      console.log("useFirestore: Received", snapshot.docs.length, "leads from Firebase");
-
-      const leadsData = snapshot.docs.map((doc) => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          ...data,
-          // Normalize timestamp
-          timestamp: data.timestamp?.toDate?.() || data.timestamp || new Date(data.createdAt || Date.now()),
-        };
-      });
-
-      // Sort by timestamp client-side
-      leadsData.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-      console.log("useFirestore: Processed leads:", leadsData.length);
-
-      setLeads(leadsData);
-      setLastRefresh(new Date());
-      setLoading(false);
-    } catch (error) {
-      console.error("useFirestore: Error fetching leads:", error);
-      setLoading(false);
+    // OPTIMIZATION: Check if we already have a fetch in progress
+    const requestKey = `leads_${userEmail}`;
+    if (inFlightRequests.has(requestKey)) {
+      console.log("useFirestore: Fetch already in progress, waiting...");
+      return inFlightRequests.get(requestKey);
     }
-  }, [userEmail]);
+
+    // OPTIMIZATION: Skip if data is still fresh (unless forced)
+    const timeSinceLastFetch = Date.now() - lastFetchTimeRef.current;
+    if (!forceRefresh && timeSinceLastFetch < MIN_REFRESH_INTERVAL && leads.length > 0) {
+      console.log("useFirestore: Data is fresh, skipping fetch");
+      return;
+    }
+
+    setLoading(true);
+    console.log("useFirestore: Fetching leads (optimized)");
+
+    const fetchPromise = (async () => {
+      try {
+        const leadsCollection = collection(db, "leads");
+        const snapshot = await getDocs(leadsCollection);
+
+        console.log("useFirestore: Received", snapshot.docs.length, "leads from Firebase");
+
+        const leadsData = snapshot.docs.map((doc) => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            ...data,
+            // Normalize timestamp
+            timestamp: data.timestamp?.toDate?.() || data.timestamp || new Date(data.createdAt || Date.now()),
+          };
+        });
+
+        // Sort by timestamp client-side
+        leadsData.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        console.log("useFirestore: Processed leads:", leadsData.length);
+
+        setLeads(leadsData);
+        setLastRefresh(new Date());
+        lastFetchTimeRef.current = Date.now();
+        setLoading(false);
+      } catch (error) {
+        console.error("useFirestore: Error fetching leads:", error);
+        setLoading(false);
+      } finally {
+        inFlightRequests.delete(requestKey);
+      }
+    })();
+
+    inFlightRequests.set(requestKey, fetchPromise);
+    return fetchPromise;
+  }, [userEmail, leads.length]);
 
   // Initial fetch on mount
   useEffect(() => {
@@ -125,7 +244,7 @@ export const useFirestore = (userEmail) => {
     fetchTeams();
   }, [fetchTeams]);
 
-  // Smart polling - auto-refresh every 60 seconds when tab is visible
+  // OPTIMIZED: Smart polling with 5-minute intervals
   useEffect(() => {
     if (!userEmail) return;
 
@@ -134,20 +253,26 @@ export const useFirestore = (userEmail) => {
       if (pollingRef.current) clearInterval(pollingRef.current);
       pollingRef.current = setInterval(() => {
         if (isVisibleRef.current) {
-          console.log("useFirestore: Auto-refresh polling...");
+          console.log("useFirestore: Auto-refresh polling (5-min interval)...");
           fetchLeads();
           fetchTeams();
         }
       }, POLLING_INTERVAL);
     };
 
-    // Handle visibility change - refresh when tab becomes visible
+    // OPTIMIZATION: Smart visibility change - only refresh if data is stale
     const handleVisibilityChange = () => {
       isVisibleRef.current = !document.hidden;
       if (!document.hidden) {
-        console.log("useFirestore: Tab visible, refreshing data...");
-        fetchLeads();
-        fetchTeams();
+        const timeSinceLastFetch = Date.now() - lastFetchTimeRef.current;
+        // Only refresh if more than 2 minutes have passed
+        if (timeSinceLastFetch > MIN_REFRESH_INTERVAL) {
+          console.log("useFirestore: Tab visible, data stale, refreshing...");
+          fetchLeads();
+          fetchTeams();
+        } else {
+          console.log("useFirestore: Tab visible, data fresh, skipping refresh");
+        }
       }
     };
 
@@ -160,10 +285,10 @@ export const useFirestore = (userEmail) => {
     };
   }, [userEmail, fetchLeads, fetchTeams]);
 
-  // Refresh all data function
+  // Refresh all data function (force refresh to bypass cache)
   const refreshData = useCallback(async () => {
-    console.log("useFirestore: Refreshing all data...");
-    await Promise.all([fetchLeads(), fetchTeams()]);
+    console.log("useFirestore: Manual refresh - forcing data update...");
+    await Promise.all([fetchLeads(true), fetchTeams()]);
   }, [fetchLeads, fetchTeams]);
 
   // Add lead function
@@ -364,6 +489,12 @@ export const useFirestore = (userEmail) => {
         setBy: userEmail,
       }, { merge: true });
 
+      // OPTIMIZATION: Update cache immediately when goals change
+      agentGoalsCache.set(agentEmail, {
+        goals: goals,
+        timestamp: Date.now()
+      });
+
       console.log("Agent goals updated for:", agentEmail, goals);
     } catch (error) {
       console.error("Error updating agent goals:", error);
@@ -371,26 +502,67 @@ export const useFirestore = (userEmail) => {
     }
   };
 
-  // Fetch individual agent goals from Firebase
-  const fetchAgentGoals = async (agentEmail) => {
+  // =============================================================================
+  // CRITICAL OPTIMIZATION: fetchAgentGoals is now memoized with useCallback
+  // and uses a 24-hour cache + request deduplication
+  //
+  // Previous behavior: Created new function reference on every render,
+  // causing useEffect dependencies to trigger unnecessary re-fetches
+  //
+  // New behavior: Stable function reference + caching = massive read reduction
+  // =============================================================================
+  const fetchAgentGoals = useCallback(async (agentEmail) => {
     if (!agentEmail) return null;
 
-    try {
-      const docId = agentEmail.replace(/\./g, '_');
-      const agentGoalsRef = doc(db, "agentGoals", docId);
-      const goalsDoc = await getDoc(agentGoalsRef);
-
-      if (goalsDoc.exists()) {
-        const data = goalsDoc.data();
-        console.log("Fetched agent goals for:", agentEmail, data.goals);
-        return data.goals;
-      }
-      return null;
-    } catch (error) {
-      console.error("Error fetching agent goals:", error);
-      return null;
+    // OPTIMIZATION 1: Check cache first (24-hour TTL)
+    const cached = agentGoalsCache.get(agentEmail);
+    if (cached && (Date.now() - cached.timestamp) < AGENT_GOALS_CACHE_DURATION) {
+      console.log("fetchAgentGoals: Cache hit for:", agentEmail);
+      return cached.goals;
     }
-  };
+
+    // OPTIMIZATION 2: Request deduplication - wait for in-flight request
+    const requestKey = `agentGoals_${agentEmail}`;
+    if (inFlightRequests.has(requestKey)) {
+      console.log("fetchAgentGoals: Waiting for in-flight request:", agentEmail);
+      return inFlightRequests.get(requestKey);
+    }
+
+    console.log("fetchAgentGoals: Fetching from Firebase for:", agentEmail);
+
+    const fetchPromise = (async () => {
+      try {
+        const docId = agentEmail.replace(/\./g, '_');
+        const agentGoalsRef = doc(db, "agentGoals", docId);
+        const goalsDoc = await getDoc(agentGoalsRef);
+
+        if (goalsDoc.exists()) {
+          const data = goalsDoc.data();
+          // Store in cache
+          agentGoalsCache.set(agentEmail, {
+            goals: data.goals,
+            timestamp: Date.now()
+          });
+          console.log("fetchAgentGoals: Cached goals for:", agentEmail);
+          return data.goals;
+        }
+        // Cache null result to avoid repeated lookups
+        agentGoalsCache.set(agentEmail, {
+          goals: null,
+          timestamp: Date.now()
+        });
+        return null;
+      } catch (error) {
+        console.error("Error fetching agent goals:", error);
+        return null;
+      } finally {
+        inFlightRequests.delete(requestKey);
+      }
+    })();
+
+    inFlightRequests.set(requestKey, fetchPromise);
+    return fetchPromise;
+  }, []); // Empty deps = stable reference
 
   return {
     leads,

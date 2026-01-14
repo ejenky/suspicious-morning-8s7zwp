@@ -12,8 +12,18 @@ import {
 } from "firebase/firestore";
 import { db } from "../firebase";
 
-// Polling interval in milliseconds (60 seconds = controlled, predictable reads)
-const POLLING_INTERVAL = 60000;
+// =============================================================================
+// OPTIMIZATION: Increased polling interval to reduce reads (5 minutes)
+// =============================================================================
+const POLLING_INTERVAL = 300000; // 5 minutes
+
+// =============================================================================
+// OPTIMIZATION: Minimum time before refresh on visibility change (2 minutes)
+// =============================================================================
+const MIN_REFRESH_INTERVAL = 120000; // 2 minutes
+
+// In-flight request tracking
+const inFlightUserRequests = new Map();
 
 export const useLeads = (userId) => {
   const [leads, setLeads] = useState([]);
@@ -21,61 +31,84 @@ export const useLeads = (userId) => {
   const [error, setError] = useState(null);
   const pollingRef = useRef(null);
   const isVisibleRef = useRef(true);
+  const lastFetchTimeRef = useRef(0);
 
-  // One-time fetch function (much more efficient than real-time listener)
-  const fetchLeads = useCallback(async (showLoading = false) => {
+  // Optimized fetch function with request deduplication
+  const fetchLeads = useCallback(async (showLoading = false, forceRefresh = false) => {
     if (!userId) {
       console.log("No userId provided to useLeads");
       setLoading(false);
       return;
     }
 
+    // OPTIMIZATION: Check if we already have a fetch in progress
+    const requestKey = `userLeads_${userId}`;
+    if (inFlightUserRequests.has(requestKey)) {
+      console.log("useLeads: Fetch already in progress, waiting...");
+      return inFlightUserRequests.get(requestKey);
+    }
+
+    // OPTIMIZATION: Skip if data is still fresh (unless forced or initial load)
+    const timeSinceLastFetch = Date.now() - lastFetchTimeRef.current;
+    if (!forceRefresh && timeSinceLastFetch < MIN_REFRESH_INTERVAL && leads.length > 0) {
+      console.log("useLeads: Data is fresh, skipping fetch");
+      return;
+    }
+
     if (showLoading) setLoading(true);
     console.log("useLeads: Fetching leads for user:", userId);
 
-    try {
-      // Query for user's leads (no orderBy to avoid index requirement)
-      const leadsQuery = query(
-        collection(db, "leads"),
-        where("agent", "==", userId)
-      );
+    const fetchPromise = (async () => {
+      try {
+        // Query for user's leads (no orderBy to avoid index requirement)
+        const leadsQuery = query(
+          collection(db, "leads"),
+          where("agent", "==", userId)
+        );
 
-      const snapshot = await getDocs(leadsQuery);
-      console.log("useLeads: Received", snapshot.size, "leads");
+        const snapshot = await getDocs(leadsQuery);
+        console.log("useLeads: Received", snapshot.size, "leads");
 
-      const leadsData = snapshot.docs.map((doc) => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          ...data,
-          timestamp:
-            data.timestamp instanceof Timestamp
-              ? data.timestamp.toDate()
-              : data.timestamp?.toDate?.() ||
-                new Date(data.timestamp || data.createdAt),
-        };
-      });
+        const leadsData = snapshot.docs.map((doc) => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            ...data,
+            timestamp:
+              data.timestamp instanceof Timestamp
+                ? data.timestamp.toDate()
+                : data.timestamp?.toDate?.() ||
+                  new Date(data.timestamp || data.createdAt),
+          };
+        });
 
-      // Sort client-side by timestamp descending
-      leadsData.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        // Sort client-side by timestamp descending
+        leadsData.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
-      console.log("useLeads: Processed leads data:", leadsData.length, "leads");
-      setLeads(leadsData);
-      setLoading(false);
-      setError(null);
-    } catch (err) {
-      console.error("useLeads: Firestore error:", err);
-      setError(err.message);
-      setLoading(false);
-    }
-  }, [userId]);
+        console.log("useLeads: Processed leads data:", leadsData.length, "leads");
+        setLeads(leadsData);
+        lastFetchTimeRef.current = Date.now();
+        setLoading(false);
+        setError(null);
+      } catch (err) {
+        console.error("useLeads: Firestore error:", err);
+        setError(err.message);
+        setLoading(false);
+      } finally {
+        inFlightUserRequests.delete(requestKey);
+      }
+    })();
+
+    inFlightUserRequests.set(requestKey, fetchPromise);
+    return fetchPromise;
+  }, [userId, leads.length]);
 
   // Initial fetch on mount
   useEffect(() => {
     fetchLeads(true);
   }, [fetchLeads]);
 
-  // Smart polling - auto-refresh every 60 seconds when tab is visible
+  // OPTIMIZED: Smart polling with 5-minute intervals
   useEffect(() => {
     if (!userId) return;
 
@@ -84,18 +117,24 @@ export const useLeads = (userId) => {
       if (pollingRef.current) clearInterval(pollingRef.current);
       pollingRef.current = setInterval(() => {
         if (isVisibleRef.current) {
-          console.log("useLeads: Auto-refresh polling...");
+          console.log("useLeads: Auto-refresh polling (5-min interval)...");
           fetchLeads(false); // Don't show loading spinner for background refresh
         }
       }, POLLING_INTERVAL);
     };
 
-    // Handle visibility change - refresh when tab becomes visible
+    // OPTIMIZATION: Smart visibility change - only refresh if data is stale
     const handleVisibilityChange = () => {
       isVisibleRef.current = !document.hidden;
       if (!document.hidden) {
-        console.log("useLeads: Tab visible, refreshing data...");
-        fetchLeads(false);
+        const timeSinceLastFetch = Date.now() - lastFetchTimeRef.current;
+        // Only refresh if more than 2 minutes have passed
+        if (timeSinceLastFetch > MIN_REFRESH_INTERVAL) {
+          console.log("useLeads: Tab visible, data stale, refreshing...");
+          fetchLeads(false);
+        } else {
+          console.log("useLeads: Tab visible, data fresh, skipping refresh");
+        }
       }
     };
 
@@ -122,8 +161,8 @@ export const useLeads = (userId) => {
       const docRef = await addDoc(collection(db, "leads"), lead);
       console.log("Lead added successfully with ID:", docRef.id);
 
-      // Immediately refresh leads so agent sees their new entry
-      await fetchLeads(false);
+      // Immediately refresh leads so agent sees their new entry (force refresh)
+      await fetchLeads(false, true);
 
       return { success: true, id: docRef.id };
     } catch (error) {
@@ -202,8 +241,8 @@ export const useLeads = (userId) => {
         updatedAt: new Date().toISOString(),
       });
       console.log("Lead updated successfully");
-      // Refresh leads to show updated data
-      await fetchLeads(false);
+      // Refresh leads to show updated data (force refresh)
+      await fetchLeads(false, true);
       return { success: true };
     } catch (error) {
       console.error("Error updating lead:", error);
@@ -211,8 +250,8 @@ export const useLeads = (userId) => {
     }
   };
 
-  // Manual refresh function (in case agent wants to force refresh)
-  const refreshLeads = useCallback(() => fetchLeads(false), [fetchLeads]);
+  // Manual refresh function (force refresh to bypass cache)
+  const refreshLeads = useCallback(() => fetchLeads(false, true), [fetchLeads]);
 
   return { leads, loading, error, addLead, updateLead, calculateMetrics, refreshLeads };
 };

@@ -71,7 +71,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { useLeads } from "../hooks/useLeads";
-import { useFirestore } from "../hooks/useFirestore";
+import { useFirestore, fetchAgentGoalsStandalone } from "../hooks/useFirestore";
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "../firebase";
 
@@ -5802,6 +5802,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
 };
 
 // Agent Dashboard with corrected calculations and global data sync
+// OPTIMIZED: No longer uses useFirestore for all leads - lazy-loads leaderboard data
 const AgentDashboard = ({ user, onSignOut }) => {
   const {
     leads,
@@ -5810,8 +5811,13 @@ const AgentDashboard = ({ user, onSignOut }) => {
     updateLead,
     calculateMetrics,
   } = useLeads(user.uid);
-  const { fetchAgentGoals, leads: allLeads } = useFirestore(user.email);
+  // OPTIMIZATION: Use standalone function instead of full useFirestore hook
+  // This eliminates duplicate polling and reduces Firebase reads significantly
   const [goalsLoaded, setGoalsLoaded] = useState(false);
+  // OPTIMIZATION: Lazy-load leaderboard data only when tab is selected
+  const [leaderboardLeads, setLeaderboardLeads] = useState([]);
+  const [leaderboardLoading, setLeaderboardLoading] = useState(false);
+  const leaderboardLoadedRef = useRef(false);
   const [activeTab, setActiveTab] = useState("dashboard");
   const [streak, setStreak] = useState(3);
   const [formErrors, setFormErrors] = useState({});
@@ -5843,12 +5849,13 @@ const AgentDashboard = ({ user, onSignOut }) => {
     setToast((prev) => ({ ...prev, isVisible: false }));
   };
 
-  // Fetch agent goals from Firebase on mount
+  // Fetch agent goals from Firebase on mount using standalone function
+  // OPTIMIZATION: Uses cached standalone function - no hook instantiation needed
   useEffect(() => {
     const loadGoals = async () => {
       if (user.email && !goalsLoaded) {
         try {
-          const firebaseGoals = await fetchAgentGoals(user.email);
+          const firebaseGoals = await fetchAgentGoalsStandalone(user.email);
           if (firebaseGoals) {
             globalAgentGoals[user.email] = firebaseGoals;
           }
@@ -5859,7 +5866,39 @@ const AgentDashboard = ({ user, onSignOut }) => {
       }
     };
     loadGoals();
-  }, [user.email, fetchAgentGoals, goalsLoaded]);
+  }, [user.email, goalsLoaded]);
+
+  // OPTIMIZATION: Lazy-load leaderboard data only when tab is selected
+  // This eliminates the need to fetch ALL leads just for leaderboards
+  useEffect(() => {
+    const loadLeaderboardData = async () => {
+      if (activeTab === "leaderboards" && !leaderboardLoadedRef.current && !leaderboardLoading) {
+        setLeaderboardLoading(true);
+        try {
+          // Use dynamic import to get getDocs and collection
+          const { collection, getDocs } = await import("firebase/firestore");
+          const { db } = await import("../firebase");
+          const leadsCollection = collection(db, "leads");
+          const snapshot = await getDocs(leadsCollection);
+          const leadsData = snapshot.docs.map((doc) => {
+            const data = doc.data();
+            return {
+              id: doc.id,
+              ...data,
+              timestamp: data.timestamp?.toDate?.() || data.timestamp || new Date(data.createdAt || Date.now()),
+            };
+          });
+          setLeaderboardLeads(leadsData);
+          leaderboardLoadedRef.current = true;
+          console.log("AgentDashboard: Lazy-loaded", leadsData.length, "leads for leaderboard");
+        } catch (err) {
+          console.error("Error loading leaderboard data:", err);
+        }
+        setLeaderboardLoading(false);
+      }
+    };
+    loadLeaderboardData();
+  }, [activeTab, leaderboardLoading]);
 
   const metrics = calculateMetrics(selectedDate);
   const [currentTheme, setCurrentTheme] = useState("default");
@@ -6748,7 +6787,16 @@ const AgentDashboard = ({ user, onSignOut }) => {
         {activeTab === "analytics" && (
           <AnalyticsDashboard leads={leads} user={user} theme={currentTheme} />
         )}
-        {activeTab === "leaderboards" && <Leaderboards leads={allLeads} />}
+        {activeTab === "leaderboards" && (
+          leaderboardLoading ? (
+            <div className="flex items-center justify-center p-12">
+              <Loader className="w-8 h-8 animate-spin text-blue-500" />
+              <span className="ml-2 text-gray-400">Loading leaderboard data...</span>
+            </div>
+          ) : (
+            <Leaderboards leads={leaderboardLeads} />
+          )
+        )}
         {activeTab === "notifications" && (
           <div
             className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-6 border border-white/20`}
