@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import {
   LineChart,
@@ -321,68 +321,86 @@ const PieChart = ({ data, colors }) => {
 };
 
 // Benchmark Chart Component - Shows hourly sales performance with trend line
-const BenchmarkChart = ({ leads, title = "Sales Benchmark", agentFilter = null }) => {
-  // Get current time info
-  const now = new Date();
-  const currentHour = now.getHours();
-  const currentTimeStr = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
+const BenchmarkChart = React.memo(({ leads, title = "Sales Benchmark", agentFilter = null }) => {
+  // Use state for current time to control updates (update every minute instead of every render)
+  const [currentTime, setCurrentTime] = useState(() => new Date());
 
-  // Filter leads for today
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 60000); // Update every minute
+    return () => clearInterval(interval);
+  }, []);
 
-  const todayLeads = leads.filter(lead => {
-    const leadDate = lead.timestamp instanceof Date ? lead.timestamp : new Date(lead.timestamp);
-    const matchesDate = leadDate >= today && leadDate < tomorrow;
-    const matchesAgent = !agentFilter || lead.agentEmail === agentFilter || lead.agent === agentFilter;
-    return matchesDate && matchesAgent;
-  });
+  const currentHour = currentTime.getHours();
+  const currentTimeStr = currentTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
 
-  // Group sales by hour (cumulative)
-  const hourlyData = [];
-  const workHours = [9, 10, 11, 12, 13, 14, 15, 16, 17]; // 9 AM to 5 PM
+  // Memoize the chart data calculations
+  const { benchmarkData, totalSalesToday, avgPerHour, maxValue } = useMemo(() => {
+    // Filter leads for today
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
 
-  let cumulativeSales = 0;
-  workHours.forEach(hour => {
-    const hourSales = todayLeads.filter(lead => {
-      if (!lead.sale) return false;
+    const todayLeads = leads.filter(lead => {
       const leadDate = lead.timestamp instanceof Date ? lead.timestamp : new Date(lead.timestamp);
-      return leadDate.getHours() <= hour;
-    }).length;
-
-    const hourLabel = hour < 12 ? `${hour} AM` : hour === 12 ? '12 PM' : `${hour - 12} PM`;
-    const isPast = hour <= currentHour;
-
-    hourlyData.push({
-      hour: hourLabel,
-      hourNum: hour,
-      sales: isPast ? hourSales : null,
-      isPast,
+      const matchesDate = leadDate >= today && leadDate < tomorrow;
+      const matchesAgent = !agentFilter || lead.agentEmail === agentFilter || lead.agent === agentFilter;
+      return matchesDate && matchesAgent;
     });
-  });
 
-  // Calculate historical average (simulated based on current data patterns)
-  // In a real scenario, this would come from historical data
-  const totalSalesToday = todayLeads.filter(l => l.sale).length;
-  const avgPerHour = totalSalesToday > 0 ? totalSalesToday / Math.max(1, currentHour - 8) : 3;
+    // Group sales by hour (cumulative)
+    const hourlyData = [];
+    const workHours = [9, 10, 11, 12, 13, 14, 15, 16, 17]; // 9 AM to 5 PM
 
-  // Generate benchmark line (expected cumulative sales per hour)
-  const benchmarkData = hourlyData.map((d, idx) => {
-    const expectedCumulative = Math.round(avgPerHour * (idx + 1));
-    return {
-      ...d,
-      benchmark: expectedCumulative,
-      avgLine: Math.round(avgPerHour * (idx + 1) * 0.9), // Slightly lower for trend visualization
-    };
-  });
+    workHours.forEach(hour => {
+      const hourSales = todayLeads.filter(lead => {
+        if (!lead.sale) return false;
+        const leadDate = lead.timestamp instanceof Date ? lead.timestamp : new Date(lead.timestamp);
+        return leadDate.getHours() <= hour;
+      }).length;
 
-  // Find max value for Y axis
-  const maxValue = Math.max(
-    ...benchmarkData.map(d => Math.max(d.sales || 0, d.benchmark || 0)),
-    10
-  );
+      const hourLabel = hour < 12 ? `${hour} AM` : hour === 12 ? '12 PM' : `${hour - 12} PM`;
+      const isPast = hour <= currentHour;
+
+      hourlyData.push({
+        hour: hourLabel,
+        hourNum: hour,
+        sales: isPast ? hourSales : null,
+        isPast,
+      });
+    });
+
+    // Calculate historical average (simulated based on current data patterns)
+    const totalSales = todayLeads.filter(l => l.sale).length;
+    const avgHourly = totalSales > 0 ? totalSales / Math.max(1, currentHour - 8) : 3;
+
+    // Generate benchmark line (expected cumulative sales per hour)
+    const chartData = hourlyData.map((d, idx) => {
+      const expectedCumulative = Math.round(avgHourly * (idx + 1));
+      return {
+        ...d,
+        benchmark: expectedCumulative,
+        avgLine: Math.round(avgHourly * (idx + 1) * 0.9),
+      };
+    });
+
+    // Find max value for Y axis
+    const maxVal = Math.max(
+      ...chartData.map(d => Math.max(d.sales || 0, d.benchmark || 0)),
+      10
+    );
+
+    return { benchmarkData: chartData, totalSalesToday: totalSales, avgPerHour: avgHourly, maxValue: maxVal };
+  }, [leads, agentFilter, currentHour]);
+
+  // Memoize static tooltip formatter
+  const tooltipFormatter = useCallback((value, name) => {
+    if (name === 'sales') return [value, 'Actual Sales'];
+    if (name === 'benchmark') return [value, 'Benchmark'];
+    return [value, name];
+  }, []);
 
   return (
     <div className="bg-slate-800 rounded-lg border border-slate-700 p-4">
@@ -425,11 +443,7 @@ const BenchmarkChart = ({ leads, title = "Sales Benchmark", agentFilter = null }
                 color: '#fff'
               }}
               labelStyle={{ color: '#9ca3af' }}
-              formatter={(value, name) => {
-                if (name === 'sales') return [value, 'Actual Sales'];
-                if (name === 'benchmark') return [value, 'Benchmark'];
-                return [value, name];
-              }}
+              formatter={tooltipFormatter}
             />
             {/* Benchmark trend line */}
             <Line
@@ -439,6 +453,7 @@ const BenchmarkChart = ({ leads, title = "Sales Benchmark", agentFilter = null }
               strokeWidth={2}
               strokeDasharray="5 5"
               dot={false}
+              isAnimationActive={false}
             />
             {/* Actual sales line */}
             <Line
@@ -448,6 +463,7 @@ const BenchmarkChart = ({ leads, title = "Sales Benchmark", agentFilter = null }
               strokeWidth={3}
               dot={{ fill: '#3b82f6', strokeWidth: 2, r: 5 }}
               connectNulls={false}
+              isAnimationActive={false}
             />
           </ComposedChart>
         </ResponsiveContainer>
@@ -476,7 +492,7 @@ const BenchmarkChart = ({ leads, title = "Sales Benchmark", agentFilter = null }
       </div>
     </div>
   );
-};
+});
 
 // Toast Notification Component
 const Toast = ({ message, type = "success", isVisible, onClose }) => {
@@ -3220,6 +3236,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   })();
   const [activeTab, setActiveTab] = useState("overview");
   const [selectedAgent, setSelectedAgent] = useState(null);
+  const [benchmarkAgent, setBenchmarkAgent] = useState(null);
   const [viewingAgentDashboard, setViewingAgentDashboard] = useState(null);
   const [selectedTeam, setSelectedTeam] = useState("all");
   const [selectedCenter, setSelectedCenter] = useState("all");
@@ -4296,10 +4313,10 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                     Individual Agent Benchmark
                   </h3>
                   <select
-                    value={selectedAgent?.email || ""}
+                    value={benchmarkAgent?.email || ""}
                     onChange={(e) => {
                       const agent = firebaseAgents.find(a => a.email === e.target.value);
-                      setSelectedAgent(agent || null);
+                      setBenchmarkAgent(agent || null);
                     }}
                     className="bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white text-sm"
                   >
@@ -4311,11 +4328,11 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                     ))}
                   </select>
                 </div>
-                {selectedAgent ? (
+                {benchmarkAgent ? (
                   <BenchmarkChart
                     leads={firebaseLeads}
-                    title={`${selectedAgent.name || selectedAgent.email?.split('@')[0]}'s Benchmark`}
-                    agentFilter={selectedAgent.email || selectedAgent.id}
+                    title={`${benchmarkAgent.name || benchmarkAgent.email?.split('@')[0]}'s Benchmark`}
+                    agentFilter={benchmarkAgent.email || benchmarkAgent.id}
                   />
                 ) : (
                   <div className="h-64 flex items-center justify-center text-gray-400">
@@ -6872,6 +6889,7 @@ const AdminDashboard = ({ user, onSignOut }) => {
     return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
   });
   const [selectedAgent, setSelectedAgent] = useState(null);
+  const [benchmarkAgent, setBenchmarkAgent] = useState(null);
   const [viewingAgentDashboard, setViewingAgentDashboard] = useState(null);
 
   // Get date range based on filter
@@ -7349,13 +7367,10 @@ const AdminDashboard = ({ user, onSignOut }) => {
                 Individual Agent Benchmark
               </h3>
               <select
-                value={selectedAgent?.email || ""}
+                value={benchmarkAgent?.email || ""}
                 onChange={(e) => {
                   const agent = firebaseAgents.find(a => a.email === e.target.value);
-                  setSelectedAgent(agent ? {
-                    ...agent,
-                    leadsList: filteredLeads.filter(l => l.agentEmail === agent.email || l.agent === agent.id)
-                  } : null);
+                  setBenchmarkAgent(agent || null);
                 }}
                 className="bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white text-sm"
               >
@@ -7367,11 +7382,11 @@ const AdminDashboard = ({ user, onSignOut }) => {
                 ))}
               </select>
             </div>
-            {selectedAgent ? (
+            {benchmarkAgent ? (
               <BenchmarkChart
                 leads={firebaseLeads}
-                title={`${selectedAgent.name || selectedAgent.email?.split('@')[0]}'s Benchmark`}
-                agentFilter={selectedAgent.email || selectedAgent.id}
+                title={`${benchmarkAgent.name || benchmarkAgent.email?.split('@')[0]}'s Benchmark`}
+                agentFilter={benchmarkAgent.email || benchmarkAgent.id}
               />
             ) : (
               <div className="h-64 flex items-center justify-center text-gray-400">
