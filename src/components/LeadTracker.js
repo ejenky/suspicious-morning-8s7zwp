@@ -1,5 +1,17 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  ReferenceLine,
+  Area,
+  ComposedChart,
+} from "recharts";
 import {
   Users,
   Target,
@@ -307,6 +319,180 @@ const PieChart = ({ data, colors }) => {
     </div>
   );
 };
+
+// Benchmark Chart Component - Shows hourly sales performance with trend line
+const BenchmarkChart = React.memo(({ leads, title = "Sales Benchmark", agentFilter = null }) => {
+  // Use state for current time to control updates (update every minute instead of every render)
+  const [currentTime, setCurrentTime] = useState(() => new Date());
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 60000); // Update every minute
+    return () => clearInterval(interval);
+  }, []);
+
+  const currentHour = currentTime.getHours();
+  const currentTimeStr = currentTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
+
+  // Memoize the chart data calculations
+  const { benchmarkData, totalSalesToday, avgPerHour, maxValue } = useMemo(() => {
+    // Filter leads for today
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const todayLeads = leads.filter(lead => {
+      const leadDate = lead.timestamp instanceof Date ? lead.timestamp : new Date(lead.timestamp);
+      const matchesDate = leadDate >= today && leadDate < tomorrow;
+      const matchesAgent = !agentFilter || lead.agentEmail === agentFilter || lead.agent === agentFilter;
+      return matchesDate && matchesAgent;
+    });
+
+    // Group sales by hour (cumulative)
+    const hourlyData = [];
+    const workHours = [9, 10, 11, 12, 13, 14, 15, 16, 17]; // 9 AM to 5 PM
+
+    workHours.forEach(hour => {
+      const hourSales = todayLeads.filter(lead => {
+        if (!lead.sale) return false;
+        const leadDate = lead.timestamp instanceof Date ? lead.timestamp : new Date(lead.timestamp);
+        return leadDate.getHours() <= hour;
+      }).length;
+
+      const hourLabel = hour < 12 ? `${hour} AM` : hour === 12 ? '12 PM' : `${hour - 12} PM`;
+      const isPast = hour <= currentHour;
+
+      hourlyData.push({
+        hour: hourLabel,
+        hourNum: hour,
+        sales: isPast ? hourSales : null,
+        isPast,
+      });
+    });
+
+    // Calculate historical average (simulated based on current data patterns)
+    const totalSales = todayLeads.filter(l => l.sale).length;
+    const avgHourly = totalSales > 0 ? totalSales / Math.max(1, currentHour - 8) : 3;
+
+    // Generate benchmark line (expected cumulative sales per hour)
+    const chartData = hourlyData.map((d, idx) => {
+      const expectedCumulative = Math.round(avgHourly * (idx + 1));
+      return {
+        ...d,
+        benchmark: expectedCumulative,
+        avgLine: Math.round(avgHourly * (idx + 1) * 0.9),
+      };
+    });
+
+    // Find max value for Y axis
+    const maxVal = Math.max(
+      ...chartData.map(d => Math.max(d.sales || 0, d.benchmark || 0)),
+      10
+    );
+
+    return { benchmarkData: chartData, totalSalesToday: totalSales, avgPerHour: avgHourly, maxValue: maxVal };
+  }, [leads, agentFilter, currentHour]);
+
+  // Memoize static tooltip formatter
+  const tooltipFormatter = useCallback((value, name) => {
+    if (name === 'sales') return [value, 'Actual Sales'];
+    if (name === 'benchmark') return [value, 'Benchmark'];
+    return [value, name];
+  }, []);
+
+  return (
+    <div className="bg-slate-800 rounded-lg border border-slate-700 p-4">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+          <TrendingUp className="w-5 h-5 text-green-400" />
+          {title}
+        </h3>
+        <div className="flex items-center gap-4 text-sm">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+            <span className="text-gray-400">Actual Sales</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-red-400"></div>
+            <span className="text-gray-400">Benchmark</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="h-64">
+        <ResponsiveContainer width="100%" height="100%">
+          <ComposedChart data={benchmarkData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+            <XAxis
+              dataKey="hour"
+              stroke="#9ca3af"
+              tick={{ fill: '#9ca3af', fontSize: 12 }}
+            />
+            <YAxis
+              stroke="#9ca3af"
+              tick={{ fill: '#9ca3af', fontSize: 12 }}
+              domain={[0, Math.ceil(maxValue * 1.2)]}
+            />
+            <Tooltip
+              contentStyle={{
+                backgroundColor: '#1f2937',
+                border: '1px solid #374151',
+                borderRadius: '8px',
+                color: '#fff'
+              }}
+              labelStyle={{ color: '#9ca3af' }}
+              formatter={tooltipFormatter}
+            />
+            {/* Benchmark trend line */}
+            <Line
+              type="monotone"
+              dataKey="benchmark"
+              stroke="#f87171"
+              strokeWidth={2}
+              strokeDasharray="5 5"
+              dot={false}
+              isAnimationActive={false}
+            />
+            {/* Actual sales line */}
+            <Line
+              type="monotone"
+              dataKey="sales"
+              stroke="#3b82f6"
+              strokeWidth={3}
+              dot={{ fill: '#3b82f6', strokeWidth: 2, r: 5 }}
+              connectNulls={false}
+              isAnimationActive={false}
+            />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* Current stats footer */}
+      <div className="flex justify-between items-center mt-4 pt-4 border-t border-slate-700">
+        <div className="bg-blue-500/20 px-4 py-2 rounded-lg">
+          <p className="text-blue-300 text-xs">Current Time</p>
+          <p className="text-white font-bold">{currentTimeStr}</p>
+        </div>
+        <div className="bg-green-500/20 px-4 py-2 rounded-lg">
+          <p className="text-green-300 text-xs">Current Sales</p>
+          <p className="text-white font-bold">{totalSalesToday}</p>
+        </div>
+        <div className="bg-purple-500/20 px-4 py-2 rounded-lg">
+          <p className="text-purple-300 text-xs">Avg Per Hour</p>
+          <p className="text-white font-bold">{avgPerHour.toFixed(1)}</p>
+        </div>
+        <div className={`px-4 py-2 rounded-lg ${totalSalesToday >= (avgPerHour * (currentHour - 8)) ? 'bg-green-500/20' : 'bg-yellow-500/20'}`}>
+          <p className={`text-xs ${totalSalesToday >= (avgPerHour * (currentHour - 8)) ? 'text-green-300' : 'text-yellow-300'}`}>Status</p>
+          <p className="text-white font-bold">
+            {totalSalesToday >= (avgPerHour * (currentHour - 8)) ? 'On Track' : 'Behind'}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+});
 
 // Toast Notification Component
 const Toast = ({ message, type = "success", isVisible, onClose }) => {
@@ -987,9 +1173,6 @@ const PvPChallenges = ({ user }) => {
 
 // Enhanced Leaderboards
 const Leaderboards = ({ leads = [] }) => {
-  const [selectedCenter, setSelectedCenter] = useState("all");
-  const [selectedBoard, setSelectedBoard] = useState("sales");
-  const centers = ["denver"];
   const boards = [
     {
       key: "sales",
@@ -1056,83 +1239,23 @@ const Leaderboards = ({ leads = [] }) => {
 
   const allAgents = getAgentsFromLeads();
 
-  const getFilteredAgents = () => {
-    let filtered =
-      selectedCenter === "all"
-        ? allAgents
-        : allAgents.filter((agent) => agent.center === selectedCenter);
-    switch (selectedBoard) {
-      case "sales":
-        return filtered.sort((a, b) => b.sales - a.sales);
-      case "conversion":
-        return filtered.sort(
-          (a, b) => parseFloat(b.conversionRate) - parseFloat(a.conversionRate)
-        );
-      case "referrals":
-        return filtered.sort((a, b) => b.referrals - a.referrals);
-      default:
-        return filtered;
-    }
-  };
-
-  const currentBoard = boards.find((b) => b.key === selectedBoard);
-
   return (
     <div className="space-y-6">
       <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
-        <div className="flex items-center gap-3 mb-4">
-          <div
-            className={`bg-gradient-to-r ${currentBoard.color} p-3 rounded-xl`}
-          >
-            <currentBoard.icon className="w-6 h-6 text-white" />
+        <div className="flex items-center gap-3">
+          <div className="bg-gradient-to-r from-yellow-500 to-orange-500 p-3 rounded-xl">
+            <Trophy className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h3 className="text-xl font-semibold text-white">
-              {currentBoard.label}
-            </h3>
+            <h3 className="text-xl font-semibold text-white">Sales Leaders</h3>
             <p className="text-gray-300">Top performing agents</p>
           </div>
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <select
-            value={selectedCenter}
-            onChange={(e) => setSelectedCenter(e.target.value)}
-            className="bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white"
-          >
-            {centers.map((center) => (
-              <option key={center} value={center} className="bg-slate-800">
-                {center === "all"
-                  ? "All Centers"
-                  : center.charAt(0).toUpperCase() + center.slice(1)}
-              </option>
-            ))}
-          </select>
-          <select
-            value={selectedBoard}
-            onChange={(e) => setSelectedBoard(e.target.value)}
-            className="bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white"
-          >
-            {boards.map((board) => (
-              <option
-                key={board.key}
-                value={board.key}
-                className="bg-slate-800"
-              >
-                {board.label}
-              </option>
-            ))}
-          </select>
         </div>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {boards.map((board) => {
           const boardAgents = (() => {
-            let agents =
-              selectedCenter === "all"
-                ? [...allAgents]
-                : allAgents.filter(
-                    (agent) => agent.center === selectedCenter
-                  );
+            let agents = [...allAgents];
             switch (board.key) {
               case "sales":
                 return agents.sort((a, b) => b.sales - a.sales);
@@ -3113,6 +3236,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   })();
   const [activeTab, setActiveTab] = useState("overview");
   const [selectedAgent, setSelectedAgent] = useState(null);
+  const [benchmarkAgent, setBenchmarkAgent] = useState(null);
   const [viewingAgentDashboard, setViewingAgentDashboard] = useState(null);
   const [selectedTeam, setSelectedTeam] = useState("all");
   const [selectedCenter, setSelectedCenter] = useState("all");
@@ -4170,6 +4294,54 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                 <p className="text-xs text-yellow-400">
                   For {new Date(dateFilter).toLocaleDateString()}
                 </p>
+              </div>
+            </div>
+
+            {/* Benchmark Charts */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Overall Team Benchmark */}
+              <BenchmarkChart
+                leads={firebaseLeads}
+                title="Overall Sales Benchmark (All Agents)"
+              />
+
+              {/* Individual Agent Benchmark Selector */}
+              <div className="bg-slate-800 rounded-lg border border-slate-700 p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                    <User className="w-5 h-5 text-blue-400" />
+                    Individual Agent Benchmark
+                  </h3>
+                  <select
+                    value={benchmarkAgent?.email || ""}
+                    onChange={(e) => {
+                      const agent = firebaseAgents.find(a => a.email === e.target.value);
+                      setBenchmarkAgent(agent || null);
+                    }}
+                    className="bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white text-sm"
+                  >
+                    <option value="">Select an agent...</option>
+                    {firebaseAgents.map(agent => (
+                      <option key={agent.id} value={agent.email}>
+                        {agent.name || agent.email?.split('@')[0]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {benchmarkAgent ? (
+                  <BenchmarkChart
+                    leads={firebaseLeads}
+                    title={`${benchmarkAgent.name || benchmarkAgent.email?.split('@')[0]}'s Benchmark`}
+                    agentFilter={benchmarkAgent.email || benchmarkAgent.id}
+                  />
+                ) : (
+                  <div className="h-64 flex items-center justify-center text-gray-400">
+                    <div className="text-center">
+                      <User className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                      <p>Select an agent to view their benchmark</p>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -6717,6 +6889,7 @@ const AdminDashboard = ({ user, onSignOut }) => {
     return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
   });
   const [selectedAgent, setSelectedAgent] = useState(null);
+  const [benchmarkAgent, setBenchmarkAgent] = useState(null);
   const [viewingAgentDashboard, setViewingAgentDashboard] = useState(null);
 
   // Get date range based on filter
@@ -7175,6 +7348,54 @@ const AdminDashboard = ({ user, onSignOut }) => {
                 </>
               )}
             </div>
+          </div>
+        </div>
+
+        {/* Benchmark Charts */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Overall Company Benchmark */}
+          <BenchmarkChart
+            leads={firebaseLeads}
+            title="Company-Wide Sales Benchmark"
+          />
+
+          {/* Individual Agent Benchmark */}
+          <div className="bg-slate-800 rounded-lg border border-slate-700 p-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                <User className="w-5 h-5 text-blue-400" />
+                Individual Agent Benchmark
+              </h3>
+              <select
+                value={benchmarkAgent?.email || ""}
+                onChange={(e) => {
+                  const agent = firebaseAgents.find(a => a.email === e.target.value);
+                  setBenchmarkAgent(agent || null);
+                }}
+                className="bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white text-sm"
+              >
+                <option value="">Select an agent...</option>
+                {firebaseAgents.map(agent => (
+                  <option key={agent.id} value={agent.email}>
+                    {agent.name || agent.email?.split('@')[0]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {benchmarkAgent ? (
+              <BenchmarkChart
+                leads={firebaseLeads}
+                title={`${benchmarkAgent.name || benchmarkAgent.email?.split('@')[0]}'s Benchmark`}
+                agentFilter={benchmarkAgent.email || benchmarkAgent.id}
+              />
+            ) : (
+              <div className="h-64 flex items-center justify-center text-gray-400">
+                <div className="text-center">
+                  <User className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                  <p>Select an agent to view their benchmark</p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
