@@ -172,9 +172,10 @@ export const useLeads = (userId) => {
       totalSales: sales.length,
       totalReferrals: referrals.length,
       totalDashSales: dashSales.length,
+      // Conversion rate = total sales / actual leads (matches displayed values)
       conversionRate:
         actualLeads.length > 0
-          ? ((sales.filter(s => !s.leadType?.startsWith("Dash Sale") && !s.leadType?.startsWith("Referral Sale")).length / actualLeads.length) * 100).toFixed(1)
+          ? ((sales.length / actualLeads.length) * 100).toFixed(1)
           : "0",
       referralRate:
         actualLeads.length > 0
