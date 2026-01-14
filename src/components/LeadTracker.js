@@ -6842,19 +6842,21 @@ const AgentDashboard = ({ user, onSignOut }) => {
                   ))}
                 </select>
               </div>
-              {editingLead.sale && (
+              {/* Show carrier and client name if the selected lead type is a sale type */}
+              {["Sale", "Dash Sale", "Referral Sale"].some(type => editingLead.leadType?.startsWith(type)) && (
                 <>
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-1">Client Name</label>
+                    <label className="block text-sm font-medium text-gray-300 mb-1">Client Name *</label>
                     <input
                       type="text"
                       value={editingLead.clientName || ""}
                       onChange={(e) => setEditingLead({ ...editingLead, clientName: e.target.value })}
                       className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white"
+                      placeholder="Enter client name"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-1">Carrier</label>
+                    <label className="block text-sm font-medium text-gray-300 mb-1">Carrier *</label>
                     <select
                       value={editingLead.carrier || ""}
                       onChange={(e) => setEditingLead({ ...editingLead, carrier: e.target.value })}
@@ -6897,12 +6899,20 @@ const AgentDashboard = ({ user, onSignOut }) => {
                 </button>
                 <button
                   onClick={async () => {
+                    // Determine if the edited lead type is a sale
+                    const saleTypesList = ["Sale", "Dash Sale", "Referral Sale"];
+                    const isSale = saleTypesList.some(type => editingLead.leadType?.startsWith(type));
+
                     const result = await updateLead(editingLead.id, {
                       leadType: editingLead.leadType,
                       notes: editingLead.notes,
                       crmLink: editingLead.crmLink,
                       clientName: editingLead.clientName,
                       carrier: editingLead.carrier,
+                      // IMPORTANT: Update sale status based on lead type
+                      sale: isSale,
+                      // Set commission based on sale status and carrier
+                      commission: isSale ? (editingLead.carrier === "Rewrite" ? 50 : 115) : 0,
                     });
                     if (result.success) {
                       showToast("Lead updated successfully!", "success");
