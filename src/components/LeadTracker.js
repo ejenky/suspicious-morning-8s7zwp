@@ -3546,6 +3546,14 @@ const ManagerDashboard = ({ user, onSignOut }) => {
 
       console.log("Team created successfully:", teamId);
 
+      // Also add selected agents to manager's personal "My Team"
+      // This syncs the created team with the My Team section
+      for (const agentId of selectedAgentsForTeam) {
+        if (!myTeamMemberIds.includes(agentId)) {
+          await addToMyTeam(agentId);
+        }
+      }
+
       // Reset form
       setNewTeamName("");
       setNewTeamSupervisor("");
@@ -3709,17 +3717,22 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   // Get real team stats using Firebase data
   const getEnhancedTeamStats = (team) => {
     // Get team members - first check if team has stored members, then fall back to teamId matching
+    // IMPORTANT: Only include agents that exist in firebaseAgents (from users collection)
+    // This ensures deleted users don't appear in team rosters
     let teamMembers = [];
 
     if (team.members && team.members.length > 0) {
       // Use members stored directly in team document
-      teamMembers = team.members.map(member => {
-        // Find full agent data from firebaseAgents if available
-        const fullAgent = firebaseAgents.find(a => a.id === member.id) || member;
-        return { ...member, ...fullAgent };
-      });
+      // Filter to only include members that still exist in the users collection
+      teamMembers = team.members
+        .map(member => {
+          // Find full agent data from firebaseAgents - only include if found
+          const fullAgent = firebaseAgents.find(a => a.id === member.id);
+          return fullAgent ? { ...member, ...fullAgent } : null;
+        })
+        .filter(member => member !== null); // Remove deleted users
     } else if (team.memberIds && team.memberIds.length > 0) {
-      // Use memberIds to find agents
+      // Use memberIds to find agents - automatically filters to existing users
       teamMembers = firebaseAgents.filter(agent => team.memberIds.includes(agent.id));
     } else {
       // Fall back to matching by teamId on agent
