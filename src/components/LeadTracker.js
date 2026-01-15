@@ -3475,11 +3475,14 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   const setAgentGoal = (agentEmail, goalType, value) => {
     if (!agentEmail) {
       console.error("setAgentGoal: No email provided");
+      showToast("Error: Agent email not found", "error");
       return;
     }
 
     // Handle NaN or invalid values - default to 0
     const numericValue = isNaN(value) || value === null || value === undefined ? 0 : Number(value);
+
+    console.log("setAgentGoal called:", { agentEmail, goalType, value, numericValue });
 
     // Initialize goals object if it doesn't exist
     if (!globalAgentGoals[agentEmail]) {
@@ -3507,11 +3510,14 @@ const ManagerDashboard = ({ user, onSignOut }) => {
 
     goalSaveTimerRef.current[timerKey] = setTimeout(async () => {
       try {
+        console.log("Saving goals to Firebase:", agentEmail, globalAgentGoals[agentEmail]);
         await updateAgentGoals(agentEmail, globalAgentGoals[agentEmail]);
-        console.log("Goals saved to Firebase for:", agentEmail, globalAgentGoals[agentEmail]);
+        console.log("Goals saved successfully for:", agentEmail);
       } catch (err) {
-        console.error("FAILED to save goals to Firebase:", err.message);
-        showToast("Failed to save goal. Please try again.", "error");
+        console.error("FAILED to save goals to Firebase:", err);
+        // Show more detailed error message
+        const errorMsg = err.code || err.message || "Unknown error";
+        showToast(`Failed to save goal: ${errorMsg}`, "error");
       }
     }, 500);
   };

@@ -190,40 +190,6 @@ export const useFirestore = (userEmail) => {
     fetchLeads();
   }, [fetchLeads]);
 
-  // Derive agents from leads data - extract unique agents who have submitted leads
-  useEffect(() => {
-    if (leads.length === 0) {
-      setAgents([]);
-      return;
-    }
-
-    console.log("useFirestore: Deriving agents from", leads.length, "leads");
-
-    // Extract unique agents from leads data
-    const agentMap = new Map();
-
-    leads.forEach((lead) => {
-      // Use agent (userId) as the primary identifier
-      const agentId = lead.agent;
-      const agentEmail = lead.agentEmail || lead.agent;
-
-      if (agentId && !agentMap.has(agentId)) {
-        agentMap.set(agentId, {
-          id: agentId,
-          email: agentEmail,
-          name: lead.agentName || (agentEmail.includes('@') ? agentEmail.split('@')[0] : agentEmail) || 'Unknown Agent',
-          teamId: lead.teamId || null,
-          team: lead.team || null,
-          center: lead.center || null,
-        });
-      }
-    });
-
-    const agentsData = Array.from(agentMap.values());
-    console.log("useFirestore: Found", agentsData.length, "unique agents");
-    setAgents(agentsData);
-  }, [leads]);
-
   // One-time fetch for teams
   const fetchTeams = useCallback(async () => {
     if (!userEmail) return;
@@ -246,6 +212,101 @@ export const useFirestore = (userEmail) => {
     fetchTeams();
   }, [fetchTeams]);
 
+  // Fallback function to derive agents from leads (in case users collection is unavailable)
+  const deriveAgentsFromLeads = useCallback(() => {
+    if (leads.length === 0) {
+      setAgents([]);
+      return;
+    }
+
+    console.log("useFirestore: Deriving agents from", leads.length, "leads (fallback)");
+
+    const agentMap = new Map();
+
+    leads.forEach((lead) => {
+      const agentId = lead.agent;
+      const agentEmail = lead.agentEmail || lead.agent;
+
+      if (agentId && !agentMap.has(agentId)) {
+        agentMap.set(agentId, {
+          id: agentId,
+          email: agentEmail,
+          name: lead.agentName || (agentEmail.includes('@') ? agentEmail.split('@')[0] : agentEmail) || 'Unknown Agent',
+          teamId: lead.teamId || null,
+          team: lead.team || null,
+          center: lead.center || null,
+        });
+      }
+    });
+
+    const agentsData = Array.from(agentMap.values());
+    console.log("useFirestore: Found", agentsData.length, "unique agents from leads");
+    setAgents(agentsData);
+  }, [leads]);
+
+  // =============================================================================
+  // FIX: Fetch agents from users collection instead of deriving from leads
+  // This ensures:
+  // 1. All active users appear (even if they haven't submitted leads yet)
+  // 2. Deleted users don't appear (they're removed from users collection)
+  // =============================================================================
+  const fetchUsers = useCallback(async () => {
+    if (!userEmail) return;
+
+    // OPTIMIZATION: Check if we already have a fetch in progress
+    const requestKey = `users_${userEmail}`;
+    if (inFlightRequests.has(requestKey)) {
+      console.log("useFirestore: Users fetch already in progress, waiting...");
+      return inFlightRequests.get(requestKey);
+    }
+
+    console.log("useFirestore: Fetching users from users collection");
+
+    const fetchPromise = (async () => {
+      try {
+        const usersCollection = collection(db, "users");
+        const snapshot = await getDocs(usersCollection);
+
+        console.log("useFirestore: Received", snapshot.docs.length, "users from Firebase");
+
+        const usersData = snapshot.docs
+          .map((doc) => {
+            const data = doc.data();
+            return {
+              id: doc.id,
+              email: data.email || doc.id,
+              name: data.name || data.displayName || (data.email ? data.email.split('@')[0] : doc.id),
+              role: data.role || 'agent',
+              teamId: data.teamId || null,
+              team: data.team || null,
+              center: data.center || null,
+              ...data,
+            };
+          })
+          // Filter to only include agents (exclude managers/admins from agent list)
+          .filter((user) => user.role === 'agent' || !user.role);
+
+        console.log("useFirestore: Found", usersData.length, "agents in users collection");
+        setAgents(usersData);
+      } catch (error) {
+        console.error("useFirestore: Error fetching users:", error);
+        // Fallback: derive agents from leads if users collection fails
+        console.log("useFirestore: Falling back to deriving agents from leads");
+        deriveAgentsFromLeads();
+      } finally {
+        inFlightRequests.delete(requestKey);
+      }
+    })();
+
+    inFlightRequests.set(requestKey, fetchPromise);
+    return fetchPromise;
+  }, [userEmail, deriveAgentsFromLeads]);
+
+  // Initial fetch for users (agents)
+  useEffect(() => {
+    fetchUsers();
+  }, [fetchUsers]);
+
   // OPTIMIZED: Smart polling with 5-minute intervals
   useEffect(() => {
     if (!userEmail) return;
@@ -258,6 +319,7 @@ export const useFirestore = (userEmail) => {
           console.log("useFirestore: Auto-refresh polling (5-min interval)...");
           fetchLeads();
           fetchTeams();
+          fetchUsers(); // Also refresh users list
         }
       }, POLLING_INTERVAL);
     };
@@ -272,6 +334,7 @@ export const useFirestore = (userEmail) => {
           console.log("useFirestore: Tab visible, data stale, refreshing...");
           fetchLeads();
           fetchTeams();
+          fetchUsers(); // Also refresh users list
         } else {
           console.log("useFirestore: Tab visible, data fresh, skipping refresh");
         }
@@ -285,13 +348,13 @@ export const useFirestore = (userEmail) => {
       if (pollingRef.current) clearInterval(pollingRef.current);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [userEmail, fetchLeads, fetchTeams]);
+  }, [userEmail, fetchLeads, fetchTeams, fetchUsers]);
 
   // Refresh all data function (force refresh to bypass cache)
   const refreshData = useCallback(async () => {
     console.log("useFirestore: Manual refresh - forcing data update...");
-    await Promise.all([fetchLeads(true), fetchTeams()]);
-  }, [fetchLeads, fetchTeams]);
+    await Promise.all([fetchLeads(true), fetchTeams(), fetchUsers()]);
+  }, [fetchLeads, fetchTeams, fetchUsers]);
 
   // Add lead function
   const addLead = async (leadData) => {
