@@ -6107,6 +6107,9 @@ const AgentDashboard = ({ user, onSignOut }) => {
       weeklyStats = {},
       monthlyStats = {};
 
+    // Sale types that should NOT count as leads for conversion rate
+    const saleTypes = ["Sale", "Dash Sale", "Referral Sale"];
+
     userLeads.forEach((lead) => {
       const date = new Date(lead.timestamp);
       const dayKey = date.toDateString();
@@ -6116,35 +6119,64 @@ const AgentDashboard = ({ user, onSignOut }) => {
       const weekKey = `${year}-${month}-W${weekNumber}`;
       const monthKey = `${year}-${month}`;
 
+      // Check if this is an actual lead (not a direct sale type)
+      const leadType = lead.leadType || "";
+      const isActualLead = !saleTypes.some(type => leadType.startsWith(type));
+
+      // Initialize stats objects
       if (!dailyStats[dayKey]) dailyStats[dayKey] = { leads: 0, sales: 0 };
-      dailyStats[dayKey].leads++;
-      if (lead.sale) dailyStats[dayKey].sales++;
-
       if (!weeklyStats[weekKey]) weeklyStats[weekKey] = { leads: 0, sales: 0 };
-      weeklyStats[weekKey].leads++;
-      if (lead.sale) weeklyStats[weekKey].sales++;
+      if (!monthlyStats[monthKey]) monthlyStats[monthKey] = { leads: 0, sales: 0 };
 
-      if (!monthlyStats[monthKey])
-        monthlyStats[monthKey] = { leads: 0, sales: 0 };
-      monthlyStats[monthKey].leads++;
-      if (lead.sale) monthlyStats[monthKey].sales++;
+      // Only count actual leads (not Dash Sale, Referral Sale, Sale types)
+      if (isActualLead) {
+        dailyStats[dayKey].leads++;
+        weeklyStats[weekKey].leads++;
+        monthlyStats[monthKey].leads++;
+      }
+
+      // Count all sales (including Dash Sale and Referral Sale)
+      if (lead.sale) {
+        dailyStats[dayKey].sales++;
+        weeklyStats[weekKey].sales++;
+        monthlyStats[monthKey].sales++;
+      }
     });
 
-    const getBestPeriod = (stats) => {
+    // Get best conversion rate period (requires at least 1 lead to have meaningful rate)
+    const getBestConversionPeriod = (stats) => {
       return Object.values(stats).reduce(
         (best, period) => {
-          const rate =
-            period.leads > 0 ? (period.sales / period.leads) * 100 : 0;
-          return rate > best.rate ? { rate, sales: period.sales } : best;
+          // Only consider periods with at least 1 lead for conversion rate
+          if (period.leads === 0) return best;
+          const rate = (period.sales / period.leads) * 100;
+          return rate > best.rate ? { rate, sales: period.sales, leads: period.leads } : best;
         },
-        { rate: 0, sales: 0 }
+        { rate: 0, sales: 0, leads: 0 }
+      );
+    };
+
+    // Get best sales period (highest number of sales)
+    const getBestSalesPeriod = (stats) => {
+      return Object.values(stats).reduce(
+        (best, period) => {
+          return period.sales > best.sales
+            ? { rate: period.leads > 0 ? (period.sales / period.leads) * 100 : 0, sales: period.sales, leads: period.leads }
+            : best;
+        },
+        { rate: 0, sales: 0, leads: 0 }
       );
     };
 
     return {
-      bestDay: getBestPeriod(dailyStats),
-      bestWeek: getBestPeriod(weeklyStats),
-      bestMonth: getBestPeriod(monthlyStats),
+      // For conversion rates, use best conversion rate
+      bestDay: getBestConversionPeriod(dailyStats),
+      bestWeek: getBestConversionPeriod(weeklyStats),
+      bestMonth: getBestConversionPeriod(monthlyStats),
+      // For sales performance, use highest sales count
+      bestDaySales: getBestSalesPeriod(dailyStats),
+      bestWeekSales: getBestSalesPeriod(weeklyStats),
+      bestMonthSales: getBestSalesPeriod(monthlyStats),
     };
   };
 
@@ -6511,19 +6543,19 @@ const AgentDashboard = ({ user, onSignOut }) => {
                   <div className="flex justify-between items-center">
                     <span className="text-gray-300">Best Day:</span>
                     <span className="text-yellow-400 font-bold">
-                      {allTimeBests.bestDay.sales} sales
+                      {allTimeBests.bestDaySales.sales} sales
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-gray-300">Best Week:</span>
                     <span className="text-yellow-400 font-bold">
-                      {allTimeBests.bestWeek.sales} sales
+                      {allTimeBests.bestWeekSales.sales} sales
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-gray-300">Best Month:</span>
                     <span className="text-yellow-400 font-bold">
-                      {allTimeBests.bestMonth.sales} sales
+                      {allTimeBests.bestMonthSales.sales} sales
                     </span>
                   </div>
                 </div>
