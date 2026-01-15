@@ -45,13 +45,16 @@ const inFlightRequests = new Map();
 // STANDALONE EXPORT: fetchAgentGoalsStandalone
 // Use this to fetch agent goals WITHOUT instantiating the full useFirestore hook
 // This is perfect for AgentDashboard which only needs goals, not all leads
+//
+// FIX: Don't cache null results - only cache actual goals data
 // =============================================================================
 export const fetchAgentGoalsStandalone = async (agentEmail) => {
   if (!agentEmail) return null;
 
   // OPTIMIZATION 1: Check cache first (24-hour TTL)
+  // IMPORTANT: Only use cache if we have actual goals data (not null)
   const cached = agentGoalsCache.get(agentEmail);
-  if (cached && (Date.now() - cached.timestamp) < AGENT_GOALS_CACHE_DURATION) {
+  if (cached && cached.goals && (Date.now() - cached.timestamp) < AGENT_GOALS_CACHE_DURATION) {
     console.log("fetchAgentGoalsStandalone: Cache hit for:", agentEmail);
     return cached.goals;
   }
@@ -73,19 +76,18 @@ export const fetchAgentGoalsStandalone = async (agentEmail) => {
 
       if (goalsDoc.exists()) {
         const data = goalsDoc.data();
-        // Store in cache
-        agentGoalsCache.set(agentEmail, {
-          goals: data.goals,
-          timestamp: Date.now()
-        });
-        console.log("fetchAgentGoalsStandalone: Cached goals for:", agentEmail);
+        // Store in cache only if we have actual goals
+        if (data.goals) {
+          agentGoalsCache.set(agentEmail, {
+            goals: data.goals,
+            timestamp: Date.now()
+          });
+          console.log("fetchAgentGoalsStandalone: Cached goals for:", agentEmail, data.goals);
+        }
         return data.goals;
       }
-      // Cache null result to avoid repeated lookups
-      agentGoalsCache.set(agentEmail, {
-        goals: null,
-        timestamp: Date.now()
-      });
+      // DON'T cache null results - allow future lookups to check Firebase
+      console.log("fetchAgentGoalsStandalone: No goals document found for:", agentEmail);
       return null;
     } catch (error) {
       console.error("Error fetching agent goals:", error);
@@ -510,13 +512,17 @@ export const useFirestore = (userEmail) => {
   // causing useEffect dependencies to trigger unnecessary re-fetches
   //
   // New behavior: Stable function reference + caching = massive read reduction
+  //
+  // FIX: Don't cache null results - only cache actual goals data
+  // This ensures that if goals are set later, they can be fetched
   // =============================================================================
   const fetchAgentGoals = useCallback(async (agentEmail) => {
     if (!agentEmail) return null;
 
     // OPTIMIZATION 1: Check cache first (24-hour TTL)
+    // IMPORTANT: Only use cache if we have actual goals data (not null)
     const cached = agentGoalsCache.get(agentEmail);
-    if (cached && (Date.now() - cached.timestamp) < AGENT_GOALS_CACHE_DURATION) {
+    if (cached && cached.goals && (Date.now() - cached.timestamp) < AGENT_GOALS_CACHE_DURATION) {
       console.log("fetchAgentGoals: Cache hit for:", agentEmail);
       return cached.goals;
     }
@@ -538,19 +544,18 @@ export const useFirestore = (userEmail) => {
 
         if (goalsDoc.exists()) {
           const data = goalsDoc.data();
-          // Store in cache
-          agentGoalsCache.set(agentEmail, {
-            goals: data.goals,
-            timestamp: Date.now()
-          });
-          console.log("fetchAgentGoals: Cached goals for:", agentEmail);
+          // Store in cache only if we have actual goals
+          if (data.goals) {
+            agentGoalsCache.set(agentEmail, {
+              goals: data.goals,
+              timestamp: Date.now()
+            });
+            console.log("fetchAgentGoals: Cached goals for:", agentEmail, data.goals);
+          }
           return data.goals;
         }
-        // Cache null result to avoid repeated lookups
-        agentGoalsCache.set(agentEmail, {
-          goals: null,
-          timestamp: Date.now()
-        });
+        // DON'T cache null results - allow future lookups to check Firebase
+        console.log("fetchAgentGoals: No goals document found for:", agentEmail);
         return null;
       } catch (error) {
         console.error("Error fetching agent goals:", error);
