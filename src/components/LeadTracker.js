@@ -3391,22 +3391,33 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   }, [firebaseAgents, myTeamMemberIds]);
 
   // Load goals for all team members from Firebase
+  // FIXED: Use state-based tracking and force-reload from Firebase
   useEffect(() => {
     const loadTeamMemberGoals = async () => {
       if (myTeamAgents.length === 0) return;
 
+      console.log("ManagerDashboard: Loading goals for", myTeamAgents.length, "team members");
+      let goalsLoaded = 0;
+
       for (const member of myTeamAgents) {
-        if (member.email && !globalAgentGoals[member.email]) {
+        if (member.email) {
           try {
+            // Always try to fetch from Firebase to ensure we have latest data
             const memberGoals = await fetchAgentGoals(member.email);
             if (memberGoals) {
               globalAgentGoals[member.email] = memberGoals;
+              goalsLoaded++;
+              console.log("Loaded goals for:", member.email, memberGoals);
+            } else {
+              console.log("No goals found in Firebase for:", member.email);
             }
           } catch (err) {
-            console.log("Could not load goals for:", member.email);
+            console.error("Error loading goals for:", member.email, err);
           }
         }
       }
+
+      console.log("ManagerDashboard: Loaded goals for", goalsLoaded, "of", myTeamAgents.length, "members");
       // Force re-render after loading goals
       setAgentGoalsVersion(prev => prev + 1);
     };
@@ -3458,7 +3469,13 @@ const ManagerDashboard = ({ user, onSignOut }) => {
     }
   };
 
-  const setAgentGoal = (agentEmail, goalType, value) => {
+  const setAgentGoal = async (agentEmail, goalType, value) => {
+    if (!agentEmail) {
+      console.error("setAgentGoal: No email provided");
+      return;
+    }
+
+    // Initialize goals object if it doesn't exist
     if (!globalAgentGoals[agentEmail]) {
       globalAgentGoals[agentEmail] = {
         dailySales: 10,
@@ -3468,15 +3485,22 @@ const ManagerDashboard = ({ user, onSignOut }) => {
         referralRate: 15,
       };
     }
+
+    // Update the specific goal value
     globalAgentGoals[agentEmail][goalType] = value;
-    // Force re-render to update input values
+
+    // Force re-render to update input values immediately
     setAgentGoalsVersion(v => v + 1);
 
-    // Persist to Firebase (with error handling)
-    updateAgentGoals(agentEmail, globalAgentGoals[agentEmail]).catch(err => {
-      console.log("Could not save goals to Firebase:", err.message);
-      // Goals still work locally, just won't persist across sessions
-    });
+    // Persist to Firebase with proper error handling
+    try {
+      await updateAgentGoals(agentEmail, globalAgentGoals[agentEmail]);
+      console.log("Goals saved to Firebase for:", agentEmail, globalAgentGoals[agentEmail]);
+    } catch (err) {
+      console.error("FAILED to save goals to Firebase:", err.message);
+      // Show error to user
+      alert("Warning: Goals may not have been saved. Please refresh and try again.");
+    }
   };
 
   // Handle Create Team
