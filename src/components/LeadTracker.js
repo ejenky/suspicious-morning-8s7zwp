@@ -3256,6 +3256,29 @@ const ManagerDashboard = ({ user, onSignOut }) => {
     const today = new Date();
     return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
   });
+
+  // All Agents tab date filter state
+  const [allAgentsDateFilterType, setAllAgentsDateFilterType] = useState("today");
+  const [allAgentsCustomStartDate, setAllAgentsCustomStartDate] = useState(() => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  });
+  const [allAgentsCustomEndDate, setAllAgentsCustomEndDate] = useState(() => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  });
+
+  // Performance tab date filter state
+  const [perfDateFilterType, setPerfDateFilterType] = useState("today");
+  const [perfCustomStartDate, setPerfCustomStartDate] = useState(() => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  });
+  const [perfCustomEndDate, setPerfCustomEndDate] = useState(() => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  });
+
   const [currentTheme, setCurrentTheme] = useState("forest");
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [userAvatar, setUserAvatar] = useState(null);
@@ -3381,6 +3404,224 @@ const ManagerDashboard = ({ user, onSignOut }) => {
       dashSales: dashSales.length,
       revenue,
       leadsList: agentLeads,
+    };
+  };
+
+  // Helper function to get date range based on filter type for All Agents tab
+  const getAllAgentsDateRange = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    switch (allAgentsDateFilterType) {
+      case "today": {
+        const endDate = new Date(today);
+        endDate.setDate(endDate.getDate() + 1);
+        return { startDate: today, endDate };
+      }
+      case "this_week": {
+        const startOfWeek = new Date(today);
+        startOfWeek.setDate(today.getDate() - today.getDay());
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 7);
+        return { startDate: startOfWeek, endDate: endOfWeek };
+      }
+      case "this_month": {
+        const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+        const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+        return { startDate: startOfMonth, endDate: endOfMonth };
+      }
+      case "custom": {
+        const [startYear, startMonth, startDay] = allAgentsCustomStartDate.split("-").map(Number);
+        const [endYear, endMonth, endDay] = allAgentsCustomEndDate.split("-").map(Number);
+        const startDate = new Date(startYear, startMonth - 1, startDay, 0, 0, 0, 0);
+        const endDate = new Date(endYear, endMonth - 1, endDay + 1, 0, 0, 0, 0);
+        return { startDate, endDate };
+      }
+      default:
+        return { startDate: today, endDate: new Date(today.getTime() + 86400000) };
+    }
+  };
+
+  // Get agent stats for All Agents date range
+  const getAgentStatsForAllAgentsDateRange = (agentIdOrEmail) => {
+    const { startDate, endDate } = getAllAgentsDateRange();
+
+    const agentLeads = firebaseLeads.filter(lead => {
+      if (lead.agent !== agentIdOrEmail && lead.agentEmail !== agentIdOrEmail) return false;
+      const leadDate = lead.timestamp instanceof Date ? lead.timestamp : new Date(lead.timestamp);
+      return leadDate >= startDate && leadDate < endDate;
+    });
+
+    const sales = agentLeads.filter(lead => lead.sale);
+    const referrals = agentLeads.filter(lead => lead.leadType?.startsWith("Referral Sale"));
+    const dashSales = agentLeads.filter(lead => lead.leadType?.startsWith("Dash Sale"));
+
+    const revenue = sales.reduce(
+      (sum, lead) => sum + (lead.commission || 115) + (lead.hra ? (lead.hraValue || 15) : 0),
+      0
+    );
+
+    return {
+      leads: agentLeads.length,
+      sales: sales.length,
+      conversionRate: agentLeads.length > 0 ? ((sales.length / agentLeads.length) * 100).toFixed(1) : "0.0",
+      referrals: referrals.length,
+      dashSales: dashSales.length,
+      revenue,
+      leadsList: agentLeads,
+    };
+  };
+
+  // Helper function to get the team name an agent belongs to
+  const getAgentTeamName = (agentId) => {
+    if (!teams || teams.length === 0) return "No Team";
+
+    for (const team of teams) {
+      // Check if agent is in memberIds
+      if (team.memberIds && team.memberIds.includes(agentId)) {
+        return team.name || "Unnamed Team";
+      }
+      // Check if agent is in members array
+      if (team.members && team.members.some(m => m.id === agentId)) {
+        return team.name || "Unnamed Team";
+      }
+    }
+    return "No Team";
+  };
+
+  // Helper function to get date range for Performance tab
+  const getPerfDateRange = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    switch (perfDateFilterType) {
+      case "today": {
+        const endDate = new Date(today);
+        endDate.setDate(endDate.getDate() + 1);
+        return { startDate: today, endDate, periodLabel: "Today" };
+      }
+      case "this_week": {
+        const startOfWeek = new Date(today);
+        startOfWeek.setDate(today.getDate() - today.getDay());
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 7);
+        return { startDate: startOfWeek, endDate: endOfWeek, periodLabel: "This Week" };
+      }
+      case "this_month": {
+        const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+        const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+        return { startDate: startOfMonth, endDate: endOfMonth, periodLabel: "This Month" };
+      }
+      case "custom": {
+        const [startYear, startMonth, startDay] = perfCustomStartDate.split("-").map(Number);
+        const [endYear, endMonth, endDay] = perfCustomEndDate.split("-").map(Number);
+        const startDate = new Date(startYear, startMonth - 1, startDay, 0, 0, 0, 0);
+        const endDate = new Date(endYear, endMonth - 1, endDay + 1, 0, 0, 0, 0);
+        return { startDate, endDate, periodLabel: `${perfCustomStartDate} to ${perfCustomEndDate}` };
+      }
+      default:
+        return { startDate: today, endDate: new Date(today.getTime() + 86400000), periodLabel: "Today" };
+    }
+  };
+
+  // Get previous period date range for comparison
+  const getPreviousPerfDateRange = () => {
+    const { startDate, endDate } = getPerfDateRange();
+    const duration = endDate.getTime() - startDate.getTime();
+    const prevEndDate = new Date(startDate.getTime());
+    const prevStartDate = new Date(startDate.getTime() - duration);
+    return { startDate: prevStartDate, endDate: prevEndDate };
+  };
+
+  // Get stats for a specific date range
+  const getStatsForDateRange = (startDate, endDate) => {
+    const leadsInRange = firebaseLeads.filter(lead => {
+      const leadDate = lead.timestamp instanceof Date ? lead.timestamp : new Date(lead.timestamp);
+      return leadDate >= startDate && leadDate < endDate;
+    });
+
+    const sales = leadsInRange.filter(lead => lead.sale);
+    const referrals = leadsInRange.filter(lead => lead.leadType?.startsWith("Referral Sale"));
+    const revenue = sales.reduce(
+      (sum, lead) => sum + (lead.commission || 115) + (lead.hra ? (lead.hraValue || 15) : 0),
+      0
+    );
+
+    return {
+      leads: leadsInRange.length,
+      sales: sales.length,
+      referrals: referrals.length,
+      revenue,
+      conversionRate: leadsInRange.length > 0 ? ((sales.length / leadsInRange.length) * 100).toFixed(1) : "0.0",
+    };
+  };
+
+  // Get comprehensive performance stats for the Performance tab
+  const getPerformanceStats = () => {
+    const { startDate, endDate, periodLabel } = getPerfDateRange();
+    const { startDate: prevStartDate, endDate: prevEndDate } = getPreviousPerfDateRange();
+
+    // Current period stats
+    const currentStats = getStatsForDateRange(startDate, endDate);
+    // Previous period stats
+    const prevStats = getStatsForDateRange(prevStartDate, prevEndDate);
+
+    // Calculate growth
+    const salesGrowth = prevStats.sales > 0
+      ? (((currentStats.sales - prevStats.sales) / prevStats.sales) * 100).toFixed(1)
+      : currentStats.sales > 0 ? "100.0" : "0.0";
+
+    // Get agent stats for current period
+    const agentStats = firebaseAgents.map(agent => {
+      const agentLeads = firebaseLeads.filter(lead => {
+        if (lead.agent !== agent.id && lead.agentEmail !== agent.id) return false;
+        const leadDate = lead.timestamp instanceof Date ? lead.timestamp : new Date(lead.timestamp);
+        return leadDate >= startDate && leadDate < endDate;
+      });
+      const agentSales = agentLeads.filter(lead => lead.sale);
+      return {
+        ...agent,
+        leads: agentLeads.length,
+        sales: agentSales.length,
+        conversionRate: agentLeads.length > 0 ? ((agentSales.length / agentLeads.length) * 100).toFixed(1) : "0.0",
+      };
+    });
+
+    // Filter agents with at least 1 lead for best/worst calculations
+    const agentsWithLeads = agentStats.filter(a => a.leads > 0);
+
+    // Find best and worst agents
+    let bestAgent = { name: "N/A", conversionRate: "0.0" };
+    let worstAgent = { name: "N/A", conversionRate: "0.0" };
+
+    if (agentsWithLeads.length > 0) {
+      const sortedByConversion = [...agentsWithLeads].sort(
+        (a, b) => parseFloat(b.conversionRate) - parseFloat(a.conversionRate)
+      );
+      bestAgent = sortedByConversion[0];
+      worstAgent = sortedByConversion[sortedByConversion.length - 1];
+    }
+
+    // Team health counts
+    const highPerformers = agentStats.filter(a => parseFloat(a.conversionRate) >= 30).length;
+    const needSupport = agentStats.filter(a => parseFloat(a.conversionRate) >= 15 && parseFloat(a.conversionRate) < 25).length;
+    const critical = agentStats.filter(a => a.leads > 0 && parseFloat(a.conversionRate) < 15).length;
+
+    return {
+      periodLabel,
+      currentSales: currentStats.sales,
+      previousSales: prevStats.sales,
+      salesGrowth,
+      totalLeads: currentStats.leads,
+      totalRevenue: currentStats.revenue,
+      avgConversion: currentStats.conversionRate,
+      referralRate: currentStats.leads > 0 ? ((currentStats.referrals / currentStats.leads) * 100).toFixed(1) : "0.0",
+      bestAgent,
+      worstAgent,
+      highPerformers,
+      needSupport,
+      critical,
+      totalAgents: firebaseAgents.length,
     };
   };
 
@@ -3546,6 +3787,14 @@ const ManagerDashboard = ({ user, onSignOut }) => {
 
       console.log("Team created successfully:", teamId);
 
+      // Also add selected agents to manager's personal "My Team"
+      // This syncs the created team with the My Team section
+      for (const agentId of selectedAgentsForTeam) {
+        if (!myTeamMemberIds.includes(agentId)) {
+          await addToMyTeam(agentId);
+        }
+      }
+
       // Reset form
       setNewTeamName("");
       setNewTeamSupervisor("");
@@ -3709,17 +3958,22 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   // Get real team stats using Firebase data
   const getEnhancedTeamStats = (team) => {
     // Get team members - first check if team has stored members, then fall back to teamId matching
+    // IMPORTANT: Only include agents that exist in firebaseAgents (from users collection)
+    // This ensures deleted users don't appear in team rosters
     let teamMembers = [];
 
     if (team.members && team.members.length > 0) {
       // Use members stored directly in team document
-      teamMembers = team.members.map(member => {
-        // Find full agent data from firebaseAgents if available
-        const fullAgent = firebaseAgents.find(a => a.id === member.id) || member;
-        return { ...member, ...fullAgent };
-      });
+      // Filter to only include members that still exist in the users collection
+      teamMembers = team.members
+        .map(member => {
+          // Find full agent data from firebaseAgents - only include if found
+          const fullAgent = firebaseAgents.find(a => a.id === member.id);
+          return fullAgent ? { ...member, ...fullAgent } : null;
+        })
+        .filter(member => member !== null); // Remove deleted users
     } else if (team.memberIds && team.memberIds.length > 0) {
-      // Use memberIds to find agents
+      // Use memberIds to find agents - automatically filters to existing users
       teamMembers = firebaseAgents.filter(agent => team.memberIds.includes(agent.id));
     } else {
       // Fall back to matching by teamId on agent
@@ -3822,20 +4076,15 @@ const ManagerDashboard = ({ user, onSignOut }) => {
       .sort((a, b) => b.totalSales - a.totalSales);
   };
 
-  // Get struggling agents based on real data with location and performance filters
+  // Get all agents with stats for All Agents tab (using date filter)
   const getStrugglingAgents = () => {
     let agents = firebaseAgents.map((agent) => ({
       ...agent,
-      ...getAgentStatsFromFirebase(agent.id || agent.email, dateFilter),
+      ...getAgentStatsForAllAgentsDateRange(agent.id || agent.email),
+      teamName: getAgentTeamName(agent.id),
     }));
 
-    if (selectedCenter !== "all") {
-      agents = agents.filter((agent) => agent.center === selectedCenter);
-    }
-
-    // Only include agents who have recorded at least 1 lead
-    agents = agents.filter((agent) => agent.leads > 0);
-
+    // Sort by performance (lowest first to prioritize agents who need help)
     return agents
       .sort((a, b) => {
         // Sort by multiple criteria: sales, conversion rate
@@ -3846,8 +4095,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
           b.sales * 0.4 +
           parseFloat(b.conversionRate) * 0.3;
         return scoreA - scoreB;
-      })
-      .slice(0, 10);
+      });
   };
 
   // Get worst Five9 adherence agents (placeholder - Five9 data would come from integration)
@@ -5315,29 +5563,42 @@ const ManagerDashboard = ({ user, onSignOut }) => {
               className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-4 border border-white/20`}
             >
               <div className="flex gap-4 items-center flex-wrap">
-                <MapPin className="w-5 h-5 text-purple-400" />
+                <Calendar className="w-5 h-5 text-blue-400" />
                 <label className="text-sm font-medium text-gray-300">
-                  Filter by Location:
+                  Date Filter:
                 </label>
                 <select
-                  value={selectedCenter}
-                  onChange={(e) => setSelectedCenter(e.target.value)}
+                  value={allAgentsDateFilterType}
+                  onChange={(e) => setAllAgentsDateFilterType(e.target.value)}
                   className="bg-slate-800 border border-white/20 rounded-lg px-3 py-2 text-white"
                 >
-                  {centers.map((center) => (
-                    <option
-                      key={center}
-                      value={center}
-                      className="bg-slate-800"
-                    >
-                      {center === "all"
-                        ? "All Centers"
-                        : center.charAt(0).toUpperCase() + center.slice(1)}
-                    </option>
-                  ))}
+                  <option value="today">Today</option>
+                  <option value="this_week">This Week</option>
+                  <option value="this_month">This Month</option>
+                  <option value="custom">Custom Range</option>
                 </select>
-                <span className="text-sm text-gray-300">
-                  Prioritizing agents who need the most help
+                {allAgentsDateFilterType === "custom" && (
+                  <div className="flex gap-2 items-center">
+                    <input
+                      type="date"
+                      value={allAgentsCustomStartDate}
+                      onChange={(e) => setAllAgentsCustomStartDate(e.target.value)}
+                      className="bg-slate-800 border border-white/20 rounded px-2 py-1 text-white text-sm"
+                    />
+                    <span className="text-gray-400">to</span>
+                    <input
+                      type="date"
+                      value={allAgentsCustomEndDate}
+                      onChange={(e) => setAllAgentsCustomEndDate(e.target.value)}
+                      className="bg-slate-800 border border-white/20 rounded px-2 py-1 text-white text-sm"
+                    />
+                  </div>
+                )}
+                <span className="text-sm text-gray-400 ml-2">
+                  Showing: {allAgentsDateFilterType === "today" && "Today"}
+                  {allAgentsDateFilterType === "this_week" && "This Week"}
+                  {allAgentsDateFilterType === "this_month" && "This Month"}
+                  {allAgentsDateFilterType === "custom" && `${allAgentsCustomStartDate} to ${allAgentsCustomEndDate}`}
                 </span>
               </div>
             </div>
@@ -5352,7 +5613,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                   <thead>
                     <tr className="border-b border-white/20">
                       <th className="text-left py-3 px-4 text-gray-300">
-                        Priority
+                        #
                       </th>
                       <th className="text-left py-3 px-4 text-gray-300">
                         Agent
@@ -5361,7 +5622,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                         Team
                       </th>
                       <th className="text-left py-3 px-4 text-gray-300">
-                        Center
+                        Leads
                       </th>
                       <th className="text-left py-3 px-4 text-gray-300">
                         Sales
@@ -5370,10 +5631,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                         Conversion
                       </th>
                       <th className="text-left py-3 px-4 text-gray-300">
-                        Lead Ratio
-                      </th>
-                      <th className="text-left py-3 px-4 text-gray-300">
-                        Status
+                        Revenue
                       </th>
                       <th className="text-left py-3 px-4 text-gray-300">
                         Actions
@@ -5384,7 +5642,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                     {strugglingAgents.length === 0 ? (
                       <tr>
                         <td
-                          colSpan="9"
+                          colSpan="8"
                           className="text-center py-8 text-gray-300"
                         >
                           No agent data available yet
@@ -5392,108 +5650,58 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                       </tr>
                     ) : (
                       strugglingAgents.map((agent, index) => {
-                        const agentStats = getRealAgentStats(
-                          agent.email,
-                          dateFilter
-                        );
-                        const leadRatio =
-                          agentStats.leads > 0
-                            ? (
-                                (agentStats.sales / agentStats.leads) *
-                                100
-                              ).toFixed(1)
-                            : 0;
                         return (
                           <tr
                             key={agent.id}
                             className="border-b border-white/10 hover:bg-white/5"
                           >
-                            <td className="py-3 px-4">
-                              <div
-                                className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold ${
-                                  index < 3
-                                    ? "bg-red-500"
-                                    : index < 6
-                                    ? "bg-orange-500"
-                                    : "bg-yellow-500"
-                                }`}
-                              >
-                                {index + 1}
-                              </div>
+                            <td className="py-3 px-4 text-gray-400">
+                              {index + 1}
                             </td>
                             <td className="py-3 px-4 font-medium text-white">
                               {agent.name}
                             </td>
                             <td className="py-3 px-4 text-gray-300">
-                              {agent.team || "No Team"}
+                              {agent.teamName || "No Team"}
                             </td>
-                            <td className="py-3 px-4 text-gray-300 uppercase">
-                              {agent.center || "No Center"}
-                            </td>
-                            <td className="py-3 px-4">
-                              <span
-                                className={`font-bold ${
-                                  agentStats.sales >= 5
-                                    ? "text-green-400"
-                                    : agentStats.sales >= 2
-                                    ? "text-yellow-400"
-                                    : "text-red-400"
-                                }`}
-                              >
-                                {agentStats.sales}
-                              </span>
+                            <td className="py-3 px-4 text-gray-300">
+                              {agent.leads}
                             </td>
                             <td className="py-3 px-4">
                               <span
                                 className={`font-bold ${
-                                  parseFloat(agentStats.conversionRate) >= 25
+                                  agent.sales >= 5
                                     ? "text-green-400"
-                                    : parseFloat(agentStats.conversionRate) >=
-                                      15
+                                    : agent.sales >= 2
                                     ? "text-yellow-400"
                                     : "text-red-400"
                                 }`}
                               >
-                                {agentStats.conversionRate}%
+                                {agent.sales}
                               </span>
                             </td>
                             <td className="py-3 px-4">
                               <span
                                 className={`font-bold ${
-                                  parseFloat(leadRatio) >= 20
+                                  parseFloat(agent.conversionRate) >= 25
                                     ? "text-green-400"
-                                    : parseFloat(leadRatio) >= 10
+                                    : parseFloat(agent.conversionRate) >= 15
                                     ? "text-yellow-400"
                                     : "text-red-400"
                                 }`}
                               >
-                                {leadRatio}%
+                                {agent.conversionRate}%
                               </span>
                             </td>
-                            <td className="py-3 px-4">
-                              <span
-                                className={`px-2 py-1 rounded text-xs font-medium ${
-                                  index < 3
-                                    ? "bg-red-500/20 text-red-400"
-                                    : index < 6
-                                    ? "bg-orange-500/20 text-orange-400"
-                                    : "bg-yellow-500/20 text-yellow-400"
-                                }`}
-                              >
-                                {index < 3
-                                  ? "Critical"
-                                  : index < 6
-                                  ? "Needs Help"
-                                  : "Monitor"}
-                              </span>
+                            <td className="py-3 px-4 text-green-400 font-medium">
+                              ${agent.revenue}
                             </td>
                             <td className="py-3 px-4">
                               <button
                                 onClick={() =>
                                   setSelectedAgent({
                                     ...agent,
-                                    ...agentStats,
-                                    leadsList: agentStats.leadsList,
+                                    leadsList: agent.leadsList,
                                   })
                                 }
                                 className="text-blue-400 hover:text-blue-300 text-sm"
@@ -5512,7 +5720,9 @@ const ManagerDashboard = ({ user, onSignOut }) => {
           </div>
         )}
 
-        {activeTab === "performance" && (
+        {activeTab === "performance" && (() => {
+          const perfStats = getPerformanceStats();
+          return (
           <div className="space-y-6">
             <div
               className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-4 border border-white/20`}
@@ -5520,35 +5730,38 @@ const ManagerDashboard = ({ user, onSignOut }) => {
               <div className="flex items-center gap-4 flex-wrap">
                 <Calendar className="w-5 h-5 text-blue-400" />
                 <label className="text-sm font-medium text-gray-300">
-                  Performance Date Filter:
-                </label>
-                <input
-                  type="date"
-                  value={dateFilter}
-                  onChange={(e) => setDateFilter(e.target.value)}
-                  className="bg-slate-800 border border-white/20 rounded px-3 py-2 text-white"
-                />
-                <MapPin className="w-5 h-5 text-purple-400 ml-4" />
-                <label className="text-sm font-medium text-gray-300">
-                  Location:
+                  Date Filter:
                 </label>
                 <select
-                  value={selectedCenter}
-                  onChange={(e) => setSelectedCenter(e.target.value)}
-                  className="bg-slate-800 border border-white/20 rounded px-3 py-2 text-white"
+                  value={perfDateFilterType}
+                  onChange={(e) => setPerfDateFilterType(e.target.value)}
+                  className="bg-slate-800 border border-white/20 rounded-lg px-3 py-2 text-white"
                 >
-                  {centers.map((center) => (
-                    <option
-                      key={center}
-                      value={center}
-                      className="bg-slate-800"
-                    >
-                      {center === "all"
-                        ? "All Centers"
-                        : center.charAt(0).toUpperCase() + center.slice(1)}
-                    </option>
-                  ))}
+                  <option value="today">Today</option>
+                  <option value="this_week">This Week</option>
+                  <option value="this_month">This Month</option>
+                  <option value="custom">Custom Range</option>
                 </select>
+                {perfDateFilterType === "custom" && (
+                  <div className="flex gap-2 items-center">
+                    <input
+                      type="date"
+                      value={perfCustomStartDate}
+                      onChange={(e) => setPerfCustomStartDate(e.target.value)}
+                      className="bg-slate-800 border border-white/20 rounded px-2 py-1 text-white text-sm"
+                    />
+                    <span className="text-gray-400">to</span>
+                    <input
+                      type="date"
+                      value={perfCustomEndDate}
+                      onChange={(e) => setPerfCustomEndDate(e.target.value)}
+                      className="bg-slate-800 border border-white/20 rounded px-2 py-1 text-white text-sm"
+                    />
+                  </div>
+                )}
+                <span className="text-sm text-gray-400 ml-2">
+                  Showing: {perfStats.periodLabel}
+                </span>
               </div>
             </div>
 
@@ -5561,25 +5774,25 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                 </h3>
                 <div className="space-y-3">
                   <div className="flex justify-between">
-                    <span className="text-gray-300">Selected Date:</span>
+                    <span className="text-gray-300">{perfStats.periodLabel} Sales:</span>
                     <span className="text-white font-bold">
-                      {companyStats.totalSales}
+                      {perfStats.currentSales}
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-300">Previous Day:</span>
-                    <span className="text-gray-400">N/A</span>
+                    <span className="text-gray-300">Previous Period:</span>
+                    <span className="text-gray-400">{perfStats.previousSales}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-300">Growth:</span>
-                    <span className="text-green-400 font-bold">N/A</span>
+                    <span className={`font-bold ${parseFloat(perfStats.salesGrowth) >= 0 ? "text-green-400" : "text-red-400"}`}>
+                      {parseFloat(perfStats.salesGrowth) >= 0 ? "+" : ""}{perfStats.salesGrowth}%
+                    </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-300">Location Filter:</span>
+                    <span className="text-gray-300">Total Leads:</span>
                     <span className="text-blue-400 font-bold">
-                      {selectedCenter === "all"
-                        ? "All"
-                        : selectedCenter.toUpperCase()}
+                      {perfStats.totalLeads}
                     </span>
                   </div>
                 </div>
@@ -5594,56 +5807,34 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                   <div className="flex justify-between">
                     <span className="text-gray-300">Team Average:</span>
                     <span className="text-white font-bold">
-                      {companyStats.avgConversion}%
+                      {perfStats.avgConversion}%
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-300">Target:</span>
                     <span className="text-gray-400">30%</span>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex justify-between items-center">
                     <span className="text-gray-300">Best Agent:</span>
-                    <span className="text-green-400 font-bold">
-                      {mockAgents.length > 0
-                        ? Math.max(
-                            ...mockAgents
-                              .filter(
-                                (a) =>
-                                  selectedCenter === "all" ||
-                                  a.center === selectedCenter
-                              )
-                              .map((a) =>
-                                parseFloat(
-                                  getRealAgentStats(a.email, dateFilter)
-                                    .conversionRate
-                                )
-                              )
-                          ).toFixed(1)
-                        : 0}
-                      %
-                    </span>
+                    <div className="text-right">
+                      <span className="text-green-400 font-bold">
+                        {perfStats.bestAgent.name}
+                      </span>
+                      <span className="text-green-400 text-sm ml-2">
+                        ({perfStats.bestAgent.conversionRate}%)
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex justify-between items-center">
                     <span className="text-gray-300">Worst Agent:</span>
-                    <span className="text-red-400 font-bold">
-                      {mockAgents.length > 0
-                        ? Math.min(
-                            ...mockAgents
-                              .filter(
-                                (a) =>
-                                  selectedCenter === "all" ||
-                                  a.center === selectedCenter
-                              )
-                              .map((a) =>
-                                parseFloat(
-                                  getRealAgentStats(a.email, dateFilter)
-                                    .conversionRate
-                                )
-                              )
-                          ).toFixed(1)
-                        : 0}
-                      %
-                    </span>
+                    <div className="text-right">
+                      <span className="text-red-400 font-bold">
+                        {perfStats.worstAgent.name}
+                      </span>
+                      <span className="text-red-400 text-sm ml-2">
+                        ({perfStats.worstAgent.conversionRate}%)
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -5655,67 +5846,27 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                 </h3>
                 <div className="space-y-3">
                   <div className="flex justify-between">
-                    <span className="text-gray-300">High Performers:</span>
+                    <span className="text-gray-300">High Performers (≥30%):</span>
                     <span className="text-green-400 font-bold">
-                      {
-                        mockAgents.filter(
-                          (a) =>
-                            (selectedCenter === "all" ||
-                              a.center === selectedCenter) &&
-                            parseFloat(
-                              getRealAgentStats(a.email, dateFilter)
-                                .conversionRate
-                            ) >= 30
-                        ).length
-                      }
+                      {perfStats.highPerformers}
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-300">Need Support:</span>
+                    <span className="text-gray-300">Need Support (15-25%):</span>
                     <span className="text-yellow-400 font-bold">
-                      {
-                        mockAgents.filter(
-                          (a) =>
-                            (selectedCenter === "all" ||
-                              a.center === selectedCenter) &&
-                            parseFloat(
-                              getRealAgentStats(a.email, dateFilter)
-                                .conversionRate
-                            ) < 25 &&
-                            parseFloat(
-                              getRealAgentStats(a.email, dateFilter)
-                                .conversionRate
-                            ) >= 15
-                        ).length
-                      }
+                      {perfStats.needSupport}
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-300">Critical:</span>
+                    <span className="text-gray-300">Critical (&lt;15%):</span>
                     <span className="text-red-400 font-bold">
-                      {
-                        mockAgents.filter(
-                          (a) =>
-                            (selectedCenter === "all" ||
-                              a.center === selectedCenter) &&
-                            parseFloat(
-                              getRealAgentStats(a.email, dateFilter)
-                                .conversionRate
-                            ) < 15
-                        ).length
-                      }
+                      {perfStats.critical}
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-300">Total Agents:</span>
                     <span className="text-white font-bold">
-                      {
-                        mockAgents.filter(
-                          (a) =>
-                            selectedCenter === "all" ||
-                            a.center === selectedCenter
-                        ).length
-                      }
+                      {perfStats.totalAgents}
                     </span>
                   </div>
                 </div>
@@ -5739,10 +5890,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                         Lead Qualification
                       </p>
                       <p className="text-white text-sm">
-                        Average 18% improvement potential across{" "}
-                        {selectedCenter === "all"
-                          ? "all centers"
-                          : selectedCenter}
+                        Average 18% improvement potential across all agents
                       </p>
                     </div>
                     <div className="p-3 bg-purple-500/20 border border-purple-500/30 rounded">
@@ -5751,7 +5899,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                       </p>
                       <p className="text-white text-sm">
                         Key skill for conversion boost in{" "}
-                        {companyStats.totalAgents} agents
+                        {perfStats.totalAgents} agents
                       </p>
                     </div>
                   </div>
@@ -5766,15 +5914,14 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                         Revenue Growth
                       </p>
                       <p className="text-white text-sm">
-                        ${companyStats.totalRevenue.toLocaleString()} generated
-                        on {new Date(dateFilter).toLocaleDateString()}
+                        ${perfStats.totalRevenue.toLocaleString()} generated ({perfStats.periodLabel})
                       </p>
                     </div>
                     <div className="p-3 bg-yellow-500/20 border border-yellow-500/30 rounded">
                       <p className="text-yellow-400 font-medium">Lead Volume</p>
                       <p className="text-white text-sm">
-                        {companyStats.totalLeads} leads processed with{" "}
-                        {companyStats.referralRate}% referral rate
+                        {perfStats.totalLeads} leads processed with{" "}
+                        {perfStats.referralRate}% referral rate
                       </p>
                     </div>
                     <div className="p-3 bg-cyan-500/20 border border-cyan-500/30 rounded">
@@ -5792,7 +5939,8 @@ const ManagerDashboard = ({ user, onSignOut }) => {
             </div>
 
           </div>
-        )}
+        );
+        })()}
 
         {activeTab === "supervisor" && <ManagerSupervisorHelp user={user} />}
 
