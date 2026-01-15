@@ -3256,6 +3256,18 @@ const ManagerDashboard = ({ user, onSignOut }) => {
     const today = new Date();
     return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
   });
+
+  // All Agents tab date filter state
+  const [allAgentsDateFilterType, setAllAgentsDateFilterType] = useState("today");
+  const [allAgentsCustomStartDate, setAllAgentsCustomStartDate] = useState(() => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  });
+  const [allAgentsCustomEndDate, setAllAgentsCustomEndDate] = useState(() => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  });
+
   const [currentTheme, setCurrentTheme] = useState("forest");
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [userAvatar, setUserAvatar] = useState(null);
@@ -3382,6 +3394,88 @@ const ManagerDashboard = ({ user, onSignOut }) => {
       revenue,
       leadsList: agentLeads,
     };
+  };
+
+  // Helper function to get date range based on filter type for All Agents tab
+  const getAllAgentsDateRange = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    switch (allAgentsDateFilterType) {
+      case "today": {
+        const endDate = new Date(today);
+        endDate.setDate(endDate.getDate() + 1);
+        return { startDate: today, endDate };
+      }
+      case "this_week": {
+        const startOfWeek = new Date(today);
+        startOfWeek.setDate(today.getDate() - today.getDay());
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 7);
+        return { startDate: startOfWeek, endDate: endOfWeek };
+      }
+      case "this_month": {
+        const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+        const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+        return { startDate: startOfMonth, endDate: endOfMonth };
+      }
+      case "custom": {
+        const [startYear, startMonth, startDay] = allAgentsCustomStartDate.split("-").map(Number);
+        const [endYear, endMonth, endDay] = allAgentsCustomEndDate.split("-").map(Number);
+        const startDate = new Date(startYear, startMonth - 1, startDay, 0, 0, 0, 0);
+        const endDate = new Date(endYear, endMonth - 1, endDay + 1, 0, 0, 0, 0);
+        return { startDate, endDate };
+      }
+      default:
+        return { startDate: today, endDate: new Date(today.getTime() + 86400000) };
+    }
+  };
+
+  // Get agent stats for All Agents date range
+  const getAgentStatsForAllAgentsDateRange = (agentIdOrEmail) => {
+    const { startDate, endDate } = getAllAgentsDateRange();
+
+    const agentLeads = firebaseLeads.filter(lead => {
+      if (lead.agent !== agentIdOrEmail && lead.agentEmail !== agentIdOrEmail) return false;
+      const leadDate = lead.timestamp instanceof Date ? lead.timestamp : new Date(lead.timestamp);
+      return leadDate >= startDate && leadDate < endDate;
+    });
+
+    const sales = agentLeads.filter(lead => lead.sale);
+    const referrals = agentLeads.filter(lead => lead.leadType?.startsWith("Referral Sale"));
+    const dashSales = agentLeads.filter(lead => lead.leadType?.startsWith("Dash Sale"));
+
+    const revenue = sales.reduce(
+      (sum, lead) => sum + (lead.commission || 115) + (lead.hra ? (lead.hraValue || 15) : 0),
+      0
+    );
+
+    return {
+      leads: agentLeads.length,
+      sales: sales.length,
+      conversionRate: agentLeads.length > 0 ? ((sales.length / agentLeads.length) * 100).toFixed(1) : "0.0",
+      referrals: referrals.length,
+      dashSales: dashSales.length,
+      revenue,
+      leadsList: agentLeads,
+    };
+  };
+
+  // Helper function to get the team name an agent belongs to
+  const getAgentTeamName = (agentId) => {
+    if (!teams || teams.length === 0) return "No Team";
+
+    for (const team of teams) {
+      // Check if agent is in memberIds
+      if (team.memberIds && team.memberIds.includes(agentId)) {
+        return team.name || "Unnamed Team";
+      }
+      // Check if agent is in members array
+      if (team.members && team.members.some(m => m.id === agentId)) {
+        return team.name || "Unnamed Team";
+      }
+    }
+    return "No Team";
   };
 
   // Update myTeamAgents when Firebase data changes
@@ -3835,20 +3929,15 @@ const ManagerDashboard = ({ user, onSignOut }) => {
       .sort((a, b) => b.totalSales - a.totalSales);
   };
 
-  // Get struggling agents based on real data with location and performance filters
+  // Get all agents with stats for All Agents tab (using date filter)
   const getStrugglingAgents = () => {
     let agents = firebaseAgents.map((agent) => ({
       ...agent,
-      ...getAgentStatsFromFirebase(agent.id || agent.email, dateFilter),
+      ...getAgentStatsForAllAgentsDateRange(agent.id || agent.email),
+      teamName: getAgentTeamName(agent.id),
     }));
 
-    if (selectedCenter !== "all") {
-      agents = agents.filter((agent) => agent.center === selectedCenter);
-    }
-
-    // Only include agents who have recorded at least 1 lead
-    agents = agents.filter((agent) => agent.leads > 0);
-
+    // Sort by performance (lowest first to prioritize agents who need help)
     return agents
       .sort((a, b) => {
         // Sort by multiple criteria: sales, conversion rate
@@ -3859,8 +3948,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
           b.sales * 0.4 +
           parseFloat(b.conversionRate) * 0.3;
         return scoreA - scoreB;
-      })
-      .slice(0, 10);
+      });
   };
 
   // Get worst Five9 adherence agents (placeholder - Five9 data would come from integration)
@@ -5328,29 +5416,42 @@ const ManagerDashboard = ({ user, onSignOut }) => {
               className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-4 border border-white/20`}
             >
               <div className="flex gap-4 items-center flex-wrap">
-                <MapPin className="w-5 h-5 text-purple-400" />
+                <Calendar className="w-5 h-5 text-blue-400" />
                 <label className="text-sm font-medium text-gray-300">
-                  Filter by Location:
+                  Date Filter:
                 </label>
                 <select
-                  value={selectedCenter}
-                  onChange={(e) => setSelectedCenter(e.target.value)}
+                  value={allAgentsDateFilterType}
+                  onChange={(e) => setAllAgentsDateFilterType(e.target.value)}
                   className="bg-slate-800 border border-white/20 rounded-lg px-3 py-2 text-white"
                 >
-                  {centers.map((center) => (
-                    <option
-                      key={center}
-                      value={center}
-                      className="bg-slate-800"
-                    >
-                      {center === "all"
-                        ? "All Centers"
-                        : center.charAt(0).toUpperCase() + center.slice(1)}
-                    </option>
-                  ))}
+                  <option value="today">Today</option>
+                  <option value="this_week">This Week</option>
+                  <option value="this_month">This Month</option>
+                  <option value="custom">Custom Range</option>
                 </select>
-                <span className="text-sm text-gray-300">
-                  Prioritizing agents who need the most help
+                {allAgentsDateFilterType === "custom" && (
+                  <div className="flex gap-2 items-center">
+                    <input
+                      type="date"
+                      value={allAgentsCustomStartDate}
+                      onChange={(e) => setAllAgentsCustomStartDate(e.target.value)}
+                      className="bg-slate-800 border border-white/20 rounded px-2 py-1 text-white text-sm"
+                    />
+                    <span className="text-gray-400">to</span>
+                    <input
+                      type="date"
+                      value={allAgentsCustomEndDate}
+                      onChange={(e) => setAllAgentsCustomEndDate(e.target.value)}
+                      className="bg-slate-800 border border-white/20 rounded px-2 py-1 text-white text-sm"
+                    />
+                  </div>
+                )}
+                <span className="text-sm text-gray-400 ml-2">
+                  Showing: {allAgentsDateFilterType === "today" && "Today"}
+                  {allAgentsDateFilterType === "this_week" && "This Week"}
+                  {allAgentsDateFilterType === "this_month" && "This Month"}
+                  {allAgentsDateFilterType === "custom" && `${allAgentsCustomStartDate} to ${allAgentsCustomEndDate}`}
                 </span>
               </div>
             </div>
@@ -5365,7 +5466,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                   <thead>
                     <tr className="border-b border-white/20">
                       <th className="text-left py-3 px-4 text-gray-300">
-                        Priority
+                        #
                       </th>
                       <th className="text-left py-3 px-4 text-gray-300">
                         Agent
@@ -5374,7 +5475,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                         Team
                       </th>
                       <th className="text-left py-3 px-4 text-gray-300">
-                        Center
+                        Leads
                       </th>
                       <th className="text-left py-3 px-4 text-gray-300">
                         Sales
@@ -5383,10 +5484,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                         Conversion
                       </th>
                       <th className="text-left py-3 px-4 text-gray-300">
-                        Lead Ratio
-                      </th>
-                      <th className="text-left py-3 px-4 text-gray-300">
-                        Status
+                        Revenue
                       </th>
                       <th className="text-left py-3 px-4 text-gray-300">
                         Actions
@@ -5397,7 +5495,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                     {strugglingAgents.length === 0 ? (
                       <tr>
                         <td
-                          colSpan="9"
+                          colSpan="8"
                           className="text-center py-8 text-gray-300"
                         >
                           No agent data available yet
@@ -5405,108 +5503,58 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                       </tr>
                     ) : (
                       strugglingAgents.map((agent, index) => {
-                        const agentStats = getRealAgentStats(
-                          agent.email,
-                          dateFilter
-                        );
-                        const leadRatio =
-                          agentStats.leads > 0
-                            ? (
-                                (agentStats.sales / agentStats.leads) *
-                                100
-                              ).toFixed(1)
-                            : 0;
                         return (
                           <tr
                             key={agent.id}
                             className="border-b border-white/10 hover:bg-white/5"
                           >
-                            <td className="py-3 px-4">
-                              <div
-                                className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold ${
-                                  index < 3
-                                    ? "bg-red-500"
-                                    : index < 6
-                                    ? "bg-orange-500"
-                                    : "bg-yellow-500"
-                                }`}
-                              >
-                                {index + 1}
-                              </div>
+                            <td className="py-3 px-4 text-gray-400">
+                              {index + 1}
                             </td>
                             <td className="py-3 px-4 font-medium text-white">
                               {agent.name}
                             </td>
                             <td className="py-3 px-4 text-gray-300">
-                              {agent.team || "No Team"}
+                              {agent.teamName || "No Team"}
                             </td>
-                            <td className="py-3 px-4 text-gray-300 uppercase">
-                              {agent.center || "No Center"}
-                            </td>
-                            <td className="py-3 px-4">
-                              <span
-                                className={`font-bold ${
-                                  agentStats.sales >= 5
-                                    ? "text-green-400"
-                                    : agentStats.sales >= 2
-                                    ? "text-yellow-400"
-                                    : "text-red-400"
-                                }`}
-                              >
-                                {agentStats.sales}
-                              </span>
+                            <td className="py-3 px-4 text-gray-300">
+                              {agent.leads}
                             </td>
                             <td className="py-3 px-4">
                               <span
                                 className={`font-bold ${
-                                  parseFloat(agentStats.conversionRate) >= 25
+                                  agent.sales >= 5
                                     ? "text-green-400"
-                                    : parseFloat(agentStats.conversionRate) >=
-                                      15
+                                    : agent.sales >= 2
                                     ? "text-yellow-400"
                                     : "text-red-400"
                                 }`}
                               >
-                                {agentStats.conversionRate}%
+                                {agent.sales}
                               </span>
                             </td>
                             <td className="py-3 px-4">
                               <span
                                 className={`font-bold ${
-                                  parseFloat(leadRatio) >= 20
+                                  parseFloat(agent.conversionRate) >= 25
                                     ? "text-green-400"
-                                    : parseFloat(leadRatio) >= 10
+                                    : parseFloat(agent.conversionRate) >= 15
                                     ? "text-yellow-400"
                                     : "text-red-400"
                                 }`}
                               >
-                                {leadRatio}%
+                                {agent.conversionRate}%
                               </span>
                             </td>
-                            <td className="py-3 px-4">
-                              <span
-                                className={`px-2 py-1 rounded text-xs font-medium ${
-                                  index < 3
-                                    ? "bg-red-500/20 text-red-400"
-                                    : index < 6
-                                    ? "bg-orange-500/20 text-orange-400"
-                                    : "bg-yellow-500/20 text-yellow-400"
-                                }`}
-                              >
-                                {index < 3
-                                  ? "Critical"
-                                  : index < 6
-                                  ? "Needs Help"
-                                  : "Monitor"}
-                              </span>
+                            <td className="py-3 px-4 text-green-400 font-medium">
+                              ${agent.revenue}
                             </td>
                             <td className="py-3 px-4">
                               <button
                                 onClick={() =>
                                   setSelectedAgent({
                                     ...agent,
-                                    ...agentStats,
-                                    leadsList: agentStats.leadsList,
+                                    leadsList: agent.leadsList,
                                   })
                                 }
                                 className="text-blue-400 hover:text-blue-300 text-sm"
