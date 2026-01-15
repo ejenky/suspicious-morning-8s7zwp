@@ -3266,6 +3266,9 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   // State to force re-renders when agent goals change
   const [agentGoalsVersion, setAgentGoalsVersion] = useState(0);
 
+  // Debounce timer for goal saving to prevent too many Firebase writes
+  const goalSaveTimerRef = useRef({});
+
   // State for team goals - controlled inputs
   const [teamSalesGoal, setTeamSalesGoal] = useState(50);
   const [teamConversionGoal, setTeamConversionGoal] = useState(25);
@@ -3469,11 +3472,14 @@ const ManagerDashboard = ({ user, onSignOut }) => {
     }
   };
 
-  const setAgentGoal = async (agentEmail, goalType, value) => {
+  const setAgentGoal = (agentEmail, goalType, value) => {
     if (!agentEmail) {
       console.error("setAgentGoal: No email provided");
       return;
     }
+
+    // Handle NaN or invalid values - default to 0
+    const numericValue = isNaN(value) || value === null || value === undefined ? 0 : Number(value);
 
     // Initialize goals object if it doesn't exist
     if (!globalAgentGoals[agentEmail]) {
@@ -3486,21 +3492,28 @@ const ManagerDashboard = ({ user, onSignOut }) => {
       };
     }
 
-    // Update the specific goal value
-    globalAgentGoals[agentEmail][goalType] = value;
+    // Update the specific goal value locally
+    globalAgentGoals[agentEmail][goalType] = numericValue;
 
     // Force re-render to update input values immediately
     setAgentGoalsVersion(v => v + 1);
 
-    // Persist to Firebase with proper error handling
-    try {
-      await updateAgentGoals(agentEmail, globalAgentGoals[agentEmail]);
-      console.log("Goals saved to Firebase for:", agentEmail, globalAgentGoals[agentEmail]);
-    } catch (err) {
-      console.error("FAILED to save goals to Firebase:", err.message);
-      // Show error to user
-      alert("Warning: Goals may not have been saved. Please refresh and try again.");
+    // Debounce Firebase save - wait 500ms after user stops typing
+    // This prevents excessive writes and rate limit issues
+    const timerKey = `${agentEmail}_${goalType}`;
+    if (goalSaveTimerRef.current[timerKey]) {
+      clearTimeout(goalSaveTimerRef.current[timerKey]);
     }
+
+    goalSaveTimerRef.current[timerKey] = setTimeout(async () => {
+      try {
+        await updateAgentGoals(agentEmail, globalAgentGoals[agentEmail]);
+        console.log("Goals saved to Firebase for:", agentEmail, globalAgentGoals[agentEmail]);
+      } catch (err) {
+        console.error("FAILED to save goals to Firebase:", err.message);
+        showToast("Failed to save goal. Please try again.", "error");
+      }
+    }, 500);
   };
 
   // Handle Create Team
@@ -5838,6 +5851,7 @@ const AgentDashboard = ({ user, onSignOut }) => {
   // OPTIMIZATION: Use standalone function instead of full useFirestore hook
   // This eliminates duplicate polling and reduces Firebase reads significantly
   const [goalsLoaded, setGoalsLoaded] = useState(false);
+  const [goalsVersion, setGoalsVersion] = useState(0); // Force re-render when goals change
   // OPTIMIZATION: Lazy-load leaderboard data only when tab is selected
   const [leaderboardLeads, setLeaderboardLeads] = useState([]);
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
@@ -5873,15 +5887,17 @@ const AgentDashboard = ({ user, onSignOut }) => {
     setToast((prev) => ({ ...prev, isVisible: false }));
   };
 
-  // Fetch agent goals from Firebase on mount using standalone function
-  // OPTIMIZATION: Uses cached standalone function - no hook instantiation needed
+  // Fetch agent goals from Firebase on mount and when tab becomes visible
+  // This ensures manager's goal changes are reflected on agent's dashboard
   useEffect(() => {
     const loadGoals = async () => {
-      if (user.email && !goalsLoaded) {
+      if (user.email) {
         try {
           const firebaseGoals = await fetchAgentGoalsStandalone(user.email);
           if (firebaseGoals) {
             globalAgentGoals[user.email] = firebaseGoals;
+            // Force re-render to show updated goals
+            setGoalsVersion(v => v + 1);
           }
         } catch (err) {
           console.log("Could not load goals from Firebase:", err.message);
@@ -5889,8 +5905,23 @@ const AgentDashboard = ({ user, onSignOut }) => {
         setGoalsLoaded(true);
       }
     };
+
+    // Load goals on mount
     loadGoals();
-  }, [user.email, goalsLoaded]);
+
+    // Refresh goals when tab becomes visible (to pick up manager changes)
+    const handleVisibilityChange = () => {
+      if (!document.hidden && user.email) {
+        console.log("AgentDashboard: Tab visible, refreshing goals...");
+        loadGoals();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [user.email]);
 
   // OPTIMIZATION: Lazy-load leaderboard data only when tab is selected
   // This eliminates the need to fetch ALL leads just for leaderboards
