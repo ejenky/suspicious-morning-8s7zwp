@@ -5851,6 +5851,7 @@ const AgentDashboard = ({ user, onSignOut }) => {
   // OPTIMIZATION: Use standalone function instead of full useFirestore hook
   // This eliminates duplicate polling and reduces Firebase reads significantly
   const [goalsLoaded, setGoalsLoaded] = useState(false);
+  const [goalsVersion, setGoalsVersion] = useState(0); // Force re-render when goals change
   // OPTIMIZATION: Lazy-load leaderboard data only when tab is selected
   const [leaderboardLeads, setLeaderboardLeads] = useState([]);
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
@@ -5886,15 +5887,17 @@ const AgentDashboard = ({ user, onSignOut }) => {
     setToast((prev) => ({ ...prev, isVisible: false }));
   };
 
-  // Fetch agent goals from Firebase on mount using standalone function
-  // OPTIMIZATION: Uses cached standalone function - no hook instantiation needed
+  // Fetch agent goals from Firebase on mount and when tab becomes visible
+  // This ensures manager's goal changes are reflected on agent's dashboard
   useEffect(() => {
     const loadGoals = async () => {
-      if (user.email && !goalsLoaded) {
+      if (user.email) {
         try {
           const firebaseGoals = await fetchAgentGoalsStandalone(user.email);
           if (firebaseGoals) {
             globalAgentGoals[user.email] = firebaseGoals;
+            // Force re-render to show updated goals
+            setGoalsVersion(v => v + 1);
           }
         } catch (err) {
           console.log("Could not load goals from Firebase:", err.message);
@@ -5902,8 +5905,23 @@ const AgentDashboard = ({ user, onSignOut }) => {
         setGoalsLoaded(true);
       }
     };
+
+    // Load goals on mount
     loadGoals();
-  }, [user.email, goalsLoaded]);
+
+    // Refresh goals when tab becomes visible (to pick up manager changes)
+    const handleVisibilityChange = () => {
+      if (!document.hidden && user.email) {
+        console.log("AgentDashboard: Tab visible, refreshing goals...");
+        loadGoals();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [user.email]);
 
   // OPTIMIZATION: Lazy-load leaderboard data only when tab is selected
   // This eliminates the need to fetch ALL leads just for leaderboards

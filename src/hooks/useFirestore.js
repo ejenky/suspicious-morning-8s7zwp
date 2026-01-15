@@ -28,11 +28,11 @@ const POLLING_INTERVAL = 300000; // 5 minutes
 const MIN_REFRESH_INTERVAL = 120000; // 2 minutes
 
 // =============================================================================
-// OPTIMIZATION: Global cache for agent goals with 24-hour expiration
-// Agent goals rarely change, so caching prevents redundant reads
+// OPTIMIZATION: Global cache for agent goals with 5-minute expiration
+// Reduced from 24 hours to 5 minutes so manager changes show up faster
 // =============================================================================
 const agentGoalsCache = new Map();
-const AGENT_GOALS_CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+const AGENT_GOALS_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes (was 24 hours)
 
 // =============================================================================
 // OPTIMIZATION: In-flight request tracking to prevent duplicate fetches
