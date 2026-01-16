@@ -7,6 +7,7 @@ import {
   getDocs,
   doc,
   updateDoc,
+  deleteDoc,
   serverTimestamp,
   Timestamp,
 } from "firebase/firestore";
@@ -171,6 +172,24 @@ export const useLeads = (userId) => {
     }
   };
 
+  const deleteLead = async (leadId) => {
+    try {
+      console.log("Deleting lead:", leadId);
+
+      const leadRef = doc(db, "leads", leadId);
+      await deleteDoc(leadRef);
+      console.log("Lead deleted successfully:", leadId);
+
+      // Immediately refresh leads to reflect deletion
+      await fetchLeads(false, true);
+
+      return { success: true };
+    } catch (error) {
+      console.error("Error deleting lead:", error);
+      return { success: false, error: error.message };
+    }
+  };
+
   const calculateMetrics = (selectedDate) => {
     if (!selectedDate) {
       selectedDate = new Date().toISOString().split("T")[0];
@@ -253,5 +272,5 @@ export const useLeads = (userId) => {
   // Manual refresh function (force refresh to bypass cache)
   const refreshLeads = useCallback(() => fetchLeads(false, true), [fetchLeads]);
 
-  return { leads, loading, error, addLead, updateLead, calculateMetrics, refreshLeads };
+  return { leads, loading, error, addLead, deleteLead, updateLead, calculateMetrics, refreshLeads };
 };
