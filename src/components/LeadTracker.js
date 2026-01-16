@@ -3295,6 +3295,10 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   // State for team goals - controlled inputs
   const [teamSalesGoal, setTeamSalesGoal] = useState(50);
   const [teamConversionGoal, setTeamConversionGoal] = useState(25);
+  // Local input state for responsive typing (updates immediately, no re-render lag)
+  const [teamSalesGoalInput, setTeamSalesGoalInput] = useState('50');
+  const [teamConversionGoalInput, setTeamConversionGoalInput] = useState('25');
+  const teamGoalsDebounceRef = useRef(null);
   const teamGoalsInitialized = useRef(false);
 
   // Use Firebase for teams and agents data
@@ -3657,10 +3661,14 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   // Initialize team goals from Firebase only once
   useEffect(() => {
     if (!teamGoalsInitialized.current && myTeamGoals) {
-      setTeamSalesGoal(myTeamGoals.salesGoal ?? 50);
-      setTeamConversionGoal(myTeamGoals.conversionGoal ?? 25);
-      globalTeamGoals.salesGoal = myTeamGoals.salesGoal ?? 50;
-      globalTeamGoals.conversionGoal = myTeamGoals.conversionGoal ?? 25;
+      const salesVal = myTeamGoals.salesGoal ?? 50;
+      const convVal = myTeamGoals.conversionGoal ?? 25;
+      setTeamSalesGoal(salesVal);
+      setTeamConversionGoal(convVal);
+      setTeamSalesGoalInput(String(salesVal));
+      setTeamConversionGoalInput(String(convVal));
+      globalTeamGoals.salesGoal = salesVal;
+      globalTeamGoals.conversionGoal = convVal;
       teamGoalsInitialized.current = true;
     }
   }, [myTeamGoals]);
@@ -5496,11 +5504,44 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                     </label>
                     <input
                       type="number"
-                      value={teamSalesGoal}
+                      value={teamSalesGoalInput}
                       onChange={(e) => {
-                        const val = parseInt(e.target.value) || 0;
-                        setTeamSalesGoal(val);
-                        globalTeamGoals.salesGoal = val;
+                        const inputValue = e.target.value;
+                        // Update local input state immediately for responsive typing
+                        setTeamSalesGoalInput(inputValue);
+
+                        // Debounce the expensive state update
+                        if (teamGoalsDebounceRef.current) {
+                          clearTimeout(teamGoalsDebounceRef.current);
+                        }
+                        teamGoalsDebounceRef.current = setTimeout(() => {
+                          if (inputValue === '') {
+                            setTeamSalesGoal(0);
+                            globalTeamGoals.salesGoal = 0;
+                          } else {
+                            const val = parseInt(inputValue, 10);
+                            if (!isNaN(val)) {
+                              setTeamSalesGoal(val);
+                              globalTeamGoals.salesGoal = val;
+                            }
+                          }
+                        }, 300);
+                      }}
+                      onBlur={(e) => {
+                        // On blur, ensure we have a valid number (default to 0)
+                        if (teamGoalsDebounceRef.current) {
+                          clearTimeout(teamGoalsDebounceRef.current);
+                        }
+                        const inputValue = e.target.value;
+                        if (inputValue === '' || isNaN(parseInt(inputValue, 10))) {
+                          setTeamSalesGoalInput('0');
+                          setTeamSalesGoal(0);
+                          globalTeamGoals.salesGoal = 0;
+                        } else {
+                          const val = parseInt(inputValue, 10);
+                          setTeamSalesGoal(val);
+                          globalTeamGoals.salesGoal = val;
+                        }
                       }}
                       className="w-full bg-slate-800 border border-white/20 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-green-500"
                     />
@@ -5511,11 +5552,44 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                     </label>
                     <input
                       type="number"
-                      value={teamConversionGoal}
+                      value={teamConversionGoalInput}
                       onChange={(e) => {
-                        const val = parseInt(e.target.value) || 0;
-                        setTeamConversionGoal(val);
-                        globalTeamGoals.conversionGoal = val;
+                        const inputValue = e.target.value;
+                        // Update local input state immediately for responsive typing
+                        setTeamConversionGoalInput(inputValue);
+
+                        // Debounce the expensive state update
+                        if (teamGoalsDebounceRef.current) {
+                          clearTimeout(teamGoalsDebounceRef.current);
+                        }
+                        teamGoalsDebounceRef.current = setTimeout(() => {
+                          if (inputValue === '') {
+                            setTeamConversionGoal(0);
+                            globalTeamGoals.conversionGoal = 0;
+                          } else {
+                            const val = parseInt(inputValue, 10);
+                            if (!isNaN(val)) {
+                              setTeamConversionGoal(val);
+                              globalTeamGoals.conversionGoal = val;
+                            }
+                          }
+                        }, 300);
+                      }}
+                      onBlur={(e) => {
+                        // On blur, ensure we have a valid number (default to 0)
+                        if (teamGoalsDebounceRef.current) {
+                          clearTimeout(teamGoalsDebounceRef.current);
+                        }
+                        const inputValue = e.target.value;
+                        if (inputValue === '' || isNaN(parseInt(inputValue, 10))) {
+                          setTeamConversionGoalInput('0');
+                          setTeamConversionGoal(0);
+                          globalTeamGoals.conversionGoal = 0;
+                        } else {
+                          const val = parseInt(inputValue, 10);
+                          setTeamConversionGoal(val);
+                          globalTeamGoals.conversionGoal = val;
+                        }
                       }}
                       className="w-full bg-slate-800 border border-white/20 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-green-500"
                     />
@@ -5523,9 +5597,21 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                 </div>
                 <button
                   onClick={async () => {
+                    // Clear any pending debounce
+                    if (teamGoalsDebounceRef.current) {
+                      clearTimeout(teamGoalsDebounceRef.current);
+                    }
+                    // Parse the latest input values directly
+                    const salesVal = parseInt(teamSalesGoalInput, 10) || 0;
+                    const convVal = parseInt(teamConversionGoalInput, 10) || 0;
+                    // Sync state
+                    setTeamSalesGoal(salesVal);
+                    setTeamConversionGoal(convVal);
+                    globalTeamGoals.salesGoal = salesVal;
+                    globalTeamGoals.conversionGoal = convVal;
                     const goals = {
-                      salesGoal: teamSalesGoal,
-                      conversionGoal: teamConversionGoal,
+                      salesGoal: salesVal,
+                      conversionGoal: convVal,
                     };
                     try {
                       await updateMyTeamGoals(goals);
