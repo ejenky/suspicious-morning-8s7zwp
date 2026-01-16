@@ -3298,7 +3298,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   const teamGoalsInitialized = useRef(false);
 
   // Use Firebase for teams and agents data
-  const { teams, agents: firebaseAgents, leads: firebaseLeads, createTeam, assignAgentToTeam, addToMyTeam, removeFromMyTeam, myTeamMemberIds, myTeamGoals, updateMyTeamGoals, updateAgentGoals, fetchAgentGoals, refreshData, lastRefresh, loading: dataLoading } = useFirestore(user.email);
+  const { teams, agents: firebaseAgents, leads: firebaseLeads, createTeam, assignAgentToTeam, addToMyTeam, removeFromMyTeam, myTeamMemberIds, myTeamGoals, myTeamMemberGoals, updateMyTeamGoals, updateAgentGoals, fetchAgentGoals, refreshData, lastRefresh, loading: dataLoading } = useFirestore(user.email);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Sync Firebase leads to global data for legacy functions
@@ -3634,39 +3634,25 @@ const ManagerDashboard = ({ user, onSignOut }) => {
     setMyTeamAgents(teamAgents);
   }, [firebaseAgents, myTeamMemberIds]);
 
-  // Load goals for all team members from Firebase
-  // FIXED: Use state-based tracking and force-reload from Firebase
+  // Load goals for all team members from manager's stored goals
+  // FIX: Use myTeamMemberGoals directly instead of fetching each one
   useEffect(() => {
-    const loadTeamMemberGoals = async () => {
-      if (myTeamAgents.length === 0) return;
+    if (!myTeamMemberGoals || Object.keys(myTeamMemberGoals).length === 0) {
+      console.log("ManagerDashboard: No member goals stored yet");
+      return;
+    }
 
-      console.log("ManagerDashboard: Loading goals for", myTeamAgents.length, "team members");
-      let goalsLoaded = 0;
+    console.log("ManagerDashboard: Loading goals from myTeamMemberGoals for", Object.keys(myTeamMemberGoals).length, "members");
 
-      for (const member of myTeamAgents) {
-        if (member.email) {
-          try {
-            // Always try to fetch from Firebase to ensure we have latest data
-            const memberGoals = await fetchAgentGoals(member.email);
-            if (memberGoals) {
-              globalAgentGoals[member.email] = memberGoals;
-              goalsLoaded++;
-              console.log("Loaded goals for:", member.email, memberGoals);
-            } else {
-              console.log("No goals found in Firebase for:", member.email);
-            }
-          } catch (err) {
-            console.error("Error loading goals for:", member.email, err);
-          }
-        }
-      }
+    // Copy manager's stored goals to globalAgentGoals for use in UI
+    for (const [agentEmail, goals] of Object.entries(myTeamMemberGoals)) {
+      globalAgentGoals[agentEmail] = goals;
+      console.log("Loaded goals for:", agentEmail, goals);
+    }
 
-      console.log("ManagerDashboard: Loaded goals for", goalsLoaded, "of", myTeamAgents.length, "members");
-      // Force re-render after loading goals
-      setAgentGoalsVersion(prev => prev + 1);
-    };
-    loadTeamMemberGoals();
-  }, [myTeamAgents, fetchAgentGoals]);
+    // Force re-render after loading goals
+    setAgentGoalsVersion(prev => prev + 1);
+  }, [myTeamMemberGoals]);
 
   // Initialize team goals from Firebase only once
   useEffect(() => {
