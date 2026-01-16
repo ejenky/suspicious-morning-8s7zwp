@@ -46,13 +46,13 @@ const inFlightRequests = new Map();
 // Use this to fetch agent goals WITHOUT instantiating the full useFirestore hook
 // This is perfect for AgentDashboard which only needs goals, not all leads
 //
-// FIX: Don't cache null results - only cache actual goals data
+// FIX: Now searches managerTeams collection for goals set by managers
+// Goals are stored in managerTeams/{managerId}/memberGoals/{agentEmail}
 // =============================================================================
 export const fetchAgentGoalsStandalone = async (agentEmail) => {
   if (!agentEmail) return null;
 
-  // OPTIMIZATION 1: Check cache first (24-hour TTL)
-  // IMPORTANT: Only use cache if we have actual goals data (not null)
+  // OPTIMIZATION 1: Check cache first
   const cached = agentGoalsCache.get(agentEmail);
   if (cached && cached.goals && (Date.now() - cached.timestamp) < AGENT_GOALS_CACHE_DURATION) {
     console.log("fetchAgentGoalsStandalone: Cache hit for:", agentEmail);
@@ -70,24 +70,26 @@ export const fetchAgentGoalsStandalone = async (agentEmail) => {
 
   const fetchPromise = (async () => {
     try {
-      const docId = agentEmail.replace(/\./g, '_');
-      const agentGoalsRef = doc(db, "agentGoals", docId);
-      const goalsDoc = await getDoc(agentGoalsRef);
+      // Search managerTeams collection for goals set by any manager
+      const managerTeamsCollection = collection(db, "managerTeams");
+      const snapshot = await getDocs(managerTeamsCollection);
 
-      if (goalsDoc.exists()) {
-        const data = goalsDoc.data();
-        // Store in cache only if we have actual goals
-        if (data.goals) {
+      for (const teamDoc of snapshot.docs) {
+        const data = teamDoc.data();
+        if (data.memberGoals && data.memberGoals[agentEmail]) {
+          const goals = data.memberGoals[agentEmail];
+          // Store in cache
           agentGoalsCache.set(agentEmail, {
-            goals: data.goals,
+            goals: goals,
             timestamp: Date.now()
           });
-          console.log("fetchAgentGoalsStandalone: Cached goals for:", agentEmail, data.goals);
+          console.log("fetchAgentGoalsStandalone: Found goals for:", agentEmail, "set by manager:", data.managerEmail);
+          return goals;
         }
-        return data.goals;
       }
-      // DON'T cache null results - allow future lookups to check Firebase
-      console.log("fetchAgentGoalsStandalone: No goals document found for:", agentEmail);
+
+      // No goals found in any manager team
+      console.log("fetchAgentGoalsStandalone: No goals found for:", agentEmail);
       return null;
     } catch (error) {
       console.error("Error fetching agent goals:", error);
@@ -118,6 +120,7 @@ export const useFirestore = (userEmail) => {
   const [teams, setTeams] = useState([]);
   const [myTeamMemberIds, setMyTeamMemberIds] = useState([]);
   const [myTeamGoals, setMyTeamGoals] = useState({ salesGoal: 50, conversionGoal: 25 });
+  const [myTeamMemberGoals, setMyTeamMemberGoals] = useState({}); // Store individual agent goals
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState(null);
   const pollingRef = useRef(null);
@@ -457,9 +460,15 @@ export const useFirestore = (userEmail) => {
         if (data.teamGoals) {
           setMyTeamGoals(data.teamGoals);
         }
+        // Load individual member goals if they exist
+        if (data.memberGoals) {
+          setMyTeamMemberGoals(data.memberGoals);
+          console.log("Loaded member goals for", Object.keys(data.memberGoals).length, "agents");
+        }
       } else {
         console.log("No manager team found, starting fresh");
         setMyTeamMemberIds([]);
+        setMyTeamMemberGoals({});
       }
     } catch (error) {
       console.error("Error fetching manager team:", error);
@@ -540,18 +549,28 @@ export const useFirestore = (userEmail) => {
   };
 
   // Update individual agent goals (persisted to Firebase)
+  // FIX: Store in managerTeams document (manager has write permission there)
+  // instead of agentGoals collection (which requires special permissions)
   const updateAgentGoals = async (agentEmail, goals) => {
-    if (!agentEmail) return;
+    if (!agentEmail || !userEmail) return;
 
     try {
-      const docId = agentEmail.replace(/\./g, '_');
-      const agentGoalsRef = doc(db, "agentGoals", docId);
+      // Store in the manager's own managerTeams document
+      const docId = userEmail.replace(/\./g, '_');
+      const teamDocRef = doc(db, "managerTeams", docId);
 
-      await setDoc(agentGoalsRef, {
-        agentEmail: agentEmail,
-        goals: goals,
+      // Update local state first for immediate UI feedback
+      const updatedMemberGoals = {
+        ...myTeamMemberGoals,
+        [agentEmail]: goals
+      };
+      setMyTeamMemberGoals(updatedMemberGoals);
+
+      // Save to Firebase in the manager's team document
+      await setDoc(teamDocRef, {
+        managerEmail: userEmail,
+        memberGoals: updatedMemberGoals,
         updatedAt: new Date(),
-        setBy: userEmail,
       }, { merge: true });
 
       // OPTIMIZATION: Update cache immediately when goals change
@@ -571,19 +590,13 @@ export const useFirestore = (userEmail) => {
   // CRITICAL OPTIMIZATION: fetchAgentGoals is now memoized with useCallback
   // and uses a 24-hour cache + request deduplication
   //
-  // Previous behavior: Created new function reference on every render,
-  // causing useEffect dependencies to trigger unnecessary re-fetches
-  //
-  // New behavior: Stable function reference + caching = massive read reduction
-  //
-  // FIX: Don't cache null results - only cache actual goals data
-  // This ensures that if goals are set later, they can be fetched
+  // FIX: Now searches managerTeams collection for goals set by managers
+  // Goals are stored in managerTeams/{managerId}/memberGoals/{agentEmail}
   // =============================================================================
   const fetchAgentGoals = useCallback(async (agentEmail) => {
     if (!agentEmail) return null;
 
-    // OPTIMIZATION 1: Check cache first (24-hour TTL)
-    // IMPORTANT: Only use cache if we have actual goals data (not null)
+    // OPTIMIZATION 1: Check cache first
     const cached = agentGoalsCache.get(agentEmail);
     if (cached && cached.goals && (Date.now() - cached.timestamp) < AGENT_GOALS_CACHE_DURATION) {
       console.log("fetchAgentGoals: Cache hit for:", agentEmail);
@@ -601,24 +614,26 @@ export const useFirestore = (userEmail) => {
 
     const fetchPromise = (async () => {
       try {
-        const docId = agentEmail.replace(/\./g, '_');
-        const agentGoalsRef = doc(db, "agentGoals", docId);
-        const goalsDoc = await getDoc(agentGoalsRef);
+        // Search managerTeams collection for goals set by any manager
+        const managerTeamsCollection = collection(db, "managerTeams");
+        const snapshot = await getDocs(managerTeamsCollection);
 
-        if (goalsDoc.exists()) {
-          const data = goalsDoc.data();
-          // Store in cache only if we have actual goals
-          if (data.goals) {
+        for (const teamDoc of snapshot.docs) {
+          const data = teamDoc.data();
+          if (data.memberGoals && data.memberGoals[agentEmail]) {
+            const goals = data.memberGoals[agentEmail];
+            // Store in cache
             agentGoalsCache.set(agentEmail, {
-              goals: data.goals,
+              goals: goals,
               timestamp: Date.now()
             });
-            console.log("fetchAgentGoals: Cached goals for:", agentEmail, data.goals);
+            console.log("fetchAgentGoals: Found goals for:", agentEmail, "set by manager:", data.managerEmail);
+            return goals;
           }
-          return data.goals;
         }
-        // DON'T cache null results - allow future lookups to check Firebase
-        console.log("fetchAgentGoals: No goals document found for:", agentEmail);
+
+        // No goals found in any manager team
+        console.log("fetchAgentGoals: No goals found for:", agentEmail);
         return null;
       } catch (error) {
         console.error("Error fetching agent goals:", error);
@@ -638,6 +653,7 @@ export const useFirestore = (userEmail) => {
     teams,
     myTeamMemberIds,
     myTeamGoals,
+    myTeamMemberGoals, // Individual agent goals set by this manager
     loading,
     lastRefresh,
     addLead,
