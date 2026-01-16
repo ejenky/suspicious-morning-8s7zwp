@@ -6098,6 +6098,7 @@ const AgentDashboard = ({ user, onSignOut }) => {
     leads,
     loading: leadsLoading,
     addLead,
+    deleteLead,
     updateLead,
     calculateMetrics,
   } = useLeads(user.uid);
@@ -6222,6 +6223,7 @@ const AgentDashboard = ({ user, onSignOut }) => {
     hraValue: 0,
     clientName: "",
   });
+  const [isAddingLead, setIsAddingLead] = useState(false);
 
   const leadTypes = [
     "Immediate Dc - The client or dialer hangs up right away",
@@ -6290,48 +6292,56 @@ const AgentDashboard = ({ user, onSignOut }) => {
   };
 
   const handleAddLead = async () => {
+    // Prevent multiple submissions
+    if (isAddingLead) return;
     if (!validateForm()) return;
 
-    const leadTimestamp = new Date();
-    // Set the date components using local time
-    const [year, month, day] = selectedDate.split("-").map(Number);
-    leadTimestamp.setFullYear(year);
-    leadTimestamp.setMonth(month - 1); // Month is 0-indexed
-    leadTimestamp.setDate(day);
+    setIsAddingLead(true);
 
-    const leadData = {
-      leadType: newLead.leadType,
-      carrier: newLead.carrier,
-      notes: newLead.notes,
-      crmLink: newLead.crmLink,
-      sale: newLead.sale,
-      hra: newLead.hra,
-      commission: newLead.commission,
-      hraValue: newLead.hraValue,
-      clientName: newLead.clientName,
-      agentEmail: user.email,
-      date: selectedDate,
-      timestamp: leadTimestamp,
-    };
+    try {
+      const leadTimestamp = new Date();
+      // Set the date components using local time
+      const [year, month, day] = selectedDate.split("-").map(Number);
+      leadTimestamp.setFullYear(year);
+      leadTimestamp.setMonth(month - 1); // Month is 0-indexed
+      leadTimestamp.setDate(day);
 
-    const result = await addLead(leadData);
+      const leadData = {
+        leadType: newLead.leadType,
+        carrier: newLead.carrier,
+        notes: newLead.notes,
+        crmLink: newLead.crmLink,
+        sale: newLead.sale,
+        hra: newLead.hra,
+        commission: newLead.commission,
+        hraValue: newLead.hraValue,
+        clientName: newLead.clientName,
+        agentEmail: user.email,
+        date: selectedDate,
+        timestamp: leadTimestamp,
+      };
 
-    if (result.success) {
-      setNewLead({
-        carrier: "",
-        leadType: "",
-        notes: "",
-        crmLink: "",
-        sale: false,
-        hra: false,
-        commission: 0,
-        hraValue: 0,
-        clientName: "",
-      });
-      setFormErrors({});
-      showToast("Lead added successfully! 🎉", "success");
-    } else {
-      showToast(`Error adding lead: ${result.error}`, "error");
+      const result = await addLead(leadData);
+
+      if (result.success) {
+        setNewLead({
+          carrier: "",
+          leadType: "",
+          notes: "",
+          crmLink: "",
+          sale: false,
+          hra: false,
+          commission: 0,
+          hraValue: 0,
+          clientName: "",
+        });
+        setFormErrors({});
+        showToast("Lead added successfully! 🎉", "success");
+      } else {
+        showToast(`Error adding lead: ${result.error}`, "error");
+      }
+    } finally {
+      setIsAddingLead(false);
     }
   };
 
@@ -7033,9 +7043,10 @@ const AgentDashboard = ({ user, onSignOut }) => {
                   </div>
                   <button
                     onClick={handleAddLead}
-                    className={`w-full bg-gradient-to-r ${currentThemeStyles.accent} hover:shadow-lg py-3 px-4 rounded-lg font-semibold transition-all transform hover:scale-105 text-white`}
+                    disabled={isAddingLead}
+                    className={`w-full bg-gradient-to-r ${currentThemeStyles.accent} hover:shadow-lg py-3 px-4 rounded-lg font-semibold transition-all transform hover:scale-105 text-white ${isAddingLead ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
-                    Add Lead
+                    {isAddingLead ? 'Adding...' : 'Add Lead'}
                   </button>
                 </div>
               </div>
@@ -7094,6 +7105,21 @@ const AgentDashboard = ({ user, onSignOut }) => {
                               className="text-blue-400 hover:text-blue-300 text-xs"
                             >
                               Edit
+                            </button>
+                            <button
+                              onClick={async () => {
+                                if (window.confirm(`Are you sure you want to delete this lead?\n\nType: ${lead.leadType}\n${lead.clientName ? `Client: ${lead.clientName}` : ''}`)) {
+                                  const result = await deleteLead(lead.id);
+                                  if (result.success) {
+                                    showToast("Lead deleted successfully", "success");
+                                  } else {
+                                    showToast(`Error deleting lead: ${result.error}`, "error");
+                                  }
+                                }
+                              }}
+                              className="text-red-400 hover:text-red-300 text-xs"
+                            >
+                              Delete
                             </button>
                             <span className="text-xs text-gray-400">
                               {new Date(lead.timestamp).toLocaleTimeString()}
