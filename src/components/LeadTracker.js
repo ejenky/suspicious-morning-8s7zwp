@@ -3630,13 +3630,36 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   };
 
   // Update myTeamAgents when Firebase data changes
+  // Also clean up stale member IDs (agents deleted from Firebase)
   useEffect(() => {
+    // Get valid agent IDs that exist in Firebase
+    const validAgentIds = new Set(firebaseAgents.map(agent => agent.id));
+
     // Filter agents based on persisted myTeamMemberIds from Firebase
     const teamAgents = firebaseAgents.filter((agent) =>
       myTeamMemberIds.includes(agent.id)
     );
     setMyTeamAgents(teamAgents);
-  }, [firebaseAgents, myTeamMemberIds]);
+
+    // Clean up stale member IDs (agents that were deleted from Firebase)
+    const staleIds = myTeamMemberIds.filter(id => !validAgentIds.has(id));
+    if (staleIds.length > 0 && firebaseAgents.length > 0) {
+      console.log("Cleaning up stale member IDs:", staleIds);
+      // Remove stale IDs from the manager's team in Firebase
+      const validMemberIds = myTeamMemberIds.filter(id => validAgentIds.has(id));
+      // Only update if we have a real change and firebaseAgents is loaded
+      if (validMemberIds.length !== myTeamMemberIds.length) {
+        // Call removeFromMyTeam for each stale ID to update Firebase
+        staleIds.forEach(async (staleId) => {
+          try {
+            await removeFromMyTeam(staleId);
+          } catch (err) {
+            console.error("Error removing stale agent:", err);
+          }
+        });
+      }
+    }
+  }, [firebaseAgents, myTeamMemberIds, removeFromMyTeam]);
 
   // Load goals for all team members from manager's stored goals
   // FIX: Use myTeamMemberGoals directly instead of fetching each one
@@ -3817,7 +3840,11 @@ const ManagerDashboard = ({ user, onSignOut }) => {
     setEditingTeam(team);
     setEditTeamName(team.name || "");
     setEditTeamSupervisor(team.supervisor || "");
-    setEditSelectedAgents(team.memberIds || team.members?.map(m => m.id) || []);
+    // Filter to only include agents that still exist in Firebase
+    const storedMemberIds = team.memberIds || team.members?.map(m => m.id) || [];
+    const validAgentIds = new Set(firebaseAgents.map(a => a.id));
+    const validMemberIds = storedMemberIds.filter(id => validAgentIds.has(id));
+    setEditSelectedAgents(validMemberIds);
     setEditTeamSalesGoal(team.salesGoal || 3);
     setEditTeamConversionGoal(team.conversionGoal || 30);
     setShowEditTeamModal(true);

@@ -293,9 +293,9 @@ export const useFirestore = (userEmail) => {
         setAgents(usersData);
       } catch (error) {
         console.error("useFirestore: Error fetching users:", error);
-        // Fallback: derive agents from leads if users collection fails
-        console.log("useFirestore: Falling back to deriving agents from leads");
-        deriveAgentsFromLeads();
+        // Don't use fallback - users collection is the source of truth
+        // This prevents deleted agents from appearing via lead data
+        setAgents([]);
       } finally {
         inFlightRequests.delete(requestKey);
       }
