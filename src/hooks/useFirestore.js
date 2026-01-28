@@ -121,6 +121,7 @@ export const useFirestore = (userEmail) => {
   const [myTeamMemberIds, setMyTeamMemberIds] = useState([]);
   const [myTeamGoals, setMyTeamGoals] = useState({ salesGoal: 50, conversionGoal: 25 });
   const [myTeamMemberGoals, setMyTeamMemberGoals] = useState({}); // Store individual agent goals
+  const [hiddenAgentIds, setHiddenAgentIds] = useState([]); // Agents hidden from lead tracker (data kept)
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState(null);
   const pollingRef = useRef(null);
@@ -465,10 +466,16 @@ export const useFirestore = (userEmail) => {
           setMyTeamMemberGoals(data.memberGoals);
           console.log("Loaded member goals for", Object.keys(data.memberGoals).length, "agents");
         }
+        // Load hidden agent IDs if they exist
+        if (data.hiddenAgentIds) {
+          setHiddenAgentIds(data.hiddenAgentIds);
+          console.log("Loaded hidden agents:", data.hiddenAgentIds.length);
+        }
       } else {
         console.log("No manager team found, starting fresh");
         setMyTeamMemberIds([]);
         setMyTeamMemberGoals({});
+        setHiddenAgentIds([]);
       }
     } catch (error) {
       console.error("Error fetching manager team:", error);
@@ -586,6 +593,52 @@ export const useFirestore = (userEmail) => {
     }
   };
 
+  // Hide agent from lead tracker (keeps their data, just hides from UI)
+  const hideAgent = async (agentId) => {
+    if (!userEmail || !agentId) return;
+
+    try {
+      const docId = userEmail.replace(/\./g, '_');
+      const teamDocRef = doc(db, "managerTeams", docId);
+      const newHiddenIds = [...new Set([...hiddenAgentIds, agentId])]; // Prevent duplicates
+
+      await setDoc(teamDocRef, {
+        managerEmail: userEmail,
+        hiddenAgentIds: newHiddenIds,
+        updatedAt: new Date(),
+      }, { merge: true });
+
+      setHiddenAgentIds(newHiddenIds);
+      console.log("Agent hidden from tracker:", agentId);
+    } catch (error) {
+      console.error("Error hiding agent:", error);
+      throw error;
+    }
+  };
+
+  // Unhide agent (show them again in lead tracker)
+  const unhideAgent = async (agentId) => {
+    if (!userEmail || !agentId) return;
+
+    try {
+      const docId = userEmail.replace(/\./g, '_');
+      const teamDocRef = doc(db, "managerTeams", docId);
+      const newHiddenIds = hiddenAgentIds.filter(id => id !== agentId);
+
+      await setDoc(teamDocRef, {
+        managerEmail: userEmail,
+        hiddenAgentIds: newHiddenIds,
+        updatedAt: new Date(),
+      }, { merge: true });
+
+      setHiddenAgentIds(newHiddenIds);
+      console.log("Agent unhidden:", agentId);
+    } catch (error) {
+      console.error("Error unhiding agent:", error);
+      throw error;
+    }
+  };
+
   // =============================================================================
   // CRITICAL OPTIMIZATION: fetchAgentGoals is now memoized with useCallback
   // and uses a 24-hour cache + request deduplication
@@ -654,6 +707,7 @@ export const useFirestore = (userEmail) => {
     myTeamMemberIds,
     myTeamGoals,
     myTeamMemberGoals, // Individual agent goals set by this manager
+    hiddenAgentIds, // Agents hidden from lead tracker
     loading,
     lastRefresh,
     addLead,
@@ -666,6 +720,8 @@ export const useFirestore = (userEmail) => {
     updateMyTeamGoals,
     updateAgentGoals,
     fetchAgentGoals,
+    hideAgent,
+    unhideAgent,
     refreshData,
   };
 };
