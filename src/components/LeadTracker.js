@@ -911,7 +911,13 @@ const ManagerAICatAssistant = ({ leads, agents, mode = "team" }) => {
         if (lead.sale) leadTypeBreakdown[type].sales++;
       });
 
+      // Count total non-sale lead types for percentage calculation
+      const totalNonSaleLeads = Object.entries(leadTypeBreakdown)
+        .filter(([type]) => !type.includes("Sale"))
+        .reduce((sum, [, data]) => sum + data.total, 0);
+
       // Find top struggling lead types (high volume, low conversion)
+      // Show % of total leads instead of conversion %
       const strugglingTypes = Object.entries(leadTypeBreakdown)
         .filter(([type, data]) => {
           const isSaleType = type.includes("Sale");
@@ -922,7 +928,9 @@ const ManagerAICatAssistant = ({ leads, agents, mode = "team" }) => {
         .map(([type, data]) => ({
           type,
           count: data.total,
-          conversion: data.total > 0 ? ((data.sales / data.total) * 100).toFixed(1) : 0
+          nonSales: data.total - data.sales,
+          // Show what % of total leads this type makes up
+          percentOfTotal: totalNonSaleLeads > 0 ? ((data.total / totalNonSaleLeads) * 100).toFixed(1) : "0.0"
         }));
 
       // Analyze agent performance
@@ -1063,13 +1071,14 @@ const ManagerAICatAssistant = ({ leads, agents, mode = "team" }) => {
                     <h4 className="text-red-400 font-medium mb-2">
                       Top Lead Types Needing Attention
                     </h4>
+                    <p className="text-slate-400 text-xs mb-2">Showing what % of total leads each type represents</p>
                     <div className="space-y-2 text-sm">
                       {analysis.strugglingTypes.map((item) => (
                         <div key={item.type} className="flex justify-between items-center">
                           <span className="text-slate-300">{item.type}</span>
                           <div className="flex gap-4">
                             <span className="text-slate-400">{item.count} leads</span>
-                            <span className="text-red-400">{item.conversion}% conv</span>
+                            <span className="text-yellow-400">{item.percentOfTotal}% of total</span>
                           </div>
                         </div>
                       ))}
@@ -3390,8 +3399,11 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   const teamGoalsInitialized = useRef(false);
 
   // Use Firebase for teams and agents data
-  const { teams, agents: firebaseAgents, leads: firebaseLeads, createTeam, assignAgentToTeam, addToMyTeam, removeFromMyTeam, myTeamMemberIds, myTeamGoals, myTeamMemberGoals, updateMyTeamGoals, updateAgentGoals, fetchAgentGoals, refreshData, lastRefresh, loading: dataLoading } = useFirestore(user.email);
+  const { teams, agents: firebaseAgents, leads: firebaseLeads, createTeam, assignAgentToTeam, addToMyTeam, removeFromMyTeam, myTeamMemberIds, myTeamGoals, myTeamMemberGoals, updateMyTeamGoals, updateAgentGoals, fetchAgentGoals, hideAgent, unhideAgent, hiddenAgentIds, refreshData, lastRefresh, loading: dataLoading } = useFirestore(user.email);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Filter out hidden agents for UI display (keeps lead data intact)
+  const visibleAgents = firebaseAgents.filter(agent => !hiddenAgentIds.includes(agent.id));
 
   // Sync Firebase leads to global data for legacy functions
   useEffect(() => {
@@ -3788,6 +3800,75 @@ const ManagerDashboard = ({ user, onSignOut }) => {
     const needSupport = agentStats.filter(a => parseFloat(a.conversionRate) >= 15 && parseFloat(a.conversionRate) < 25).length;
     const critical = agentStats.filter(a => a.leads > 0 && parseFloat(a.conversionRate) < 15).length;
 
+    // Calculate real struggling lead types from actual data
+    const periodLeads = firebaseLeads.filter(lead => {
+      const leadDate = lead.timestamp instanceof Date ? lead.timestamp : new Date(lead.timestamp);
+      return leadDate >= startDate && leadDate < endDate;
+    });
+
+    const leadTypeBreakdown = {};
+    periodLeads.forEach(lead => {
+      const type = lead.leadType?.split(" - ")[0] || lead.leadType || "Unknown";
+      // Skip sale types as they are successes
+      const isSaleType = type.includes("Sale");
+      if (isSaleType) return;
+
+      if (!leadTypeBreakdown[type]) {
+        leadTypeBreakdown[type] = { total: 0, sales: 0 };
+      }
+      leadTypeBreakdown[type].total++;
+      if (lead.sale) {
+        leadTypeBreakdown[type].sales++;
+      }
+    });
+
+    // Find top struggling lead types (high volume, low conversion)
+    const strugglingLeadTypes = Object.entries(leadTypeBreakdown)
+      .filter(([, data]) => data.total >= 3) // Need at least 3 leads
+      .map(([type, data]) => ({
+        type,
+        total: data.total,
+        sales: data.sales,
+        nonSales: data.total - data.sales,
+        conversionRate: data.total > 0 ? ((data.sales / data.total) * 100).toFixed(1) : "0.0",
+        percentOfTotal: periodLeads.length > 0 ? ((data.total / periodLeads.length) * 100).toFixed(1) : "0.0"
+      }))
+      .sort((a, b) => b.nonSales - a.nonSales) // Sort by most lost leads
+      .slice(0, 5);
+
+    // Find agents struggling with specific lead types
+    const agentLeadTypePerformance = {};
+    agentsWithLeads.forEach(agent => {
+      const agentLeads = periodLeads.filter(lead =>
+        lead.agent === agent.id || lead.agentEmail === agent.email
+      );
+      agentLeads.forEach(lead => {
+        const type = lead.leadType?.split(" - ")[0] || lead.leadType || "Unknown";
+        if (!agentLeadTypePerformance[type]) {
+          agentLeadTypePerformance[type] = [];
+        }
+        agentLeadTypePerformance[type].push({
+          agentName: agent.name,
+          sale: lead.sale
+        });
+      });
+    });
+
+    // Calculate improvement potential per lead type
+    const improvementAreas = strugglingLeadTypes.map(leadType => {
+      const avgConversionForType = parseFloat(leadType.conversionRate);
+      const potentialGain = leadType.nonSales; // Each non-sale is potential gain
+      return {
+        ...leadType,
+        potentialGain,
+        recommendation: avgConversionForType < 10
+          ? `Focus training on ${leadType.type} handling - very low conversion`
+          : avgConversionForType < 20
+          ? `Improve ${leadType.type} approach - below average conversion`
+          : `Fine-tune ${leadType.type} techniques - room for improvement`
+      };
+    });
+
     return {
       periodLabel,
       currentSales: currentStats.sales,
@@ -3802,7 +3883,9 @@ const ManagerDashboard = ({ user, onSignOut }) => {
       highPerformers,
       needSupport,
       critical,
-      totalAgents: firebaseAgents.length,
+      totalAgents: visibleAgents.length,
+      strugglingLeadTypes,
+      improvementAreas,
     };
   };
 
@@ -4275,8 +4358,9 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   };
 
   // Get all agents with stats for All Agents tab (using date filter)
+  // Uses visibleAgents to exclude hidden agents from the list
   const getStrugglingAgents = () => {
-    let agents = firebaseAgents.map((agent) => ({
+    let agents = visibleAgents.map((agent) => ({
       ...agent,
       ...getAgentStatsForAllAgentsDateRange(agent.id || agent.email),
       teamName: getAgentTeamName(agent.id),
@@ -4299,8 +4383,8 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   // Get worst Five9 adherence agents (placeholder - Five9 data would come from integration)
   const getWorstAdherenceAgents = () => {
     // Five9 data would need to be integrated from Five9 API
-    // For now, return agents sorted by lowest performance
-    let agents = firebaseAgents.map((agent) => ({
+    // For now, return agents sorted by lowest performance (excludes hidden agents)
+    let agents = visibleAgents.map((agent) => ({
       ...agent,
       ...getAgentStatsFromFirebase(agent.id || agent.email, dateFilter),
     }));
@@ -4319,9 +4403,9 @@ const ManagerDashboard = ({ user, onSignOut }) => {
   const rankedTeams = getAllTeamsData();
   const currentThemeStyles = themes[currentTheme];
 
-  // Get overall company stats
+  // Get overall company stats (uses visibleAgents to exclude hidden agents)
   const getCompanyStats = () => {
-    let agents = firebaseAgents;
+    let agents = visibleAgents;
     if (selectedCenter !== "all") {
       agents = agents.filter((agent) => agent.center === selectedCenter);
     }
@@ -4804,13 +4888,13 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                   <select
                     value={benchmarkAgent?.email || ""}
                     onChange={(e) => {
-                      const agent = firebaseAgents.find(a => a.email === e.target.value);
+                      const agent = visibleAgents.find(a => a.email === e.target.value);
                       setBenchmarkAgent(agent || null);
                     }}
                     className="bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white text-sm"
                   >
                     <option value="">Select an agent...</option>
-                    {firebaseAgents.map(agent => (
+                    {visibleAgents.map(agent => (
                       <option key={agent.id} value={agent.email}>
                         {agent.name || agent.email?.split('@')[0]}
                       </option>
@@ -5620,7 +5704,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                   Add Agents to Your Team
                 </h4>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  {firebaseAgents
+                  {visibleAgents
                     .filter(
                       (agent) => !myTeamAgents.some((ta) => ta.id === agent.id)
                     )
@@ -5638,11 +5722,11 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                         </button>
                       </div>
                     ))}
-                  {firebaseAgents.filter(
+                  {visibleAgents.filter(
                     (agent) => !myTeamAgents.some((ta) => ta.id === agent.id)
                   ).length === 0 && (
                     <p className="text-gray-300 text-sm col-span-3">
-                      {firebaseAgents.length === 0 ? "No agents registered yet" : "All available agents are already on your team"}
+                      {visibleAgents.length === 0 ? "No agents registered yet" : "All available agents are already on your team"}
                     </p>
                   )}
                 </div>
@@ -6136,17 +6220,30 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                               ${agent.revenue}
                             </td>
                             <td className="py-3 px-4">
-                              <button
-                                onClick={() =>
-                                  setSelectedAgent({
-                                    ...agent,
-                                    leadsList: agent.leadsList,
-                                  })
-                                }
-                                className="text-blue-400 hover:text-blue-300 text-sm"
-                              >
-                                View Profile
-                              </button>
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() =>
+                                    setSelectedAgent({
+                                      ...agent,
+                                      leadsList: agent.leadsList,
+                                    })
+                                  }
+                                  className="text-blue-400 hover:text-blue-300 text-sm"
+                                >
+                                  View Profile
+                                </button>
+                                <button
+                                  onClick={async () => {
+                                    if (window.confirm(`Remove ${agent.name} from the lead tracker? Their data will be preserved.`)) {
+                                      await hideAgent(agent.id);
+                                      showToast(`${agent.name} has been removed from the tracker`, "success");
+                                    }
+                                  }}
+                                  className="text-red-400 hover:text-red-300 text-sm"
+                                >
+                                  Remove
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         );
@@ -6155,6 +6252,31 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                   </tbody>
                 </table>
               </div>
+              {/* Show hidden agents section for restoration */}
+              {hiddenAgentIds.length > 0 && (
+                <div className="mt-6 border-t border-white/10 pt-4">
+                  <h4 className="text-sm font-medium text-gray-400 mb-3">
+                    Hidden Agents ({hiddenAgentIds.length}) - Click to restore
+                  </h4>
+                  <div className="flex flex-wrap gap-2">
+                    {firebaseAgents
+                      .filter(agent => hiddenAgentIds.includes(agent.id))
+                      .map(agent => (
+                        <button
+                          key={agent.id}
+                          onClick={async () => {
+                            await unhideAgent(agent.id);
+                            showToast(`${agent.name} has been restored`, "success");
+                          }}
+                          className="bg-slate-700 hover:bg-slate-600 px-3 py-1 rounded text-sm text-gray-300 hover:text-white flex items-center gap-1"
+                        >
+                          <Plus className="w-3 h-3" />
+                          {agent.name}
+                        </button>
+                      ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -6316,63 +6438,109 @@ const ManagerDashboard = ({ user, onSignOut }) => {
               className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-6 border border-white/20`}
             >
               <h3 className="text-xl font-semibold text-white mb-4">
-                Detailed Performance Analysis
+                Data-Backed Improvement Areas
               </h3>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div>
-                  <h4 className="text-white font-medium mb-3">
-                    Top Improvement Areas
+                  <h4 className="text-white font-medium mb-3 flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-red-400" />
+                    Top Struggling Lead Types
                   </h4>
                   <div className="space-y-2">
-                    <div className="p-3 bg-blue-500/20 border border-blue-500/30 rounded">
-                      <p className="text-blue-400 font-medium">
-                        Lead Qualification
-                      </p>
-                      <p className="text-white text-sm">
-                        Average 18% improvement potential across all agents
-                      </p>
-                    </div>
-                    <div className="p-3 bg-purple-500/20 border border-purple-500/30 rounded">
-                      <p className="text-purple-400 font-medium">
-                        Objection Handling
-                      </p>
-                      <p className="text-white text-sm">
-                        Key skill for conversion boost in{" "}
-                        {perfStats.totalAgents} agents
-                      </p>
-                    </div>
+                    {perfStats.strugglingLeadTypes && perfStats.strugglingLeadTypes.length > 0 ? (
+                      perfStats.strugglingLeadTypes.map((item, index) => (
+                        <div key={index} className="p-3 bg-red-500/20 border border-red-500/30 rounded">
+                          <div className="flex justify-between items-center mb-1">
+                            <p className="text-red-400 font-medium">{item.type}</p>
+                            <span className="text-red-300 text-sm">{item.conversionRate}% conv</span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-300">{item.total} leads total</span>
+                            <span className="text-red-300">{item.nonSales} lost</span>
+                          </div>
+                          <div className="mt-1 w-full bg-slate-700 rounded-full h-1.5">
+                            <div
+                              className="bg-red-500 h-1.5 rounded-full"
+                              style={{ width: `${Math.min(100 - parseFloat(item.conversionRate), 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-gray-400 text-sm">No struggling lead types identified - great job!</p>
+                    )}
                   </div>
                 </div>
                 <div>
-                  <h4 className="text-white font-medium mb-3">
-                    Performance Trends
+                  <h4 className="text-white font-medium mb-3 flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4 text-green-400" />
+                    Recommended Actions
                   </h4>
                   <div className="space-y-2">
-                    <div className="p-3 bg-green-500/20 border border-green-500/30 rounded">
-                      <p className="text-green-400 font-medium">
-                        Revenue Growth
-                      </p>
-                      <p className="text-white text-sm">
-                        ${perfStats.totalRevenue.toLocaleString()} generated ({perfStats.periodLabel})
-                      </p>
-                    </div>
-                    <div className="p-3 bg-yellow-500/20 border border-yellow-500/30 rounded">
-                      <p className="text-yellow-400 font-medium">Lead Volume</p>
-                      <p className="text-white text-sm">
-                        {perfStats.totalLeads} leads processed with{" "}
-                        {perfStats.referralRate}% referral rate
-                      </p>
-                    </div>
-                    <div className="p-3 bg-cyan-500/20 border border-cyan-500/30 rounded">
-                      <p className="text-cyan-400 font-medium">
-                        Team Distribution
-                      </p>
-                      <p className="text-white text-sm">
-                        {rankedTeams.length} teams active with varying
-                        performance levels
-                      </p>
-                    </div>
+                    {perfStats.improvementAreas && perfStats.improvementAreas.length > 0 ? (
+                      perfStats.improvementAreas.slice(0, 3).map((item, index) => (
+                        <div key={index} className={`p-3 rounded border ${
+                          index === 0 ? 'bg-red-500/20 border-red-500/30' :
+                          index === 1 ? 'bg-yellow-500/20 border-yellow-500/30' :
+                          'bg-blue-500/20 border-blue-500/30'
+                        }`}>
+                          <p className={`font-medium ${
+                            index === 0 ? 'text-red-400' :
+                            index === 1 ? 'text-yellow-400' :
+                            'text-blue-400'
+                          }`}>
+                            #{index + 1}: {item.type}
+                          </p>
+                          <p className="text-white text-sm mt-1">
+                            {item.recommendation}
+                          </p>
+                          <p className="text-gray-400 text-xs mt-1">
+                            Potential: {item.potentialGain} additional sales
+                          </p>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="p-3 bg-green-500/20 border border-green-500/30 rounded">
+                        <p className="text-green-400 font-medium">Excellent Performance</p>
+                        <p className="text-white text-sm">No major improvement areas identified</p>
+                      </div>
+                    )}
                   </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Performance Summary */}
+            <div
+              className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-6 border border-white/20`}
+            >
+              <h3 className="text-xl font-semibold text-white mb-4">
+                Performance Summary
+              </h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="p-3 bg-green-500/20 border border-green-500/30 rounded text-center">
+                  <p className="text-green-400 font-medium">Revenue</p>
+                  <p className="text-2xl font-bold text-white">
+                    ${perfStats.totalRevenue.toLocaleString()}
+                  </p>
+                  <p className="text-gray-400 text-xs">{perfStats.periodLabel}</p>
+                </div>
+                <div className="p-3 bg-blue-500/20 border border-blue-500/30 rounded text-center">
+                  <p className="text-blue-400 font-medium">Total Leads</p>
+                  <p className="text-2xl font-bold text-white">{perfStats.totalLeads}</p>
+                  <p className="text-gray-400 text-xs">{perfStats.referralRate}% referral rate</p>
+                </div>
+                <div className="p-3 bg-purple-500/20 border border-purple-500/30 rounded text-center">
+                  <p className="text-purple-400 font-medium">Active Teams</p>
+                  <p className="text-2xl font-bold text-white">{rankedTeams.length}</p>
+                  <p className="text-gray-400 text-xs">with performance data</p>
+                </div>
+                <div className="p-3 bg-yellow-500/20 border border-yellow-500/30 rounded text-center">
+                  <p className="text-yellow-400 font-medium">Growth</p>
+                  <p className={`text-2xl font-bold ${parseFloat(perfStats.salesGrowth) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {parseFloat(perfStats.salesGrowth) >= 0 ? '+' : ''}{perfStats.salesGrowth}%
+                  </p>
+                  <p className="text-gray-400 text-xs">vs previous period</p>
                 </div>
               </div>
             </div>
@@ -7642,7 +7810,9 @@ const AgentDashboard = ({ user, onSignOut }) => {
 
 // Admin Dashboard Component
 const AdminDashboard = ({ user, onSignOut }) => {
-  const { leads: firebaseLeads, agents: firebaseAgents, loading: dataLoading } = useFirestore(user.email);
+  const { leads: firebaseLeads, agents: firebaseAgents, hiddenAgentIds, loading: dataLoading } = useFirestore(user.email);
+  // Filter out hidden agents for UI display
+  const visibleAgents = firebaseAgents.filter(agent => !hiddenAgentIds?.includes(agent.id));
   const [dateFilter, setDateFilter] = useState("this_month");
   const [customStartDate, setCustomStartDate] = useState(() => {
     const today = new Date();
@@ -7771,11 +7941,11 @@ const AdminDashboard = ({ user, onSignOut }) => {
       .slice(-14);
   };
 
-  // Get agent performance
+  // Get agent performance (uses visibleAgents to exclude hidden agents)
   const getAgentPerformance = () => {
     const leads = getFilteredLeads();
 
-    return firebaseAgents.map(agent => {
+    return visibleAgents.map(agent => {
       const agentLeads = leads.filter(l => l.agentEmail === agent.email || l.agent === agent.id);
       const sales = agentLeads.filter(l => l.sale).length;
       const leadCount = agentLeads.length;
@@ -8133,13 +8303,13 @@ const AdminDashboard = ({ user, onSignOut }) => {
               <select
                 value={benchmarkAgent?.email || ""}
                 onChange={(e) => {
-                  const agent = firebaseAgents.find(a => a.email === e.target.value);
+                  const agent = visibleAgents.find(a => a.email === e.target.value);
                   setBenchmarkAgent(agent || null);
                 }}
                 className="bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white text-sm"
               >
                 <option value="">Select an agent...</option>
-                {firebaseAgents.map(agent => (
+                {visibleAgents.map(agent => (
                   <option key={agent.id} value={agent.email}>
                     {agent.name || agent.email?.split('@')[0]}
                   </option>
