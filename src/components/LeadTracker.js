@@ -320,6 +320,94 @@ const PieChart = ({ data, colors }) => {
   );
 };
 
+// Mini Pie Chart Component - Compact pie chart for inline display with struggled leads
+const MiniPieChart = ({ data, size = 80, showLegend = true }) => {
+  if (!data || data.length === 0) {
+    return (
+      <div className="flex items-center justify-center text-gray-400 text-xs" style={{ minWidth: size }}>
+        No data
+      </div>
+    );
+  }
+
+  const total = data.reduce((sum, item) => sum + item.value, 0);
+  if (total === 0) {
+    return (
+      <div className="flex items-center justify-center text-gray-400 text-xs" style={{ minWidth: size }}>
+        No struggles
+      </div>
+    );
+  }
+
+  let currentAngle = 0;
+  const radius = (size / 2) - 5;
+  const centerX = size / 2;
+  const centerY = size / 2;
+
+  const colors = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899'];
+
+  const segments = data.map((item, index) => {
+    const angle = (item.value / total) * 360;
+    const percentage = ((item.value / total) * 100).toFixed(0);
+    const largeArcFlag = angle > 180 ? 1 : 0;
+    const startAngle = (currentAngle * Math.PI) / 180;
+    const endAngle = ((currentAngle + angle) * Math.PI) / 180;
+    const x1 = centerX + radius * Math.cos(startAngle);
+    const y1 = centerY + radius * Math.sin(startAngle);
+    const x2 = centerX + radius * Math.cos(endAngle);
+    const y2 = centerY + radius * Math.sin(endAngle);
+    currentAngle += angle;
+    const path = `M ${centerX} ${centerY} L ${x1} ${y1} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2} Z`;
+    return {
+      path,
+      color: colors[index % colors.length],
+      label: item.label,
+      value: item.value,
+      percentage,
+    };
+  });
+
+  return (
+    <div className="flex items-center gap-2">
+      <svg
+        width={size}
+        height={size}
+        viewBox={`0 0 ${size} ${size}`}
+        className="transform -rotate-90 flex-shrink-0"
+      >
+        {segments.map((segment, index) => (
+          <path
+            key={index}
+            d={segment.path}
+            fill={segment.color}
+            stroke="#1e293b"
+            strokeWidth="1"
+          />
+        ))}
+      </svg>
+      {showLegend && (
+        <div className="space-y-0.5 text-xs max-w-[120px]">
+          {segments.slice(0, 4).map((segment, index) => (
+            <div key={index} className="flex items-center gap-1">
+              <div
+                className="w-2 h-2 rounded-full flex-shrink-0"
+                style={{ backgroundColor: segment.color }}
+              />
+              <span className="text-gray-300 truncate" title={segment.label}>
+                {segment.label.length > 12 ? segment.label.substring(0, 12) + '...' : segment.label}
+              </span>
+              <span className="text-gray-400 flex-shrink-0">({segment.percentage}%)</span>
+            </div>
+          ))}
+          {segments.length > 4 && (
+            <div className="text-gray-500 text-[10px]">+{segments.length - 4} more</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // Benchmark Chart Component - Shows hourly sales performance with trend line
 const BenchmarkChart = React.memo(({ leads, title = "Sales Benchmark", agentFilter = null }) => {
   // Use state for current time to control updates (update every minute instead of every render)
@@ -3411,6 +3499,95 @@ const ManagerDashboard = ({ user, onSignOut }) => {
     };
   };
 
+  // Get struggled lead types for an agent (leads that didn't convert, grouped by type)
+  const getAgentStruggledLeads = (agentIdOrEmail) => {
+    const { startDate, endDate } = getMyTeamDateRange();
+
+    const agentLeads = firebaseLeads.filter(lead => {
+      if (lead.agent !== agentIdOrEmail && lead.agentEmail !== agentIdOrEmail) return false;
+      const leadDate = lead.timestamp instanceof Date ? lead.timestamp : new Date(lead.timestamp);
+      return leadDate >= startDate && leadDate < endDate;
+    });
+
+    // Group leads by type and track non-sales (struggled leads)
+    const leadTypeBreakdown = {};
+    agentLeads.forEach(lead => {
+      const type = lead.leadType?.split(" - ")[0] || lead.leadType || "Unknown";
+      // Skip sale types as they are successes, not struggles
+      const isSaleType = type.includes("Sale");
+      if (isSaleType) return;
+
+      if (!leadTypeBreakdown[type]) {
+        leadTypeBreakdown[type] = { total: 0, nonSales: 0 };
+      }
+      leadTypeBreakdown[type].total++;
+      if (!lead.sale) {
+        leadTypeBreakdown[type].nonSales++;
+      }
+    });
+
+    // Convert to array format for pie chart - only include types with non-sales
+    const struggledLeads = Object.entries(leadTypeBreakdown)
+      .filter(([, data]) => data.nonSales > 0)
+      .map(([type, data]) => ({
+        label: type,
+        value: data.nonSales,
+        total: data.total,
+        conversionRate: data.total > 0 ? ((data.total - data.nonSales) / data.total * 100).toFixed(1) : "0.0"
+      }))
+      .sort((a, b) => b.value - a.value);
+
+    return struggledLeads;
+  };
+
+  // Get struggled leads for the entire team (aggregated)
+  const getTeamStruggledLeads = () => {
+    const { startDate, endDate } = getMyTeamDateRange();
+
+    // Get all team member IDs
+    const teamMemberIds = myTeamAgents.map(member => member.id || member.email);
+
+    // Filter leads for all team members in date range
+    const teamLeads = firebaseLeads.filter(lead => {
+      const matchesTeam = teamMemberIds.some(id =>
+        lead.agent === id || lead.agentEmail === id
+      );
+      if (!matchesTeam) return false;
+      const leadDate = lead.timestamp instanceof Date ? lead.timestamp : new Date(lead.timestamp);
+      return leadDate >= startDate && leadDate < endDate;
+    });
+
+    // Group leads by type and track non-sales
+    const leadTypeBreakdown = {};
+    teamLeads.forEach(lead => {
+      const type = lead.leadType?.split(" - ")[0] || lead.leadType || "Unknown";
+      // Skip sale types
+      const isSaleType = type.includes("Sale");
+      if (isSaleType) return;
+
+      if (!leadTypeBreakdown[type]) {
+        leadTypeBreakdown[type] = { total: 0, nonSales: 0 };
+      }
+      leadTypeBreakdown[type].total++;
+      if (!lead.sale) {
+        leadTypeBreakdown[type].nonSales++;
+      }
+    });
+
+    // Convert to array format for pie chart
+    const struggledLeads = Object.entries(leadTypeBreakdown)
+      .filter(([, data]) => data.nonSales > 0)
+      .map(([type, data]) => ({
+        label: type,
+        value: data.nonSales,
+        total: data.total,
+        conversionRate: data.total > 0 ? ((data.total - data.nonSales) / data.total * 100).toFixed(1) : "0.0"
+      }))
+      .sort((a, b) => b.value - a.value);
+
+    return struggledLeads;
+  };
+
   // Helper function to get date range based on filter type for All Agents tab
   const getAllAgentsDateRange = () => {
     const today = new Date();
@@ -5273,6 +5450,169 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                   </p>
                 </div>
               </div>
+
+              {/* Team Performance Breakdown - Like Teams Tab */}
+              {myTeamAgents.length > 0 && (
+                <div className="bg-white/5 rounded-lg overflow-hidden mb-6">
+                  {/* Team Header */}
+                  <div className="bg-gradient-to-r from-green-600 to-green-700 px-4 py-3 flex justify-between items-center">
+                    <div className="flex items-center gap-3">
+                      <h4 className="text-lg font-semibold text-white">
+                        My Team Performance Breakdown
+                      </h4>
+                      <span className="bg-white/20 px-2 py-0.5 rounded text-xs text-white">
+                        {myTeamAgents.length} agents
+                      </span>
+                      <span className="bg-white/10 px-2 py-0.5 rounded text-xs text-white/70">
+                        Goals: {teamSalesGoal || 10} sales | {teamConversionGoal || 25}% conv
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Team Overview Pie Chart - What the entire team struggled with */}
+                  {(() => {
+                    const teamStruggles = getTeamStruggledLeads();
+                    if (teamStruggles.length > 0) {
+                      return (
+                        <div className="bg-red-900/20 border-b border-red-500/30 px-4 py-4">
+                          <div className="flex items-start gap-6">
+                            <div className="flex-1">
+                              <h5 className="text-red-400 font-medium mb-2 flex items-center gap-2">
+                                <AlertTriangle className="w-4 h-4" />
+                                Team Struggles Overview - Lead Types That Need Attention
+                              </h5>
+                              <p className="text-gray-400 text-sm mb-3">
+                                These are the lead types your team struggled to convert during this period
+                              </p>
+                            </div>
+                            <div className="flex-shrink-0">
+                              <MiniPieChart data={teamStruggles} size={100} showLegend={true} />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-3">
+                            {teamStruggles.slice(0, 8).map((item, index) => (
+                              <div key={index} className="bg-red-900/30 rounded px-2 py-1 text-xs">
+                                <span className="text-white font-medium">{item.label}</span>
+                                <span className="text-red-300 ml-2">{item.value} lost</span>
+                                <span className="text-gray-400 ml-1">({item.conversionRate}% conv)</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
+
+                  {/* Metrics Table */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-slate-700/50">
+                          <th className="text-left px-3 py-2 text-gray-300 font-medium sticky left-0 bg-slate-700/50">Agent</th>
+                          <th className="text-center px-3 py-2 text-gray-300 font-medium">Leads</th>
+                          <th className="text-center px-3 py-2 text-gray-300 font-medium">Sales</th>
+                          <th className="text-center px-3 py-2 text-gray-300 font-medium">Conv %</th>
+                          <th className="text-center px-3 py-2 text-gray-300 font-medium">Ref Sales</th>
+                          <th className="text-center px-3 py-2 text-gray-300 font-medium">Dash Sales</th>
+                          <th className="text-center px-3 py-2 text-gray-300 font-medium">Revenue</th>
+                          <th className="text-left px-3 py-2 text-gray-300 font-medium min-w-[220px]">Struggled Leads</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {myTeamAgents.map((member) => {
+                          const stats = getAgentStatsForDateRange(member.id || member.email);
+                          const struggledLeads = getAgentStruggledLeads(member.id || member.email);
+                          const salesGoal = teamSalesGoal || 10;
+                          const conversionGoal = teamConversionGoal || 25;
+
+                          const getSalesColor = (sales) => {
+                            if (sales >= salesGoal) return "text-green-400";
+                            if (sales >= salesGoal * 0.7) return "text-yellow-400";
+                            return "text-red-400";
+                          };
+
+                          const getConversionColor = (rate) => {
+                            const val = parseFloat(rate);
+                            if (val >= conversionGoal) return "text-green-400";
+                            if (val >= conversionGoal * 0.8) return "text-yellow-400";
+                            return "text-red-400";
+                          };
+
+                          return (
+                            <tr key={member.id} className="border-t border-slate-600/30 hover:bg-slate-700/30">
+                              <td className="px-3 py-2 text-white font-medium sticky left-0 bg-slate-800/80">
+                                {member.name || member.email?.split('@')[0] || 'Unknown'}
+                              </td>
+                              <td className="text-center px-3 py-2 text-white">{stats.leads}</td>
+                              <td className={`text-center px-3 py-2 font-semibold ${getSalesColor(stats.sales)}`}>{stats.sales}</td>
+                              <td className={`text-center px-3 py-2 font-semibold ${getConversionColor(stats.conversionRate)}`}>
+                                {stats.conversionRate}%
+                              </td>
+                              <td className="text-center px-3 py-2 text-white">{stats.referrals}</td>
+                              <td className="text-center px-3 py-2 text-white">{stats.dashSales}</td>
+                              <td className="text-center px-3 py-2 text-green-400 font-semibold">${stats.revenue}</td>
+                              <td className="px-3 py-2">
+                                <MiniPieChart data={struggledLeads} size={60} showLegend={true} />
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        {/* Team Totals Row */}
+                        {(() => {
+                          const totals = myTeamAgents.reduce((acc, member) => {
+                            const stats = getAgentStatsForDateRange(member.id || member.email);
+                            return {
+                              leads: acc.leads + stats.leads,
+                              sales: acc.sales + stats.sales,
+                              referrals: acc.referrals + stats.referrals,
+                              dashSales: acc.dashSales + stats.dashSales,
+                              revenue: acc.revenue + stats.revenue,
+                            };
+                          }, { leads: 0, sales: 0, referrals: 0, dashSales: 0, revenue: 0 });
+
+                          const totalConversion = totals.leads > 0
+                            ? ((totals.sales / totals.leads) * 100).toFixed(1)
+                            : "0.0";
+
+                          const salesGoal = teamSalesGoal || 10;
+                          const conversionGoal = teamConversionGoal || 25;
+
+                          const getSalesColor = (sales) => {
+                            if (sales >= salesGoal * myTeamAgents.length) return "text-green-400";
+                            if (sales >= salesGoal * myTeamAgents.length * 0.7) return "text-yellow-400";
+                            return "text-red-400";
+                          };
+
+                          const getConversionColor = (rate) => {
+                            const val = parseFloat(rate);
+                            if (val >= conversionGoal) return "text-green-400";
+                            if (val >= conversionGoal * 0.8) return "text-yellow-400";
+                            return "text-red-400";
+                          };
+
+                          return (
+                            <tr className="bg-green-600/30 border-t-2 border-green-400 font-semibold">
+                              <td className="px-3 py-2 text-white sticky left-0 bg-green-600/50">
+                                Team Totals
+                              </td>
+                              <td className="text-center px-3 py-2 text-white">{totals.leads}</td>
+                              <td className={`text-center px-3 py-2 ${getSalesColor(totals.sales)}`}>{totals.sales}</td>
+                              <td className={`text-center px-3 py-2 ${getConversionColor(totalConversion)}`}>
+                                {totalConversion}%
+                              </td>
+                              <td className="text-center px-3 py-2 text-white">{totals.referrals}</td>
+                              <td className="text-center px-3 py-2 text-white">{totals.dashSales}</td>
+                              <td className="text-center px-3 py-2 text-green-400">${totals.revenue}</td>
+                              <td className="px-3 py-2 text-gray-400 text-xs">See overview above</td>
+                            </tr>
+                          );
+                        })()}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
 
               {/* Add/Remove Agents */}
               <div className="bg-white/5 rounded-lg p-4 mb-6">
