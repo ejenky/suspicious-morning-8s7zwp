@@ -184,9 +184,71 @@ const HelloKittyDecorations = ({ isActive }) => {
           z-index: 0;
         }
 
-        /* Make text more readable on light background */
+        /* Fix text readability on light pink background */
         .hello-kitty-active .text-white {
-          text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+          color: #4a1942 !important;
+          text-shadow: none;
+        }
+
+        .hello-kitty-active .text-gray-300 {
+          color: #6b2d5b !important;
+        }
+
+        .hello-kitty-active .text-gray-400 {
+          color: #8b4d7b !important;
+        }
+
+        .hello-kitty-active .text-xs.text-gray-400 {
+          color: #9b5d8b !important;
+        }
+
+        /* Keep colored text visible but darker */
+        .hello-kitty-active .text-blue-400 {
+          color: #1e40af !important;
+        }
+
+        .hello-kitty-active .text-green-400 {
+          color: #166534 !important;
+        }
+
+        .hello-kitty-active .text-cyan-400 {
+          color: #0e7490 !important;
+        }
+
+        .hello-kitty-active .text-purple-400 {
+          color: #7c3aed !important;
+        }
+
+        .hello-kitty-active .text-pink-400 {
+          color: #be185d !important;
+        }
+
+        .hello-kitty-active .text-yellow-400 {
+          color: #b45309 !important;
+        }
+
+        .hello-kitty-active .text-red-400 {
+          color: #b91c1c !important;
+        }
+
+        /* Make cards more visible */
+        .hello-kitty-active .bg-white\\/10,
+        .hello-kitty-active .bg-white\\/30,
+        .hello-kitty-active .bg-white\\/5 {
+          background-color: rgba(255, 255, 255, 0.7) !important;
+          border-color: rgba(219, 39, 119, 0.3) !important;
+        }
+
+        .hello-kitty-active .bg-slate-800 {
+          background-color: rgba(255, 255, 255, 0.8) !important;
+        }
+
+        .hello-kitty-active .border-white\\/20 {
+          border-color: rgba(219, 39, 119, 0.3) !important;
+        }
+
+        .hello-kitty-active .border-slate-700 {
+          border-color: rgba(219, 39, 119, 0.3) !important;
         }
 
         /* Cute rounded corners for cards */
@@ -197,6 +259,24 @@ const HelloKittyDecorations = ({ isActive }) => {
         /* Add subtle glow to accent buttons */
         .hello-kitty-active button[class*="from-pink"] {
           box-shadow: 0 0 15px rgba(255, 105, 180, 0.4);
+        }
+
+        /* Header text */
+        .hello-kitty-active h1,
+        .hello-kitty-active h2,
+        .hello-kitty-active h3,
+        .hello-kitty-active h4,
+        .hello-kitty-active h5 {
+          color: #4a1942 !important;
+        }
+
+        /* Chart labels */
+        .hello-kitty-active .recharts-cartesian-axis-tick-value {
+          fill: #4a1942 !important;
+        }
+
+        .hello-kitty-active .recharts-legend-item-text {
+          color: #4a1942 !important;
         }
       `}</style>
     </>
@@ -209,6 +289,74 @@ const HelloKittyBow = ({ isActive }) => {
   return (
     <span className="ml-2 text-2xl animate-pulse" title="Hello Kitty Mode!">🎀</span>
   );
+};
+
+// Hello Kitty Icon mappings - replaces regular icons with cute alternatives
+const helloKittyIcons = {
+  shield: "🎀",      // Logo/branding
+  users: "🐱",       // Team/agents
+  user: "🐱",        // Single user
+  target: "💖",      // Goals/targets
+  trending: "✨",    // Trends/growth
+  dollar: "🌸",      // Revenue/money
+  trophy: "👑",      // Awards
+  chart: "🎀",       // Analytics
+  settings: "⚙️",    // Settings (keep)
+  calendar: "📅",    // Calendar (keep)
+  bell: "🔔",        // Notifications (keep)
+  fire: "💕",        // Hot/fire
+  star: "⭐",        // Star (keep)
+  check: "💖",       // Success
+  alert: "😿",       // Warning
+  phone: "📱",       // Phone (keep)
+  mail: "💌",        // Email
+  referral: "🎁",    // Referrals
+  bot: "🤖",         // AI (keep for now)
+  headphones: "🎧",  // Support (keep)
+};
+
+// Hello Kitty Icon Component - shows emoji when theme is active, otherwise shows regular icon
+const HelloKittyIcon = ({ icon: Icon, iconType, isHelloKitty, className = "", ...props }) => {
+  if (isHelloKitty && helloKittyIcons[iconType]) {
+    return (
+      <span
+        className={`inline-flex items-center justify-center ${className}`}
+        style={{ fontSize: '1.25rem', lineHeight: 1 }}
+        {...props}
+      >
+        {helloKittyIcons[iconType]}
+      </span>
+    );
+  }
+  return <Icon className={className} {...props} />;
+};
+
+// Hello Kitty Avatar Component - shows Hello Kitty face instead of initials
+const HelloKittyAvatar = ({ name, isHelloKitty, className = "" }) => {
+  if (isHelloKitty) {
+    return (
+      <div className={`bg-gradient-to-r from-pink-400 to-rose-300 rounded-full flex items-center justify-center ${className}`}>
+        <span style={{ fontSize: '1.5rem' }}>🐱</span>
+      </div>
+    );
+  }
+  return (
+    <div className={`bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold ${className}`}>
+      {name?.split(" ").map((n) => n[0]).join("") || "?"}
+    </div>
+  );
+};
+
+// Hello Kitty Logo Component for header
+const HelloKittyLogo = ({ isHelloKitty, className = "" }) => {
+  if (isHelloKitty) {
+    return (
+      <div className={`flex items-center justify-center ${className}`}>
+        <span style={{ fontSize: '1.75rem' }}>🐱</span>
+      </div>
+    );
+  }
+  return <Shield className={className} />;
 };
 
 // Global state for supervisor help requests and goals
@@ -4793,7 +4941,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
               <div
                 className={`bg-gradient-to-r ${currentThemeStyles.accent} p-2 rounded-lg`}
               >
-                <Shield className="w-6 h-6" />
+                <HelloKittyLogo isHelloKitty={currentTheme === 'helloKitty'} className="w-6 h-6" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
@@ -4834,18 +4982,20 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                 onToggleDarkMode={() => setIsDarkMode(!isDarkMode)}
               />
               <div className="relative">
-                <div className="w-10 h-10 rounded-full bg-slate-600 flex items-center justify-center overflow-hidden">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center overflow-hidden ${currentTheme === 'helloKitty' ? 'bg-pink-200' : 'bg-slate-600'}`}>
                   {userAvatar ? (
                     <img
                       src={userAvatar}
                       alt="Avatar"
                       className="w-full h-full object-cover"
                     />
+                  ) : currentTheme === 'helloKitty' ? (
+                    <span style={{ fontSize: '1.5rem' }}>🐱</span>
                   ) : (
                     <User className="w-6 h-6 text-slate-300" />
                   )}
                 </div>
-                <label className="absolute -bottom-1 -right-1 bg-blue-600 rounded-full p-1 cursor-pointer hover:bg-blue-700">
+                <label className={`absolute -bottom-1 -right-1 rounded-full p-1 cursor-pointer ${currentTheme === 'helloKitty' ? 'bg-pink-500 hover:bg-pink-600' : 'bg-blue-600 hover:bg-blue-700'}`}>
                   <Camera className="w-3 h-3 text-white" />
                   <input
                     type="file"
@@ -4857,7 +5007,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
               </div>
               <button
                 onClick={onSignOut}
-                className="flex items-center gap-2 bg-red-600 hover:bg-red-700 px-3 py-2 rounded-lg text-sm transition-colors"
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${currentTheme === 'helloKitty' ? 'bg-pink-600 hover:bg-pink-700' : 'bg-red-600 hover:bg-red-700'}`}
               >
                 <LogOut className="w-4 h-4" />
                 Sign Out
@@ -4869,13 +5019,13 @@ const ManagerDashboard = ({ user, onSignOut }) => {
       <div className="container mx-auto px-6 py-6">
         <div className="flex bg-white/10 rounded-lg p-1 mb-6 border border-white/20 overflow-x-auto">
           {[
-            { key: "overview", label: "Overview", icon: BarChart3 },
-            { key: "teams", label: "Teams", icon: Users2 },
-            { key: "myteam", label: "My Team", icon: Users },
-            { key: "agents", label: "All Agents", icon: Users },
-            { key: "performance", label: "Performance", icon: TrendingUp },
-            { key: "supervisor", label: "Supervisor Help", icon: Headphones },
-            { key: "notifications", label: "Notifications", icon: Bell },
+            { key: "overview", label: "Overview", icon: BarChart3, iconType: "chart" },
+            { key: "teams", label: "Teams", icon: Users2, iconType: "users" },
+            { key: "myteam", label: "My Team", icon: Users, iconType: "users" },
+            { key: "agents", label: "All Agents", icon: Users, iconType: "users" },
+            { key: "performance", label: "Performance", icon: TrendingUp, iconType: "trending" },
+            { key: "supervisor", label: "Supervisor Help", icon: Headphones, iconType: "headphones" },
+            { key: "notifications", label: "Notifications", icon: Bell, iconType: "bell" },
           ].map((tab) => (
             <button
               key={tab.key}
@@ -4886,7 +5036,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                   : "text-gray-300 hover:text-white"
               }`}
             >
-              <tab.icon className="w-4 h-4 inline mr-2" />
+              <HelloKittyIcon icon={tab.icon} iconType={tab.iconType} isHelloKitty={currentTheme === 'helloKitty'} className="w-4 h-4 inline mr-2" />
               {tab.label}
             </button>
           ))}
@@ -4954,7 +5104,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
               <div
                 className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-4 border border-white/20 text-center`}
               >
-                <Users className="w-6 h-6 text-blue-400 mx-auto mb-2" />
+                <HelloKittyIcon icon={Users} iconType="users" isHelloKitty={currentTheme === 'helloKitty'} className="w-6 h-6 text-blue-400 mx-auto mb-2" />
                 <p className="text-gray-300 text-sm">Total Agents</p>
                 <p className="text-xl font-bold text-white">
                   {companyStats.totalAgents}
@@ -4966,7 +5116,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
               <div
                 className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-4 border border-white/20 text-center`}
               >
-                <Target className="w-6 h-6 text-green-400 mx-auto mb-2" />
+                <HelloKittyIcon icon={Target} iconType="target" isHelloKitty={currentTheme === 'helloKitty'} className="w-6 h-6 text-green-400 mx-auto mb-2" />
                 <p className="text-gray-300 text-sm">Total Sales</p>
                 <p className="text-xl font-bold text-white">
                   {companyStats.totalSales}
@@ -4978,7 +5128,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
               <div
                 className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-4 border border-white/20 text-center`}
               >
-                <Users className="w-6 h-6 text-cyan-400 mx-auto mb-2" />
+                <HelloKittyIcon icon={Users} iconType="users" isHelloKitty={currentTheme === 'helloKitty'} className="w-6 h-6 text-cyan-400 mx-auto mb-2" />
                 <p className="text-gray-300 text-sm">Total Leads</p>
                 <p className="text-xl font-bold text-white">
                   {companyStats.totalLeads}
@@ -4990,7 +5140,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
               <div
                 className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-4 border border-white/20 text-center`}
               >
-                <TrendingUp className="w-6 h-6 text-purple-400 mx-auto mb-2" />
+                <HelloKittyIcon icon={TrendingUp} iconType="trending" isHelloKitty={currentTheme === 'helloKitty'} className="w-6 h-6 text-purple-400 mx-auto mb-2" />
                 <p className="text-gray-300 text-sm">Conversion Rate</p>
                 <p className="text-xl font-bold text-white">
                   {companyStats.avgConversion}%
@@ -5000,7 +5150,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
               <div
                 className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-4 border border-white/20 text-center`}
               >
-                <UserPlus className="w-6 h-6 text-pink-400 mx-auto mb-2" />
+                <HelloKittyIcon icon={UserPlus} iconType="referral" isHelloKitty={currentTheme === 'helloKitty'} className="w-6 h-6 text-pink-400 mx-auto mb-2" />
                 <p className="text-gray-300 text-sm">Total Referrals</p>
                 <p className="text-xl font-bold text-white">
                   {companyStats.totalReferrals}
@@ -5012,7 +5162,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
               <div
                 className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-4 border border-white/20 text-center`}
               >
-                <DollarSign className="w-6 h-6 text-yellow-400 mx-auto mb-2" />
+                <HelloKittyIcon icon={DollarSign} iconType="dollar" isHelloKitty={currentTheme === 'helloKitty'} className="w-6 h-6 text-yellow-400 mx-auto mb-2" />
                 <p className="text-gray-300 text-sm">Total Revenue</p>
                 <p className="text-xl font-bold text-white">
                   ${companyStats.totalRevenue.toLocaleString()}
@@ -5035,7 +5185,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
               <div className="bg-slate-800 rounded-lg border border-slate-700 p-4">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                    <User className="w-5 h-5 text-blue-400" />
+                    <HelloKittyIcon icon={User} iconType="user" isHelloKitty={currentTheme === 'helloKitty'} className="w-5 h-5 text-blue-400" />
                     Individual Agent Benchmark
                   </h3>
                   <select
@@ -5063,7 +5213,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                 ) : (
                   <div className="h-64 flex items-center justify-center text-gray-400">
                     <div className="text-center">
-                      <User className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                      <HelloKittyIcon icon={User} iconType="user" isHelloKitty={currentTheme === 'helloKitty'} className="w-12 h-12 mx-auto mb-2 opacity-50" />
                       <p>Select an agent to view their benchmark</p>
                     </div>
                   </div>
@@ -5637,13 +5787,15 @@ const ManagerDashboard = ({ user, onSignOut }) => {
 
               {/* My Team Overview */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <div className="bg-blue-500/20 rounded-lg p-4 text-center">
+                <div className={`rounded-lg p-4 text-center ${currentTheme === 'helloKitty' ? 'bg-pink-200/50' : 'bg-blue-500/20'}`}>
+                  <HelloKittyIcon icon={Users} iconType="users" isHelloKitty={currentTheme === 'helloKitty'} className="w-6 h-6 text-blue-400 mx-auto mb-1" />
                   <p className="text-blue-300 text-sm">Team Members</p>
                   <p className="text-2xl font-bold text-white">
                     {myTeamAgents.length}
                   </p>
                 </div>
-                <div className="bg-green-500/20 rounded-lg p-4 text-center">
+                <div className={`rounded-lg p-4 text-center ${currentTheme === 'helloKitty' ? 'bg-pink-200/50' : 'bg-green-500/20'}`}>
+                  <HelloKittyIcon icon={Target} iconType="target" isHelloKitty={currentTheme === 'helloKitty'} className="w-6 h-6 text-green-400 mx-auto mb-1" />
                   <p className="text-green-300 text-sm">Total Sales</p>
                   <p className="text-2xl font-bold text-white">
                     {myTeamAgents.reduce(
@@ -5653,7 +5805,8 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                     )}
                   </p>
                 </div>
-                <div className="bg-purple-500/20 rounded-lg p-4 text-center">
+                <div className={`rounded-lg p-4 text-center ${currentTheme === 'helloKitty' ? 'bg-pink-200/50' : 'bg-purple-500/20'}`}>
+                  <HelloKittyIcon icon={TrendingUp} iconType="trending" isHelloKitty={currentTheme === 'helloKitty'} className="w-6 h-6 text-purple-400 mx-auto mb-1" />
                   <p className="text-purple-300 text-sm">Conversion</p>
                   <p className="text-2xl font-bold text-white">
                     {(() => {
@@ -5673,7 +5826,8 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                     })()}%
                   </p>
                 </div>
-                <div className="bg-yellow-500/20 rounded-lg p-4 text-center">
+                <div className={`rounded-lg p-4 text-center ${currentTheme === 'helloKitty' ? 'bg-pink-200/50' : 'bg-yellow-500/20'}`}>
+                  <HelloKittyIcon icon={DollarSign} iconType="dollar" isHelloKitty={currentTheme === 'helloKitty'} className="w-6 h-6 text-yellow-400 mx-auto mb-1" />
                   <p className="text-yellow-300 text-sm">Total Revenue</p>
                   <p className="text-2xl font-bold text-white">
                     $
@@ -5911,12 +6065,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                       >
                         <div className="flex justify-between items-start mb-4">
                           <div className="flex items-center gap-3">
-                            <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold">
-                              {member.name
-                                .split(" ")
-                                .map((n) => n[0])
-                                .join("")}
-                            </div>
+                            <HelloKittyAvatar name={member.name} isHelloKitty={currentTheme === 'helloKitty'} className="w-12 h-12" />
                             <div>
                               <h5 className="font-semibold text-white">
                                 {member.name}
@@ -7168,7 +7317,7 @@ const AgentDashboard = ({ user, onSignOut }) => {
               <div
                 className={`bg-gradient-to-r ${currentThemeStyles.accent} p-2 rounded-lg`}
               >
-                <Target className="w-6 h-6 text-white" />
+                <HelloKittyLogo isHelloKitty={currentTheme === 'helloKitty'} className="w-6 h-6 text-white" />
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-white">
@@ -7186,18 +7335,20 @@ const AgentDashboard = ({ user, onSignOut }) => {
                 onToggleDarkMode={() => setIsDarkMode(!isDarkMode)}
               />
               <div className="relative">
-                <div className="w-10 h-10 rounded-full bg-slate-600 flex items-center justify-center overflow-hidden">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center overflow-hidden ${currentTheme === 'helloKitty' ? 'bg-pink-200' : 'bg-slate-600'}`}>
                   {userAvatar ? (
                     <img
                       src={userAvatar}
                       alt="Avatar"
                       className="w-full h-full object-cover"
                     />
+                  ) : currentTheme === 'helloKitty' ? (
+                    <span style={{ fontSize: '1.5rem' }}>🐱</span>
                   ) : (
                     <User className="w-6 h-6 text-slate-300" />
                   )}
                 </div>
-                <label className="absolute -bottom-1 -right-1 bg-blue-600 rounded-full p-1 cursor-pointer hover:bg-blue-700">
+                <label className={`absolute -bottom-1 -right-1 rounded-full p-1 cursor-pointer ${currentTheme === 'helloKitty' ? 'bg-pink-500 hover:bg-pink-600' : 'bg-blue-600 hover:bg-blue-700'}`}>
                   <Camera className="w-3 h-3 text-white" />
                   <input
                     type="file"
@@ -7207,15 +7358,15 @@ const AgentDashboard = ({ user, onSignOut }) => {
                   />
                 </label>
               </div>
-              <div className="flex items-center gap-2 bg-gradient-to-r from-orange-500 to-red-500 px-3 py-2 rounded-lg">
-                <Flame className="w-5 h-5 text-white" />
+              <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${currentTheme === 'helloKitty' ? 'bg-gradient-to-r from-pink-400 to-rose-400' : 'bg-gradient-to-r from-orange-500 to-red-500'}`}>
+                {currentTheme === 'helloKitty' ? <span>💕</span> : <Flame className="w-5 h-5 text-white" />}
                 <span className="text-white font-bold">
                   {streak} day streak!
                 </span>
               </div>
               <button
                 onClick={onSignOut}
-                className="flex items-center gap-2 bg-red-600 hover:bg-red-700 px-3 py-2 rounded-lg text-sm transition-colors text-white"
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors text-white ${currentTheme === 'helloKitty' ? 'bg-pink-600 hover:bg-pink-700' : 'bg-red-600 hover:bg-red-700'}`}
               >
                 <LogOut className="w-4 h-4" />
                 Sign Out
@@ -7227,12 +7378,12 @@ const AgentDashboard = ({ user, onSignOut }) => {
       <div className="container mx-auto px-6 py-6">
         <div className="flex bg-white/10 rounded-lg p-1 mb-6 border border-white/20 overflow-x-auto">
           {[
-            { key: "dashboard", label: "Dashboard", icon: Target },
-            { key: "analytics", label: "Analytics", icon: BarChart3 },
-            { key: "leaderboards", label: "Leaderboard", icon: Crown },
-            { key: "notifications", label: "Notifications", icon: Bell },
-            { key: "supervisor", label: "Supervisor Help", icon: Headphones },
-            { key: "pvp", label: "PvP", icon: Sword },
+            { key: "dashboard", label: "Dashboard", icon: Target, iconType: "target" },
+            { key: "analytics", label: "Analytics", icon: BarChart3, iconType: "chart" },
+            { key: "leaderboards", label: "Leaderboard", icon: Crown, iconType: "trophy" },
+            { key: "notifications", label: "Notifications", icon: Bell, iconType: "bell" },
+            { key: "supervisor", label: "Supervisor Help", icon: Headphones, iconType: "headphones" },
+            { key: "pvp", label: "PvP", icon: Sword, iconType: "star" },
           ].map((tab) => (
             <button
               key={tab.key}
@@ -7243,7 +7394,7 @@ const AgentDashboard = ({ user, onSignOut }) => {
                   : "text-gray-300 hover:text-white"
               }`}
             >
-              <tab.icon className="w-4 h-4 inline mr-2" />
+              <HelloKittyIcon icon={tab.icon} iconType={tab.iconType} isHelloKitty={currentTheme === 'helloKitty'} className="w-4 h-4 inline mr-2" />
               {tab.label}
             </button>
           ))}
