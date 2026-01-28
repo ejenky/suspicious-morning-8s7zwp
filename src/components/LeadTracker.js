@@ -158,7 +158,23 @@ const HelloKittyDecorations = ({ isActive }) => {
 
       {/* Hello Kitty watermark in corner */}
       <div className="fixed bottom-4 left-4 pointer-events-none z-0 opacity-20">
-        <div className="text-6xl">🐱</div>
+        <svg width="80" height="80" viewBox="0 0 100 100">
+          <ellipse cx="50" cy="55" rx="42" ry="38" fill="white" stroke="#333" strokeWidth="2"/>
+          <path d="M 15 35 Q 8 15 25 20 Q 30 25 28 35" fill="white" stroke="#333" strokeWidth="2"/>
+          <path d="M 85 35 Q 92 15 75 20 Q 70 25 72 35" fill="white" stroke="#333" strokeWidth="2"/>
+          <ellipse cx="82" cy="22" rx="12" ry="8" fill="#FF0000"/>
+          <ellipse cx="68" cy="28" rx="8" ry="6" fill="#FF0000"/>
+          <circle cx="75" cy="25" r="4" fill="#FF0000"/>
+          <ellipse cx="35" cy="52" rx="4" ry="5" fill="#333"/>
+          <ellipse cx="65" cy="52" rx="4" ry="5" fill="#333"/>
+          <ellipse cx="50" cy="62" rx="3" ry="2.5" fill="#FFD700"/>
+          <line x1="5" y1="50" x2="25" y2="55" stroke="#333" strokeWidth="1.5"/>
+          <line x1="5" y1="58" x2="25" y2="60" stroke="#333" strokeWidth="1.5"/>
+          <line x1="5" y1="66" x2="25" y2="65" stroke="#333" strokeWidth="1.5"/>
+          <line x1="95" y1="50" x2="75" y2="55" stroke="#333" strokeWidth="1.5"/>
+          <line x1="95" y1="58" x2="75" y2="60" stroke="#333" strokeWidth="1.5"/>
+          <line x1="95" y1="66" x2="75" y2="65" stroke="#333" strokeWidth="1.5"/>
+        </svg>
       </div>
 
       {/* Custom CSS for Hello Kitty theme */}
@@ -291,42 +307,80 @@ const HelloKittyBow = ({ isActive }) => {
   );
 };
 
+// Hello Kitty Face SVG Component - the iconic Hello Kitty logo
+const HelloKittyFace = ({ size = 24, className = "" }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 100 100"
+    className={className}
+    style={{ display: 'inline-block', verticalAlign: 'middle' }}
+  >
+    {/* Face outline */}
+    <ellipse cx="50" cy="55" rx="42" ry="38" fill="white" stroke="#333" strokeWidth="2"/>
+    {/* Left ear */}
+    <path d="M 15 35 Q 8 15 25 20 Q 30 25 28 35" fill="white" stroke="#333" strokeWidth="2"/>
+    {/* Right ear */}
+    <path d="M 85 35 Q 92 15 75 20 Q 70 25 72 35" fill="white" stroke="#333" strokeWidth="2"/>
+    {/* Red bow */}
+    <ellipse cx="82" cy="22" rx="12" ry="8" fill="#FF0000"/>
+    <ellipse cx="68" cy="28" rx="8" ry="6" fill="#FF0000"/>
+    <circle cx="75" cy="25" r="4" fill="#FF0000"/>
+    {/* Left eye */}
+    <ellipse cx="35" cy="52" rx="4" ry="5" fill="#333"/>
+    {/* Right eye */}
+    <ellipse cx="65" cy="52" rx="4" ry="5" fill="#333"/>
+    {/* Nose */}
+    <ellipse cx="50" cy="62" rx="3" ry="2.5" fill="#FFD700"/>
+    {/* Left whiskers */}
+    <line x1="5" y1="50" x2="25" y2="55" stroke="#333" strokeWidth="1.5"/>
+    <line x1="5" y1="58" x2="25" y2="60" stroke="#333" strokeWidth="1.5"/>
+    <line x1="5" y1="66" x2="25" y2="65" stroke="#333" strokeWidth="1.5"/>
+    {/* Right whiskers */}
+    <line x1="95" y1="50" x2="75" y2="55" stroke="#333" strokeWidth="1.5"/>
+    <line x1="95" y1="58" x2="75" y2="60" stroke="#333" strokeWidth="1.5"/>
+    <line x1="95" y1="66" x2="75" y2="65" stroke="#333" strokeWidth="1.5"/>
+  </svg>
+);
+
 // Hello Kitty Icon mappings - replaces regular icons with cute alternatives
-const helloKittyIcons = {
-  shield: "🎀",      // Logo/branding
-  users: "🐱",       // Team/agents
-  user: "🐱",        // Single user
+const helloKittyIconEmojis = {
   target: "💖",      // Goals/targets
   trending: "✨",    // Trends/growth
   dollar: "🌸",      // Revenue/money
   trophy: "👑",      // Awards
-  chart: "🎀",       // Analytics
-  settings: "⚙️",    // Settings (keep)
-  calendar: "📅",    // Calendar (keep)
-  bell: "🔔",        // Notifications (keep)
+  bell: "🔔",        // Notifications
   fire: "💕",        // Hot/fire
-  star: "⭐",        // Star (keep)
+  star: "⭐",        // Star
   check: "💖",       // Success
   alert: "😿",       // Warning
-  phone: "📱",       // Phone (keep)
   mail: "💌",        // Email
   referral: "🎁",    // Referrals
-  bot: "🤖",         // AI (keep for now)
-  headphones: "🎧",  // Support (keep)
+  headphones: "🎧",  // Support
 };
 
-// Hello Kitty Icon Component - shows emoji when theme is active, otherwise shows regular icon
-const HelloKittyIcon = ({ icon: Icon, iconType, isHelloKitty, className = "", ...props }) => {
-  if (isHelloKitty && helloKittyIcons[iconType]) {
-    return (
-      <span
-        className={`inline-flex items-center justify-center ${className}`}
-        style={{ fontSize: '1.25rem', lineHeight: 1 }}
-        {...props}
-      >
-        {helloKittyIcons[iconType]}
-      </span>
-    );
+// Icon types that should use Hello Kitty face
+const helloKittyFaceTypes = ['shield', 'users', 'user', 'chart'];
+
+// Hello Kitty Icon Component - shows Hello Kitty face or emoji when theme is active
+const HelloKittyIcon = ({ icon: Icon, iconType, isHelloKitty, className = "", size, ...props }) => {
+  if (isHelloKitty) {
+    // Use Hello Kitty face for user/avatar related icons
+    if (helloKittyFaceTypes.includes(iconType)) {
+      return <HelloKittyFace size={size || 20} className={className} />;
+    }
+    // Use emoji for other icons
+    if (helloKittyIconEmojis[iconType]) {
+      return (
+        <span
+          className={`inline-flex items-center justify-center ${className}`}
+          style={{ fontSize: '1.25rem', lineHeight: 1 }}
+          {...props}
+        >
+          {helloKittyIconEmojis[iconType]}
+        </span>
+      );
+    }
   }
   return <Icon className={className} {...props} />;
 };
@@ -335,8 +389,8 @@ const HelloKittyIcon = ({ icon: Icon, iconType, isHelloKitty, className = "", ..
 const HelloKittyAvatar = ({ name, isHelloKitty, className = "" }) => {
   if (isHelloKitty) {
     return (
-      <div className={`bg-gradient-to-r from-pink-400 to-rose-300 rounded-full flex items-center justify-center ${className}`}>
-        <span style={{ fontSize: '1.5rem' }}>🐱</span>
+      <div className={`bg-gradient-to-r from-pink-100 to-pink-50 rounded-full flex items-center justify-center ${className}`}>
+        <HelloKittyFace size={32} />
       </div>
     );
   }
@@ -352,7 +406,7 @@ const HelloKittyLogo = ({ isHelloKitty, className = "" }) => {
   if (isHelloKitty) {
     return (
       <div className={`flex items-center justify-center ${className}`}>
-        <span style={{ fontSize: '1.75rem' }}>🐱</span>
+        <HelloKittyFace size={28} />
       </div>
     );
   }
@@ -4990,7 +5044,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                       className="w-full h-full object-cover"
                     />
                   ) : currentTheme === 'helloKitty' ? (
-                    <span style={{ fontSize: '1.5rem' }}>🐱</span>
+                    <HelloKittyFace size={28} />
                   ) : (
                     <User className="w-6 h-6 text-slate-300" />
                   )}
@@ -7343,7 +7397,7 @@ const AgentDashboard = ({ user, onSignOut }) => {
                       className="w-full h-full object-cover"
                     />
                   ) : currentTheme === 'helloKitty' ? (
-                    <span style={{ fontSize: '1.5rem' }}>🐱</span>
+                    <HelloKittyFace size={28} />
                   ) : (
                     <User className="w-6 h-6 text-slate-300" />
                   )}
