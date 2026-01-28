@@ -115,6 +115,100 @@ const themes = {
     accent: "from-violet-500 to-fuchsia-600",
     card: "bg-violet-500/10",
   },
+  helloKitty: {
+    primary: "from-pink-400 via-pink-300 to-rose-200",
+    accent: "from-pink-500 to-red-400",
+    card: "bg-white/30",
+    isLight: true,
+  },
+};
+
+// Hello Kitty Decorations Component
+const HelloKittyDecorations = ({ isActive }) => {
+  if (!isActive) return null;
+
+  return (
+    <>
+      {/* Floating decorative elements */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+        {/* Top left bow */}
+        <div className="absolute top-20 left-4 text-4xl animate-bounce" style={{ animationDuration: '3s' }}>
+          🎀
+        </div>
+        {/* Top right hearts */}
+        <div className="absolute top-32 right-8 text-2xl animate-pulse" style={{ animationDuration: '2s' }}>
+          💕
+        </div>
+        {/* Bottom left flower */}
+        <div className="absolute bottom-40 left-10 text-3xl animate-bounce" style={{ animationDuration: '4s', animationDelay: '1s' }}>
+          🌸
+        </div>
+        {/* Bottom right bow */}
+        <div className="absolute bottom-28 right-12 text-3xl animate-pulse" style={{ animationDuration: '2.5s' }}>
+          🎀
+        </div>
+        {/* Middle decorations */}
+        <div className="absolute top-1/2 left-6 text-2xl animate-bounce" style={{ animationDuration: '3.5s', animationDelay: '0.5s' }}>
+          ✨
+        </div>
+        <div className="absolute top-1/3 right-6 text-2xl animate-bounce" style={{ animationDuration: '2.8s', animationDelay: '1.5s' }}>
+          💖
+        </div>
+      </div>
+
+      {/* Hello Kitty watermark in corner */}
+      <div className="fixed bottom-4 left-4 pointer-events-none z-0 opacity-20">
+        <div className="text-6xl">🐱</div>
+      </div>
+
+      {/* Custom CSS for Hello Kitty theme */}
+      <style>{`
+        /* Hello Kitty theme custom styles */
+        .hello-kitty-active {
+          --hk-pink: #FF69B4;
+          --hk-light-pink: #FFB6C1;
+          --hk-red: #FF4444;
+        }
+
+        /* Add subtle pattern overlay */
+        .hello-kitty-active::before {
+          content: '';
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background-image: radial-gradient(circle, rgba(255,255,255,0.1) 1px, transparent 1px);
+          background-size: 20px 20px;
+          pointer-events: none;
+          z-index: 0;
+        }
+
+        /* Make text more readable on light background */
+        .hello-kitty-active .text-white {
+          text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+
+        /* Cute rounded corners for cards */
+        .hello-kitty-active .rounded-xl {
+          border-radius: 1.5rem;
+        }
+
+        /* Add subtle glow to accent buttons */
+        .hello-kitty-active button[class*="from-pink"] {
+          box-shadow: 0 0 15px rgba(255, 105, 180, 0.4);
+        }
+      `}</style>
+    </>
+  );
+};
+
+// Hello Kitty Header Bow Component
+const HelloKittyBow = ({ isActive }) => {
+  if (!isActive) return null;
+  return (
+    <span className="ml-2 text-2xl animate-pulse" title="Hello Kitty Mode!">🎀</span>
+  );
 };
 
 // Global state for supervisor help requests and goals
@@ -892,11 +986,48 @@ const ManagerAICatAssistant = ({ leads, agents, mode = "team" }) => {
   const [analysis, setAnalysis] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisMode, setAnalysisMode] = useState(mode);
+  const [dateFilterType, setDateFilterType] = useState("thisWeek");
+
+  // Get date range based on filter type
+  const getDateRange = () => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    switch (dateFilterType) {
+      case "today": {
+        const endOfDay = new Date(today.getTime() + 86400000);
+        return { startDate: today, endDate: endOfDay, label: "Today" };
+      }
+      case "thisWeek": {
+        const dayOfWeek = today.getDay();
+        const startOfWeek = new Date(today.getTime() - dayOfWeek * 86400000);
+        const endOfWeek = new Date(startOfWeek.getTime() + 7 * 86400000);
+        return { startDate: startOfWeek, endDate: endOfWeek, label: "This Week" };
+      }
+      case "thisMonth": {
+        const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+        const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+        return { startDate: startOfMonth, endDate: endOfMonth, label: "This Month" };
+      }
+      case "allTime":
+      default:
+        return { startDate: new Date(0), endDate: new Date(Date.now() + 86400000), label: "All Time" };
+    }
+  };
+
+  // Filter leads by date range
+  const getFilteredLeads = () => {
+    const { startDate, endDate } = getDateRange();
+    return (leads || []).filter(lead => {
+      const leadDate = lead.timestamp instanceof Date ? lead.timestamp : new Date(lead.timestamp);
+      return leadDate >= startDate && leadDate < endDate;
+    });
+  };
 
   const analyzeTeamPerformance = () => {
     setIsAnalyzing(true);
     setTimeout(() => {
-      const allLeads = leads || [];
+      const allLeads = getFilteredLeads();
       const totalLeads = allLeads.length;
       const totalSales = allLeads.filter((lead) => lead.sale).length;
       const conversionRate =
@@ -953,6 +1084,7 @@ const ManagerAICatAssistant = ({ leads, agents, mode = "team" }) => {
         })
         .length;
 
+      const { label: dateLabel } = getDateRange();
       setAnalysis({
         totalLeads,
         totalSales,
@@ -961,6 +1093,7 @@ const ManagerAICatAssistant = ({ leads, agents, mode = "team" }) => {
         avgLeadsPerAgent,
         strugglingTypes,
         strugglingAgents,
+        dateLabel,
         recommendation:
           parseFloat(conversionRate) < 20
             ? "Team conversion is low. Consider additional training sessions focused on objection handling and closing techniques."
@@ -1025,6 +1158,19 @@ const ManagerAICatAssistant = ({ leads, agents, mode = "team" }) => {
                     All Agents
                   </button>
                 </div>
+                <div className="mb-4">
+                  <label className="text-slate-400 text-sm block mb-2">Date Range</label>
+                  <select
+                    value={dateFilterType}
+                    onChange={(e) => setDateFilterType(e.target.value)}
+                    className="w-full bg-slate-700 text-white px-4 py-2 rounded-lg text-sm"
+                  >
+                    <option value="today">Today</option>
+                    <option value="thisWeek">This Week</option>
+                    <option value="thisMonth">This Month</option>
+                    <option value="allTime">All Time</option>
+                  </select>
+                </div>
                 <button
                   onClick={analyzeTeamPerformance}
                   disabled={isAnalyzing}
@@ -1037,7 +1183,10 @@ const ManagerAICatAssistant = ({ leads, agents, mode = "team" }) => {
             {analysis && (
               <div className="space-y-4">
                 <div className="bg-slate-800 rounded-lg p-4">
-                  <h4 className="text-white font-medium mb-2">Overview Stats</h4>
+                  <div className="flex justify-between items-center mb-2">
+                    <h4 className="text-white font-medium">Overview Stats</h4>
+                    <span className="text-xs bg-purple-600/30 text-purple-300 px-2 py-1 rounded">{analysis.dateLabel}</span>
+                  </div>
                   <div className="grid grid-cols-2 gap-2 text-sm">
                     <div>
                       <span className="text-slate-400">Total Leads:</span>
@@ -4606,8 +4755,11 @@ const ManagerDashboard = ({ user, onSignOut }) => {
 
   return (
     <div
-      className={`min-h-screen bg-gradient-to-br ${currentThemeStyles.primary} text-white`}
+      className={`min-h-screen bg-gradient-to-br ${currentThemeStyles.primary} ${currentTheme === 'helloKitty' ? 'hello-kitty-active text-gray-800' : 'text-white'}`}
     >
+      {/* Hello Kitty Decorations */}
+      <HelloKittyDecorations isActive={currentTheme === 'helloKitty'} />
+
       {/* Toast Notification */}
       {toast && (
         <div className="fixed top-4 right-4 z-50 animate-pulse">
@@ -4663,6 +4815,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                       onClick={() => setIsEditingTeamName(true)}
                     >
                       {teamName}
+                      <HelloKittyBow isActive={currentTheme === 'helloKitty'} />
                     </h1>
                   )}
                   <Edit
@@ -4670,7 +4823,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                     onClick={() => setIsEditingTeamName(!isEditingTeamName)}
                   />
                 </div>
-                <p className="text-gray-300">Welcome, {user.name}</p>
+                <p className={currentTheme === 'helloKitty' ? 'text-pink-700' : 'text-gray-300'}>Welcome, {user.name}</p>
               </div>
             </div>
             <div className="flex items-center gap-4">
@@ -6996,8 +7149,11 @@ const AgentDashboard = ({ user, onSignOut }) => {
 
   return (
     <div
-      className={`min-h-screen bg-gradient-to-br ${currentThemeStyles.primary} text-white`}
+      className={`min-h-screen bg-gradient-to-br ${currentThemeStyles.primary} ${currentTheme === 'helloKitty' ? 'hello-kitty-active text-gray-800' : 'text-white'}`}
     >
+      {/* Hello Kitty Decorations */}
+      <HelloKittyDecorations isActive={currentTheme === 'helloKitty'} />
+
       <Toast
         message={toast.message}
         type={toast.type}
@@ -7017,8 +7173,9 @@ const AgentDashboard = ({ user, onSignOut }) => {
               <div>
                 <h1 className="text-2xl font-bold text-white">
                   Sales Agent Dashboard
+                  <HelloKittyBow isActive={currentTheme === 'helloKitty'} />
                 </h1>
-                <p className="text-gray-300">Welcome back, {user.name}</p>
+                <p className={currentTheme === 'helloKitty' ? 'text-pink-700' : 'text-gray-300'}>Welcome back, {user.name}</p>
               </div>
             </div>
             <div className="flex items-center gap-4">
