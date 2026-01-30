@@ -3727,6 +3727,33 @@ const ManagerDashboard = ({ user, onSignOut }) => {
     return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
   });
 
+  // Performance tab lead type filter state
+  const [perfLeadTypeFilter, setPerfLeadTypeFilter] = useState("all");
+
+  // Lead types for Performance tab filter
+  const perfLeadTypes = [
+    "Immediate Dc - The client or dialer hangs up right away",
+    "Has an Activity - Another agent from our company has a valid activity on the lead",
+    "Tier 1 - A lead you are not allowed to sell (Employer, Tricare, Champ Va, Hospice)",
+    "Not Appointed - Area you are not appointed to sell in",
+    "Spanish - Spanish lead and you don't speak spanish",
+    "Intro/Soa - Lost the client on Step 0-1",
+    "RWB Card - Lost the client on step 8",
+    "No SEP - Did not have a SEP to enroll the client",
+    "No Value - Could not find any value to sell the client on (Supervisor Approval)",
+    "Dr Change - Lost the client because they wouldn't change their DR",
+    "Carrier Change - Lost the client because they wouldn't change their carrier",
+    "Third Party - Someone else came into the call and ruined the deal (Son, Daughter, Etc)",
+    "Pitch - Lost the client on step 15",
+    "Meds - Lost the client on step 17",
+    "Pre Inbound - Lost the client on step 19 or Ghosted",
+    "Inbound - Lost the client on enrollment call",
+    "Med Supp - Could not sell someone off a Med Supp",
+    "Sale - Sold the client",
+    "Referral Sale - 2nd part of Twofer or Referral from existing client",
+    "Dash Sale - Sale from your dash",
+  ];
+
   const [currentTheme, setCurrentTheme] = useState("forest");
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [userAvatar, setUserAvatar] = useState(null);
@@ -6679,8 +6706,152 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                 <span className="text-sm text-gray-400 ml-2">
                   Showing: {perfStats.periodLabel}
                 </span>
+
+                <div className="border-l border-white/20 h-6 mx-2" />
+
+                <Filter className="w-5 h-5 text-purple-400" />
+                <label className="text-sm font-medium text-gray-300">
+                  Lead Type:
+                </label>
+                <select
+                  value={perfLeadTypeFilter}
+                  onChange={(e) => setPerfLeadTypeFilter(e.target.value)}
+                  className="bg-slate-800 border border-white/20 rounded-lg px-3 py-2 text-white max-w-xs"
+                >
+                  <option value="all">All Lead Types</option>
+                  {perfLeadTypes.map((type) => (
+                    <option key={type} value={type}>
+                      {type.split(" - ")[0]}
+                    </option>
+                  ))}
+                </select>
+                {perfLeadTypeFilter !== "all" && (
+                  <button
+                    onClick={() => setPerfLeadTypeFilter("all")}
+                    className="text-gray-400 hover:text-white text-sm underline"
+                  >
+                    Clear Filter
+                  </button>
+                )}
               </div>
             </div>
+
+            {/* Filtered Leads Display - Shows when a lead type is selected */}
+            {perfLeadTypeFilter !== "all" && (() => {
+              const { startDate, endDate } = getPerfDateRange();
+              const filteredLeads = firebaseLeads.filter(lead => {
+                const leadDate = lead.timestamp instanceof Date ? lead.timestamp : new Date(lead.timestamp);
+                const isInDateRange = leadDate >= startDate && leadDate < endDate;
+                const matchesType = lead.leadType === perfLeadTypeFilter ||
+                  lead.leadType?.startsWith(perfLeadTypeFilter.split(" - ")[0]);
+                return isInDateRange && matchesType;
+              });
+
+              // Get agent info for each lead
+              const leadsWithAgentInfo = filteredLeads.map(lead => {
+                const agent = firebaseAgents.find(a => a.id === lead.agent || a.email === lead.agentEmail);
+                return {
+                  ...lead,
+                  agentName: agent?.name || lead.agentEmail || "Unknown Agent",
+                  agentEmail: agent?.email || lead.agentEmail || ""
+                };
+              }).sort((a, b) => {
+                const dateA = a.timestamp instanceof Date ? a.timestamp : new Date(a.timestamp);
+                const dateB = b.timestamp instanceof Date ? b.timestamp : new Date(b.timestamp);
+                return dateB - dateA;
+              });
+
+              return (
+                <div className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-6 border border-white/20`}>
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-xl font-semibold text-white flex items-center gap-2">
+                      <Filter className="w-5 h-5 text-purple-400" />
+                      Filtered Leads: {perfLeadTypeFilter.split(" - ")[0]}
+                    </h3>
+                    <span className="text-gray-400 text-sm">
+                      {leadsWithAgentInfo.length} lead{leadsWithAgentInfo.length !== 1 ? 's' : ''} found
+                    </span>
+                  </div>
+
+                  {leadsWithAgentInfo.length === 0 ? (
+                    <div className="text-center py-8">
+                      <p className="text-gray-400">No leads found for this type in the selected date range.</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-b border-white/10">
+                            <th className="text-left py-3 px-4 text-gray-300 font-medium">Agent</th>
+                            <th className="text-left py-3 px-4 text-gray-300 font-medium">Client</th>
+                            <th className="text-left py-3 px-4 text-gray-300 font-medium">Carrier</th>
+                            <th className="text-left py-3 px-4 text-gray-300 font-medium">Notes</th>
+                            <th className="text-left py-3 px-4 text-gray-300 font-medium">CRM Link</th>
+                            <th className="text-left py-3 px-4 text-gray-300 font-medium">Date</th>
+                            <th className="text-left py-3 px-4 text-gray-300 font-medium">Sale</th>
+                            <th className="text-left py-3 px-4 text-gray-300 font-medium">Commission</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {leadsWithAgentInfo.map((lead, index) => {
+                            const leadDate = lead.timestamp instanceof Date ? lead.timestamp : new Date(lead.timestamp);
+                            return (
+                              <tr key={lead.id || index} className="border-b border-white/5 hover:bg-white/5">
+                                <td className="py-3 px-4">
+                                  <div>
+                                    <p className="text-white font-medium">{lead.agentName}</p>
+                                    <p className="text-gray-500 text-xs">{lead.agentEmail}</p>
+                                  </div>
+                                </td>
+                                <td className="py-3 px-4 text-white">
+                                  {lead.clientName || "-"}
+                                </td>
+                                <td className="py-3 px-4 text-gray-300">
+                                  {lead.carrier || "-"}
+                                </td>
+                                <td className="py-3 px-4">
+                                  <p className="text-gray-300 max-w-xs truncate" title={lead.notes}>
+                                    {lead.notes || "-"}
+                                  </p>
+                                </td>
+                                <td className="py-3 px-4">
+                                  {lead.crmLink ? (
+                                    <a
+                                      href={lead.crmLink}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-blue-400 hover:text-blue-300 flex items-center gap-1"
+                                    >
+                                      <ExternalLink className="w-4 h-4" />
+                                      View
+                                    </a>
+                                  ) : (
+                                    <span className="text-gray-500">-</span>
+                                  )}
+                                </td>
+                                <td className="py-3 px-4 text-gray-300 text-sm">
+                                  {leadDate.toLocaleDateString()} {leadDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </td>
+                                <td className="py-3 px-4">
+                                  {lead.sale ? (
+                                    <span className="px-2 py-1 bg-green-500/20 text-green-400 rounded text-xs">Yes</span>
+                                  ) : (
+                                    <span className="px-2 py-1 bg-red-500/20 text-red-400 rounded text-xs">No</span>
+                                  )}
+                                </td>
+                                <td className="py-3 px-4 text-white">
+                                  {lead.sale ? `$${lead.commission || 0}` : "-"}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div
