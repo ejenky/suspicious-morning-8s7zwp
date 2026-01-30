@@ -26,14 +26,17 @@ import { db } from "../firebase";
 // AFTER: Using real-time listeners (onSnapshot) + localStorage cache
 // - Real-time listeners only charge for initial load + changes
 // - localStorage cache provides instant load without Firebase reads
-// - Queries limited to recent data (last 30 days for leads)
+// - Queries limited to recent data (last 120 days for leads)
+// - Historical data (older than 120 days) available on-demand via fetchHistoricalLeads()
 // =============================================================================
 
 const POLLING_INTERVAL = 600000; // 10 minutes (backup only, real-time handles updates)
 const MIN_REFRESH_INTERVAL = 300000; // 5 minutes minimum between manual refreshes
 const LEADS_CACHE_KEY = 'firestore_leads_cache';
 const USERS_CACHE_KEY = 'firestore_users_cache';
+const HISTORICAL_LEADS_CACHE_KEY = 'firestore_historical_leads_cache';
 const CACHE_EXPIRY = 5 * 60 * 1000; // 5 minutes cache validity
+const HISTORICAL_CACHE_EXPIRY = 60 * 60 * 1000; // 1 hour for historical data (doesn't change often)
 
 // =============================================================================
 // OPTIMIZATION: Global cache for agent goals with 30-minute expiration
@@ -184,13 +187,13 @@ export const useFirestore = (userEmail) => {
 
     console.log("useFirestore: Setting up real-time leads listener");
 
-    // OPTIMIZATION: Only fetch leads from last 60 days
-    const sixtyDaysAgo = new Date();
-    sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+    // OPTIMIZATION: Only fetch leads from last 120 days
+    const oneHundredTwentyDaysAgo = new Date();
+    oneHundredTwentyDaysAgo.setDate(oneHundredTwentyDaysAgo.getDate() - 120);
 
     const leadsQuery = query(
       collection(db, "leads"),
-      where("timestamp", ">=", sixtyDaysAgo),
+      where("timestamp", ">=", oneHundredTwentyDaysAgo),
       orderBy("timestamp", "desc"),
       limit(5000) // Safety limit
     );
@@ -583,6 +586,88 @@ export const useFirestore = (userEmail) => {
     }
   };
 
+  // =============================================================================
+  // HISTORICAL DATA FETCH: On-demand fetch for leads older than 120 days
+  // This function ONLY runs when explicitly called (e.g., for reports)
+  // Uses getDocs (one-time read) with aggressive caching to minimize reads
+  // =============================================================================
+  const fetchHistoricalLeads = useCallback(async (startDate, endDate) => {
+    if (!startDate || !endDate) {
+      console.error("fetchHistoricalLeads: Both startDate and endDate are required");
+      return [];
+    }
+
+    // Create a cache key based on the date range
+    const cacheKey = `${HISTORICAL_LEADS_CACHE_KEY}_${startDate.toISOString().split('T')[0]}_${endDate.toISOString().split('T')[0]}`;
+
+    // Check localStorage cache first (1 hour expiry for historical data)
+    try {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        const { data, timestamp } = JSON.parse(cached);
+        if (Date.now() - timestamp < HISTORICAL_CACHE_EXPIRY) {
+          console.log("fetchHistoricalLeads: Cache hit -", data.length, "leads from", startDate.toDateString(), "to", endDate.toDateString());
+          return data;
+        }
+      }
+    } catch (e) {
+      console.warn('fetchHistoricalLeads: Cache read error:', e);
+    }
+
+    // Check for in-flight request to prevent duplicates
+    const requestKey = `historical_${cacheKey}`;
+    if (inFlightRequests.has(requestKey)) {
+      console.log("fetchHistoricalLeads: Request already in progress, waiting...");
+      return inFlightRequests.get(requestKey);
+    }
+
+    const fetchPromise = (async () => {
+      try {
+        console.log("fetchHistoricalLeads: Fetching from", startDate.toDateString(), "to", endDate.toDateString());
+
+        const historicalQuery = query(
+          collection(db, "leads"),
+          where("timestamp", ">=", startDate),
+          where("timestamp", "<=", endDate),
+          orderBy("timestamp", "desc"),
+          limit(10000) // Higher limit for historical data
+        );
+
+        const snapshot = await getDocs(historicalQuery);
+        console.log("fetchHistoricalLeads: Retrieved", snapshot.docs.length, "historical leads");
+
+        const historicalLeads = snapshot.docs.map((doc) => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            ...data,
+            timestamp: data.timestamp?.toDate?.() || data.timestamp || new Date(data.createdAt || Date.now()),
+          };
+        });
+
+        // Save to localStorage cache (1 hour expiry)
+        try {
+          localStorage.setItem(cacheKey, JSON.stringify({
+            data: historicalLeads,
+            timestamp: Date.now()
+          }));
+        } catch (e) {
+          console.warn('fetchHistoricalLeads: Cache write error:', e);
+        }
+
+        return historicalLeads;
+      } catch (error) {
+        console.error("fetchHistoricalLeads: Error fetching historical leads:", error);
+        return [];
+      } finally {
+        inFlightRequests.delete(requestKey);
+      }
+    })();
+
+    inFlightRequests.set(requestKey, fetchPromise);
+    return fetchPromise;
+  }, []);
+
   // Fetch agent goals (cached)
   const fetchAgentGoals = useCallback(async (agentEmail) => {
     if (!agentEmail) return null;
@@ -646,6 +731,7 @@ export const useFirestore = (userEmail) => {
     updateMyTeamGoals,
     updateAgentGoals,
     fetchAgentGoals,
+    fetchHistoricalLeads, // On-demand fetch for data older than 120 days
     hideAgent,
     unhideAgent,
     refreshData,
