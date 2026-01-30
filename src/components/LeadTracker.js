@@ -3754,8 +3754,18 @@ const ManagerDashboard = ({ user, onSignOut }) => {
     "Dash Sale - Sale from your dash",
   ];
 
-  const [currentTheme, setCurrentTheme] = useState("forest");
+  const [currentTheme, setCurrentTheme] = useState(() => {
+    const savedTheme = localStorage.getItem(`theme_${user?.email}`);
+    return savedTheme || "forest";
+  });
   const [isDarkMode, setIsDarkMode] = useState(true);
+
+  // Persist theme to localStorage when it changes
+  useEffect(() => {
+    if (user?.email && currentTheme) {
+      localStorage.setItem(`theme_${user.email}`, currentTheme);
+    }
+  }, [currentTheme, user?.email]);
   const [userAvatar, setUserAvatar] = useState(null);
   const [teamName, setTeamName] = useState("Sales Team Alpha");
   const [isEditingTeamName, setIsEditingTeamName] = useState(false);
@@ -4127,8 +4137,8 @@ const ManagerDashboard = ({ user, onSignOut }) => {
     };
   };
 
-  // Get comprehensive performance stats for the Performance tab
-  const getPerformanceStats = () => {
+  // Get comprehensive performance stats for the Performance tab - MEMOIZED for performance
+  const performanceStats = useMemo(() => {
     const { startDate, endDate, periodLabel } = getPerfDateRange();
     const { startDate: prevStartDate, endDate: prevEndDate } = getPreviousPerfDateRange();
 
@@ -4265,7 +4275,10 @@ const ManagerDashboard = ({ user, onSignOut }) => {
       strugglingLeadTypes,
       improvementAreas,
     };
-  };
+  }, [firebaseLeads, firebaseAgents, perfDateFilterType, perfCustomStartDate, perfCustomEndDate, visibleAgents.length]);
+
+  // Wrapper function for backward compatibility
+  const getPerformanceStats = () => performanceStats;
 
   // Update myTeamAgents when Firebase data changes
   // Also clean up stale member IDs (agents deleted from Firebase)
@@ -4776,9 +4789,10 @@ const ManagerDashboard = ({ user, onSignOut }) => {
       .slice(0, 10);
   };
 
-  const strugglingAgents = getStrugglingAgents();
-  const worstAdherenceAgents = getWorstAdherenceAgents();
-  const rankedTeams = getAllTeamsData();
+  // Memoize expensive computed values for performance
+  const strugglingAgents = useMemo(() => getStrugglingAgents(), [visibleAgents, firebaseLeads, allAgentsDateFilterType, allAgentsCustomStartDate, allAgentsCustomEndDate]);
+  const worstAdherenceAgents = useMemo(() => getWorstAdherenceAgents(), [visibleAgents, selectedCenter, dateFilter, firebaseLeads]);
+  const rankedTeams = useMemo(() => getAllTeamsData(), [teams, firebaseLeads, firebaseAgents]);
   const currentThemeStyles = themes[currentTheme];
 
   // Get overall company stats (uses visibleAgents to exclude hidden agents)
@@ -4816,7 +4830,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
     };
   };
 
-  const companyStats = getCompanyStats();
+  const companyStats = useMemo(() => getCompanyStats(), [visibleAgents, selectedCenter, dateFilter, firebaseLeads]);
   const centers = ["denver"];
 
   const EnhancedAgentProfile = ({ agent, onClose }) => {
@@ -6739,12 +6753,18 @@ const ManagerDashboard = ({ user, onSignOut }) => {
             {/* Filtered Leads Display - Shows when a lead type is selected */}
             {perfLeadTypeFilter !== "all" && (() => {
               const { startDate, endDate } = getPerfDateRange();
-              const filteredLeads = firebaseLeads.filter(lead => {
+
+              // Get all leads in date range for total count
+              const allLeadsInRange = firebaseLeads.filter(lead => {
                 const leadDate = lead.timestamp instanceof Date ? lead.timestamp : new Date(lead.timestamp);
-                const isInDateRange = leadDate >= startDate && leadDate < endDate;
+                return leadDate >= startDate && leadDate < endDate;
+              });
+              const totalLeadsInRange = allLeadsInRange.length;
+
+              const filteredLeads = allLeadsInRange.filter(lead => {
                 const matchesType = lead.leadType === perfLeadTypeFilter ||
                   lead.leadType?.startsWith(perfLeadTypeFilter.split(" - ")[0]);
-                return isInDateRange && matchesType;
+                return matchesType;
               });
 
               // Get agent info for each lead
@@ -6769,7 +6789,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                       Filtered Leads: {perfLeadTypeFilter.split(" - ")[0]}
                     </h3>
                     <span className="text-gray-400 text-sm">
-                      {leadsWithAgentInfo.length} lead{leadsWithAgentInfo.length !== 1 ? 's' : ''} found
+                      {leadsWithAgentInfo.length} lead{leadsWithAgentInfo.length !== 1 ? 's' : ''} found out of {totalLeadsInRange} total leads
                     </span>
                   </div>
 
@@ -7245,8 +7265,18 @@ const AgentDashboard = ({ user, onSignOut }) => {
   }, [activeTab, leaderboardLoading]);
 
   const metrics = calculateMetrics(selectedDate);
-  const [currentTheme, setCurrentTheme] = useState("default");
+  const [currentTheme, setCurrentTheme] = useState(() => {
+    const savedTheme = localStorage.getItem(`theme_${user?.email}`);
+    return savedTheme || "default";
+  });
   const [isDarkMode, setIsDarkMode] = useState(true);
+
+  // Persist theme to localStorage when it changes
+  useEffect(() => {
+    if (user?.email && currentTheme) {
+      localStorage.setItem(`theme_${user.email}`, currentTheme);
+    }
+  }, [currentTheme, user?.email]);
   const [newLead, setNewLead] = useState({
     leadType: "",
     carrier: "",
