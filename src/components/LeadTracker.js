@@ -68,6 +68,7 @@ import {
   Check,
   Loader,
   RefreshCw,
+  Download,
 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { useLeads } from "../hooks/useLeads";
@@ -6781,6 +6782,44 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                 return dateB - dateA;
               });
 
+              // CSV Export function
+              const exportToCSV = () => {
+                const headers = ['Agent Name', 'Agent Email', 'Client Name', 'Carrier', 'Lead Type', 'Notes', 'CRM Link', 'Date', 'Time', 'Sale', 'Commission', 'HRA', 'HRA Value'];
+                const csvRows = [headers.join(',')];
+
+                leadsWithAgentInfo.forEach(lead => {
+                  const leadDate = lead.timestamp instanceof Date ? lead.timestamp : new Date(lead.timestamp);
+                  const row = [
+                    `"${(lead.agentName || '').replace(/"/g, '""')}"`,
+                    `"${(lead.agentEmail || '').replace(/"/g, '""')}"`,
+                    `"${(lead.clientName || '').replace(/"/g, '""')}"`,
+                    `"${(lead.carrier || '').replace(/"/g, '""')}"`,
+                    `"${(lead.leadType || '').replace(/"/g, '""')}"`,
+                    `"${(lead.notes || '').replace(/"/g, '""')}"`,
+                    `"${(lead.crmLink || '').replace(/"/g, '""')}"`,
+                    `"${leadDate.toLocaleDateString()}"`,
+                    `"${leadDate.toLocaleTimeString()}"`,
+                    lead.sale ? 'Yes' : 'No',
+                    lead.sale ? (lead.commission || 0) : 0,
+                    lead.hra ? 'Yes' : 'No',
+                    lead.hra ? (lead.hraValue || 0) : 0
+                  ];
+                  csvRows.push(row.join(','));
+                });
+
+                const csvContent = csvRows.join('\n');
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.setAttribute('href', url);
+                const fileName = `leads_${perfLeadTypeFilter.split(" - ")[0].replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`;
+                link.setAttribute('download', fileName);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+              };
+
               return (
                 <div className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-6 border border-white/20`}>
                   <div className="flex justify-between items-center mb-4">
@@ -6788,9 +6827,20 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                       <Filter className="w-5 h-5 text-purple-400" />
                       Filtered Leads: {perfLeadTypeFilter.split(" - ")[0]}
                     </h3>
-                    <span className="text-gray-400 text-sm">
-                      {leadsWithAgentInfo.length} lead{leadsWithAgentInfo.length !== 1 ? 's' : ''} found out of {totalLeadsInRange} total leads
-                    </span>
+                    <div className="flex items-center gap-4">
+                      <span className="text-gray-400 text-sm">
+                        {leadsWithAgentInfo.length} lead{leadsWithAgentInfo.length !== 1 ? 's' : ''} found out of {totalLeadsInRange} total leads
+                      </span>
+                      {leadsWithAgentInfo.length > 0 && (
+                        <button
+                          onClick={exportToCSV}
+                          className="flex items-center gap-2 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm rounded-lg transition-colors"
+                        >
+                          <Download className="w-4 h-4" />
+                          Export CSV
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   {leadsWithAgentInfo.length === 0 ? (
