@@ -122,6 +122,11 @@ const themes = {
     card: "bg-white/30",
     isLight: true,
   },
+  runescape: {
+    primary: "from-stone-950 via-amber-950 to-yellow-950",
+    accent: "from-yellow-600 to-amber-700",
+    card: "bg-amber-500/10",
+  },
 };
 
 // Hello Kitty Decorations Component
@@ -301,7 +306,10 @@ const HelloKittyDecorations = ({ isActive }) => {
 };
 
 // Hello Kitty Header Bow Component
-const HelloKittyBow = ({ isActive }) => {
+const HelloKittyBow = ({ isActive, isRuneScape }) => {
+  if (isRuneScape) return (
+    <span className="ml-2 text-2xl animate-pulse" title="RuneScape Mode!">⚔️</span>
+  );
   if (!isActive) return null;
   return (
     <span className="ml-2 text-2xl animate-pulse" title="Hello Kitty Mode!">🎀</span>
@@ -363,8 +371,8 @@ const helloKittyIconEmojis = {
 // Icon types that should use Hello Kitty face
 const helloKittyFaceTypes = ['shield', 'users', 'user', 'chart'];
 
-// Hello Kitty Icon Component - shows Hello Kitty face or emoji when theme is active
-const HelloKittyIcon = ({ icon: Icon, iconType, isHelloKitty, className = "", size, ...props }) => {
+// Themed Icon Component - shows themed face or emoji when special themes are active
+const HelloKittyIcon = ({ icon: Icon, iconType, isHelloKitty, isRuneScape, className = "", size, ...props }) => {
   if (isHelloKitty) {
     // Use Hello Kitty face for user/avatar related icons
     if (helloKittyFaceTypes.includes(iconType)) {
@@ -383,15 +391,40 @@ const HelloKittyIcon = ({ icon: Icon, iconType, isHelloKitty, className = "", si
       );
     }
   }
+  if (isRuneScape) {
+    // Use Gnome Child for user/avatar related icons
+    if (runescapeFaceTypes.includes(iconType)) {
+      return <RuneScapeGnomeChild size={size || 20} className={className} />;
+    }
+    // Use RuneScape emoji for other icons
+    if (runescapeIconEmojis[iconType]) {
+      return (
+        <span
+          className={`inline-flex items-center justify-center ${className}`}
+          style={{ fontSize: '1.25rem', lineHeight: 1 }}
+          {...props}
+        >
+          {runescapeIconEmojis[iconType]}
+        </span>
+      );
+    }
+  }
   return <Icon className={className} {...props} />;
 };
 
-// Hello Kitty Avatar Component - shows Hello Kitty face instead of initials
-const HelloKittyAvatar = ({ name, isHelloKitty, className = "" }) => {
+// Themed Avatar Component - shows themed face instead of initials
+const HelloKittyAvatar = ({ name, isHelloKitty, isRuneScape, className = "" }) => {
   if (isHelloKitty) {
     return (
       <div className={`bg-gradient-to-r from-pink-100 to-pink-50 rounded-full flex items-center justify-center ${className}`}>
         <HelloKittyFace size={32} />
+      </div>
+    );
+  }
+  if (isRuneScape) {
+    return (
+      <div className={`bg-gradient-to-r from-amber-800 to-yellow-700 rounded-full flex items-center justify-center ${className}`}>
+        <RuneScapeGnomeChild size={32} />
       </div>
     );
   }
@@ -402,8 +435,8 @@ const HelloKittyAvatar = ({ name, isHelloKitty, className = "" }) => {
   );
 };
 
-// Hello Kitty Logo Component for header
-const HelloKittyLogo = ({ isHelloKitty, className = "" }) => {
+// Themed Logo Component for header
+const HelloKittyLogo = ({ isHelloKitty, isRuneScape, className = "" }) => {
   if (isHelloKitty) {
     return (
       <div className={`flex items-center justify-center ${className}`}>
@@ -411,8 +444,330 @@ const HelloKittyLogo = ({ isHelloKitty, className = "" }) => {
       </div>
     );
   }
+  if (isRuneScape) {
+    return (
+      <div className={`flex items-center justify-center ${className}`}>
+        <RuneScapeGoldCoin size={28} />
+      </div>
+    );
+  }
   return <Shield className={className} />;
 };
+
+// RuneScape Gold Coin SVG Component - the iconic OSRS gold piece
+const RuneScapeGoldCoin = ({ size = 24, className = "" }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 100 100"
+    className={className}
+    style={{ display: 'inline-block', verticalAlign: 'middle' }}
+  >
+    {/* Coin shadow/depth */}
+    <ellipse cx="50" cy="56" rx="38" ry="36" fill="#8B6914"/>
+    {/* Coin body */}
+    <ellipse cx="50" cy="50" rx="38" ry="36" fill="#FFD700"/>
+    {/* Coin highlight */}
+    <ellipse cx="42" cy="42" rx="20" ry="18" fill="#FFF8DC" opacity="0.3"/>
+    {/* Inner ring */}
+    <ellipse cx="50" cy="50" rx="30" ry="28" fill="none" stroke="#DAA520" strokeWidth="2"/>
+    {/* GP text */}
+    <text x="50" y="58" textAnchor="middle" fill="#8B6914" fontSize="24" fontWeight="bold" fontFamily="serif">GP</text>
+  </svg>
+);
+
+// RuneScape Gnome Child SVG Component - the iconic meme
+const RuneScapeGnomeChild = ({ size = 24, className = "" }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 100 100"
+    className={className}
+    style={{ display: 'inline-block', verticalAlign: 'middle' }}
+  >
+    {/* Head */}
+    <circle cx="50" cy="62" r="28" fill="#E8D5B7"/>
+    {/* Hat - green pointy gnome hat */}
+    <path d="M 22 52 L 50 5 L 78 52 Z" fill="#2D5A27"/>
+    {/* Hat band */}
+    <rect x="22" y="48" width="56" height="6" rx="2" fill="#1a3a15"/>
+    {/* Eyes - big and round */}
+    <circle cx="40" cy="58" r="5" fill="#333"/>
+    <circle cx="60" cy="58" r="5" fill="#333"/>
+    {/* Eye shine */}
+    <circle cx="42" cy="56" r="2" fill="white"/>
+    <circle cx="62" cy="56" r="2" fill="white"/>
+    {/* Big round nose */}
+    <ellipse cx="50" cy="68" rx="5" ry="6" fill="#D4A574"/>
+    {/* Nose highlight */}
+    <ellipse cx="48" cy="66" rx="2" ry="2.5" fill="#E8D5B7" opacity="0.5"/>
+    {/* Smile */}
+    <path d="M 38 78 Q 50 86 62 78" fill="none" stroke="#8B6914" strokeWidth="2" strokeLinecap="round"/>
+  </svg>
+);
+
+// RuneScape Decorations Component - gold coins everywhere!
+const RuneScapeDecorations = ({ isActive }) => {
+  if (!isActive) return null;
+
+  return (
+    <>
+      {/* Floating gold coins and medieval elements everywhere */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+        {/* Top row coins */}
+        <div className="absolute top-20 left-4 text-3xl animate-bounce" style={{ animationDuration: '3s' }}>
+          🪙
+        </div>
+        <div className="absolute top-16 left-[12%] text-2xl animate-bounce" style={{ animationDuration: '2.5s', animationDelay: '0.3s' }}>
+          🪙
+        </div>
+        <div className="absolute top-24 left-[28%] text-xl animate-pulse" style={{ animationDuration: '2.8s', animationDelay: '0.8s' }}>
+          🪙
+        </div>
+        <div className="absolute top-32 right-8 text-2xl animate-pulse" style={{ animationDuration: '2s' }}>
+          🪙
+        </div>
+        <div className="absolute top-20 right-[18%] text-3xl animate-bounce" style={{ animationDuration: '3.2s', animationDelay: '0.5s' }}>
+          🪙
+        </div>
+
+        {/* Medieval elements */}
+        <div className="absolute top-1/3 left-6 text-2xl animate-bounce" style={{ animationDuration: '3.5s', animationDelay: '0.5s' }}>
+          ⚔️
+        </div>
+        <div className="absolute top-[45%] right-[3%] text-2xl animate-pulse" style={{ animationDuration: '2.9s', animationDelay: '0.2s' }}>
+          🏰
+        </div>
+        <div className="absolute bottom-[15%] left-[3%] text-2xl animate-bounce" style={{ animationDuration: '4.2s', animationDelay: '1.7s' }}>
+          🐉
+        </div>
+
+        {/* Middle scattered coins */}
+        <div className="absolute top-1/3 right-6 text-xl animate-bounce" style={{ animationDuration: '2.8s', animationDelay: '1.5s' }}>
+          🪙
+        </div>
+        <div className="absolute top-1/2 left-[8%] text-2xl animate-pulse" style={{ animationDuration: '3s', animationDelay: '0.7s' }}>
+          🪙
+        </div>
+        <div className="absolute top-1/2 right-[10%] text-xl animate-bounce" style={{ animationDuration: '4s', animationDelay: '1.2s' }}>
+          🪙
+        </div>
+        <div className="absolute top-[15%] left-[40%] text-xl animate-bounce" style={{ animationDuration: '3.3s', animationDelay: '1.1s' }}>
+          🪙
+        </div>
+        <div className="absolute top-[60%] left-[5%] text-2xl animate-pulse" style={{ animationDuration: '2.7s', animationDelay: '0.6s' }}>
+          🪙
+        </div>
+        <div className="absolute top-[70%] right-[8%] text-xl animate-bounce" style={{ animationDuration: '3.1s', animationDelay: '1.4s' }}>
+          🪙
+        </div>
+
+        {/* Bottom row coins */}
+        <div className="absolute bottom-40 left-10 text-3xl animate-bounce" style={{ animationDuration: '4s', animationDelay: '1s' }}>
+          🪙
+        </div>
+        <div className="absolute bottom-32 left-[25%] text-xl animate-pulse" style={{ animationDuration: '2.2s', animationDelay: '0.4s' }}>
+          🪙
+        </div>
+        <div className="absolute bottom-28 right-12 text-3xl animate-pulse" style={{ animationDuration: '2.5s' }}>
+          🪙
+        </div>
+        <div className="absolute bottom-20 right-[30%] text-2xl animate-bounce" style={{ animationDuration: '3.8s', animationDelay: '0.9s' }}>
+          🪙
+        </div>
+        <div className="absolute bottom-12 left-[50%] text-xl animate-pulse" style={{ animationDuration: '3.4s', animationDelay: '1.3s' }}>
+          🪙
+        </div>
+      </div>
+
+      {/* RuneScape gold coin watermark in corner */}
+      <div className="fixed bottom-4 left-4 pointer-events-none z-0 opacity-20">
+        <RuneScapeGoldCoin size={80} />
+      </div>
+
+      {/* RuneScape Gnome Child watermark in opposite corner */}
+      <div className="fixed bottom-4 right-4 pointer-events-none z-0 opacity-15">
+        <RuneScapeGnomeChild size={70} />
+      </div>
+
+      {/* RuneScape theme custom CSS */}
+      <style>{`
+        /* RuneScape theme custom styles */
+        .runescape-active {
+          --rs-gold: #FFD700;
+          --rs-dark-gold: #B8860B;
+          --rs-brown: #3E3529;
+          --rs-dark-brown: #1a1108;
+          --rs-amber: #FF981F;
+        }
+
+        /* Stone/parchment texture overlay */
+        .runescape-active::before {
+          content: '';
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background-image:
+            radial-gradient(circle, rgba(255, 215, 0, 0.04) 1px, transparent 1px),
+            radial-gradient(circle, rgba(184, 134, 11, 0.03) 1px, transparent 1px);
+          background-size: 30px 30px, 20px 20px;
+          background-position: 0 0, 10px 10px;
+          pointer-events: none;
+          z-index: 0;
+        }
+
+        /* Gold text for headers - OSRS style */
+        .runescape-active h1,
+        .runescape-active h2,
+        .runescape-active h3,
+        .runescape-active h4,
+        .runescape-active h5 {
+          color: #FFD700 !important;
+          text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8), 0 0 8px rgba(255, 215, 0, 0.3);
+        }
+
+        /* Warm wheat tone for white text */
+        .runescape-active .text-white {
+          color: #F5DEB3 !important;
+          text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+        }
+
+        .runescape-active .text-gray-300 {
+          color: #D4A574 !important;
+        }
+
+        .runescape-active .text-gray-400 {
+          color: #C4956A !important;
+        }
+
+        .runescape-active .text-xs.text-gray-400 {
+          color: #B8945A !important;
+        }
+
+        /* Keep colored text visible with warm tones */
+        .runescape-active .text-blue-400 {
+          color: #6CB4EE !important;
+        }
+
+        .runescape-active .text-green-400 {
+          color: #50C878 !important;
+        }
+
+        .runescape-active .text-cyan-400 {
+          color: #7EC8E3 !important;
+        }
+
+        .runescape-active .text-purple-400 {
+          color: #B57EDC !important;
+        }
+
+        .runescape-active .text-pink-400 {
+          color: #FFB6C1 !important;
+        }
+
+        .runescape-active .text-yellow-400 {
+          color: #FFD700 !important;
+        }
+
+        .runescape-active .text-red-400 {
+          color: #FF6347 !important;
+        }
+
+        /* Cards with dark leather/parchment feel */
+        .runescape-active .bg-white\\/10,
+        .runescape-active .bg-white\\/30,
+        .runescape-active .bg-white\\/5 {
+          background-color: rgba(62, 53, 41, 0.6) !important;
+          border-color: rgba(255, 215, 0, 0.25) !important;
+        }
+
+        .runescape-active .bg-slate-800 {
+          background-color: rgba(62, 53, 41, 0.8) !important;
+        }
+
+        .runescape-active .border-white\\/20 {
+          border-color: rgba(255, 215, 0, 0.25) !important;
+        }
+
+        .runescape-active .border-slate-700 {
+          border-color: rgba(184, 134, 11, 0.4) !important;
+        }
+
+        /* Slightly sharper corners for medieval feel */
+        .runescape-active .rounded-xl {
+          border-radius: 0.5rem;
+        }
+
+        /* Golden glow on accent buttons */
+        .runescape-active button[class*="from-yellow"],
+        .runescape-active button[class*="from-amber"] {
+          box-shadow: 0 0 15px rgba(255, 215, 0, 0.4);
+        }
+
+        /* Chart labels */
+        .runescape-active .recharts-cartesian-axis-tick-value {
+          fill: #D4A574 !important;
+        }
+
+        .runescape-active .recharts-legend-item-text {
+          color: #D4A574 !important;
+        }
+
+        /* Custom scrollbar */
+        .runescape-active ::-webkit-scrollbar {
+          width: 8px;
+        }
+
+        .runescape-active ::-webkit-scrollbar-track {
+          background: #1a1108;
+        }
+
+        .runescape-active ::-webkit-scrollbar-thumb {
+          background: #B8860B;
+          border-radius: 4px;
+        }
+
+        .runescape-active ::-webkit-scrollbar-thumb:hover {
+          background: #DAA520;
+        }
+
+        /* Gold border glow on inputs */
+        .runescape-active input:focus,
+        .runescape-active select:focus,
+        .runescape-active textarea:focus {
+          border-color: #FFD700 !important;
+          box-shadow: 0 0 8px rgba(255, 215, 0, 0.3) !important;
+        }
+
+        /* Tab active state golden glow */
+        .runescape-active button[class*="bg-gradient-to-r"][class*="from-yellow"] {
+          box-shadow: 0 0 12px rgba(255, 215, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+        }
+      `}</style>
+    </>
+  );
+};
+
+// RuneScape Icon emoji mappings - replaces regular icons with OSRS alternatives
+const runescapeIconEmojis = {
+  target: "⚔️",       // Goals/targets → crossed swords
+  trending: "📈",     // Trends/growth
+  dollar: "🪙",       // Revenue/money → gold coins!
+  trophy: "👑",       // Awards → crown
+  bell: "🔔",         // Notifications
+  fire: "🔥",         // Hot/fire rune
+  star: "⭐",         // Star
+  check: "✅",        // Success
+  alert: "☠️",        // Warning → skull (PK danger!)
+  mail: "📜",         // Email → scroll
+  referral: "🗡️",     // Referrals → dagger
+  headphones: "🛡️",   // Support → shield
+};
+
+// Icon types that should use Gnome Child face in RuneScape theme
+const runescapeFaceTypes = ['shield', 'users', 'user', 'chart'];
 
 // Global state for supervisor help requests and goals
 let globalSupervisorRequests = [];
@@ -4999,10 +5354,11 @@ const ManagerDashboard = ({ user, onSignOut }) => {
 
   return (
     <div
-      className={`min-h-screen bg-gradient-to-br ${currentThemeStyles.primary} ${currentTheme === 'helloKitty' ? 'hello-kitty-active text-gray-800' : 'text-white'}`}
+      className={`min-h-screen bg-gradient-to-br ${currentThemeStyles.primary} ${currentTheme === 'helloKitty' ? 'hello-kitty-active text-gray-800' : currentTheme === 'runescape' ? 'runescape-active text-white' : 'text-white'}`}
     >
       {/* Hello Kitty Decorations */}
       <HelloKittyDecorations isActive={currentTheme === 'helloKitty'} />
+      <RuneScapeDecorations isActive={currentTheme === 'runescape'} />
 
       {/* Toast Notification */}
       {toast && (
@@ -5037,7 +5393,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
               <div
                 className={`bg-gradient-to-r ${currentThemeStyles.accent} p-2 rounded-lg`}
               >
-                <HelloKittyLogo isHelloKitty={currentTheme === 'helloKitty'} className="w-6 h-6" />
+                <HelloKittyLogo isHelloKitty={currentTheme === 'helloKitty'} isRuneScape={currentTheme === 'runescape'} className="w-6 h-6" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
@@ -5059,7 +5415,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                       onClick={() => setIsEditingTeamName(true)}
                     >
                       {teamName}
-                      <HelloKittyBow isActive={currentTheme === 'helloKitty'} />
+                      <HelloKittyBow isActive={currentTheme === 'helloKitty'} isRuneScape={currentTheme === 'runescape'} />
                     </h1>
                   )}
                   <Edit
@@ -5067,7 +5423,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                     onClick={() => setIsEditingTeamName(!isEditingTeamName)}
                   />
                 </div>
-                <p className={currentTheme === 'helloKitty' ? 'text-pink-700' : 'text-gray-300'}>Welcome, {user.name}</p>
+                <p className={currentTheme === 'helloKitty' ? 'text-pink-700' : currentTheme === 'runescape' ? 'text-amber-400' : 'text-gray-300'}>Welcome, {user.name}</p>
               </div>
             </div>
             <div className="flex items-center gap-4">
@@ -5078,7 +5434,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                 onToggleDarkMode={() => setIsDarkMode(!isDarkMode)}
               />
               <div className="relative">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center overflow-hidden ${currentTheme === 'helloKitty' ? 'bg-pink-200' : 'bg-slate-600'}`}>
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center overflow-hidden ${currentTheme === 'helloKitty' ? 'bg-pink-200' : currentTheme === 'runescape' ? 'bg-amber-900' : 'bg-slate-600'}`}>
                   {userAvatar ? (
                     <img
                       src={userAvatar}
@@ -5087,11 +5443,13 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                     />
                   ) : currentTheme === 'helloKitty' ? (
                     <HelloKittyFace size={28} />
+                  ) : currentTheme === 'runescape' ? (
+                    <RuneScapeGnomeChild size={28} />
                   ) : (
                     <User className="w-6 h-6 text-slate-300" />
                   )}
                 </div>
-                <label className={`absolute -bottom-1 -right-1 rounded-full p-1 cursor-pointer ${currentTheme === 'helloKitty' ? 'bg-pink-500 hover:bg-pink-600' : 'bg-blue-600 hover:bg-blue-700'}`}>
+                <label className={`absolute -bottom-1 -right-1 rounded-full p-1 cursor-pointer ${currentTheme === 'helloKitty' ? 'bg-pink-500 hover:bg-pink-600' : currentTheme === 'runescape' ? 'bg-amber-600 hover:bg-amber-700' : 'bg-blue-600 hover:bg-blue-700'}`}>
                   <Camera className="w-3 h-3 text-white" />
                   <input
                     type="file"
@@ -5103,7 +5461,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
               </div>
               <button
                 onClick={onSignOut}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${currentTheme === 'helloKitty' ? 'bg-pink-600 hover:bg-pink-700' : 'bg-red-600 hover:bg-red-700'}`}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${currentTheme === 'helloKitty' ? 'bg-pink-600 hover:bg-pink-700' : currentTheme === 'runescape' ? 'bg-amber-700 hover:bg-amber-800' : 'bg-red-600 hover:bg-red-700'}`}
               >
                 <LogOut className="w-4 h-4" />
                 Sign Out
@@ -5132,7 +5490,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                   : "text-gray-300 hover:text-white"
               }`}
             >
-              <HelloKittyIcon icon={tab.icon} iconType={tab.iconType} isHelloKitty={currentTheme === 'helloKitty'} className="w-4 h-4 inline mr-2" />
+              <HelloKittyIcon icon={tab.icon} iconType={tab.iconType} isHelloKitty={currentTheme === 'helloKitty'} isRuneScape={currentTheme === 'runescape'} className="w-4 h-4 inline mr-2" />
               {tab.label}
             </button>
           ))}
@@ -5200,7 +5558,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
               <div
                 className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-4 border border-white/20 text-center`}
               >
-                <HelloKittyIcon icon={Users} iconType="users" isHelloKitty={currentTheme === 'helloKitty'} className="w-6 h-6 text-blue-400 mx-auto mb-2" />
+                <HelloKittyIcon icon={Users} iconType="users" isHelloKitty={currentTheme === 'helloKitty'} isRuneScape={currentTheme === 'runescape'} className="w-6 h-6 text-blue-400 mx-auto mb-2" />
                 <p className="text-gray-300 text-sm">Total Agents</p>
                 <p className="text-xl font-bold text-white">
                   {companyStats.totalAgents}
@@ -5212,7 +5570,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
               <div
                 className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-4 border border-white/20 text-center`}
               >
-                <HelloKittyIcon icon={Target} iconType="target" isHelloKitty={currentTheme === 'helloKitty'} className="w-6 h-6 text-green-400 mx-auto mb-2" />
+                <HelloKittyIcon icon={Target} iconType="target" isHelloKitty={currentTheme === 'helloKitty'} isRuneScape={currentTheme === 'runescape'} className="w-6 h-6 text-green-400 mx-auto mb-2" />
                 <p className="text-gray-300 text-sm">Total Sales</p>
                 <p className="text-xl font-bold text-white">
                   {companyStats.totalSales}
@@ -5224,7 +5582,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
               <div
                 className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-4 border border-white/20 text-center`}
               >
-                <HelloKittyIcon icon={Users} iconType="users" isHelloKitty={currentTheme === 'helloKitty'} className="w-6 h-6 text-cyan-400 mx-auto mb-2" />
+                <HelloKittyIcon icon={Users} iconType="users" isHelloKitty={currentTheme === 'helloKitty'} isRuneScape={currentTheme === 'runescape'} className="w-6 h-6 text-cyan-400 mx-auto mb-2" />
                 <p className="text-gray-300 text-sm">Total Leads</p>
                 <p className="text-xl font-bold text-white">
                   {companyStats.totalLeads}
@@ -5236,7 +5594,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
               <div
                 className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-4 border border-white/20 text-center`}
               >
-                <HelloKittyIcon icon={TrendingUp} iconType="trending" isHelloKitty={currentTheme === 'helloKitty'} className="w-6 h-6 text-purple-400 mx-auto mb-2" />
+                <HelloKittyIcon icon={TrendingUp} iconType="trending" isHelloKitty={currentTheme === 'helloKitty'} isRuneScape={currentTheme === 'runescape'} className="w-6 h-6 text-purple-400 mx-auto mb-2" />
                 <p className="text-gray-300 text-sm">Conversion Rate</p>
                 <p className="text-xl font-bold text-white">
                   {companyStats.avgConversion}%
@@ -5246,7 +5604,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
               <div
                 className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-4 border border-white/20 text-center`}
               >
-                <HelloKittyIcon icon={UserPlus} iconType="referral" isHelloKitty={currentTheme === 'helloKitty'} className="w-6 h-6 text-pink-400 mx-auto mb-2" />
+                <HelloKittyIcon icon={UserPlus} iconType="referral" isHelloKitty={currentTheme === 'helloKitty'} isRuneScape={currentTheme === 'runescape'} className="w-6 h-6 text-pink-400 mx-auto mb-2" />
                 <p className="text-gray-300 text-sm">Total Referrals</p>
                 <p className="text-xl font-bold text-white">
                   {companyStats.totalReferrals}
@@ -5258,7 +5616,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
               <div
                 className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-4 border border-white/20 text-center`}
               >
-                <HelloKittyIcon icon={DollarSign} iconType="dollar" isHelloKitty={currentTheme === 'helloKitty'} className="w-6 h-6 text-yellow-400 mx-auto mb-2" />
+                <HelloKittyIcon icon={DollarSign} iconType="dollar" isHelloKitty={currentTheme === 'helloKitty'} isRuneScape={currentTheme === 'runescape'} className="w-6 h-6 text-yellow-400 mx-auto mb-2" />
                 <p className="text-gray-300 text-sm">Total Revenue</p>
                 <p className="text-xl font-bold text-white">
                   ${companyStats.totalRevenue.toLocaleString()}
@@ -5281,7 +5639,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
               <div className="bg-slate-800 rounded-lg border border-slate-700 p-4">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                    <HelloKittyIcon icon={User} iconType="user" isHelloKitty={currentTheme === 'helloKitty'} className="w-5 h-5 text-blue-400" />
+                    <HelloKittyIcon icon={User} iconType="user" isHelloKitty={currentTheme === 'helloKitty'} isRuneScape={currentTheme === 'runescape'} className="w-5 h-5 text-blue-400" />
                     Individual Agent Benchmark
                   </h3>
                   <select
@@ -5309,7 +5667,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                 ) : (
                   <div className="h-64 flex items-center justify-center text-gray-400">
                     <div className="text-center">
-                      <HelloKittyIcon icon={User} iconType="user" isHelloKitty={currentTheme === 'helloKitty'} className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                      <HelloKittyIcon icon={User} iconType="user" isHelloKitty={currentTheme === 'helloKitty'} isRuneScape={currentTheme === 'runescape'} className="w-12 h-12 mx-auto mb-2 opacity-50" />
                       <p>Select an agent to view their benchmark</p>
                     </div>
                   </div>
@@ -5883,15 +6241,15 @@ const ManagerDashboard = ({ user, onSignOut }) => {
 
               {/* My Team Overview */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <div className={`rounded-lg p-4 text-center ${currentTheme === 'helloKitty' ? 'bg-pink-200/50' : 'bg-blue-500/20'}`}>
-                  <HelloKittyIcon icon={Users} iconType="users" isHelloKitty={currentTheme === 'helloKitty'} className="w-6 h-6 text-blue-400 mx-auto mb-1" />
+                <div className={`rounded-lg p-4 text-center ${currentTheme === 'helloKitty' ? 'bg-pink-200/50' : currentTheme === 'runescape' ? 'bg-amber-500/20' : 'bg-blue-500/20'}`}>
+                  <HelloKittyIcon icon={Users} iconType="users" isHelloKitty={currentTheme === 'helloKitty'} isRuneScape={currentTheme === 'runescape'} className="w-6 h-6 text-blue-400 mx-auto mb-1" />
                   <p className="text-blue-300 text-sm">Team Members</p>
                   <p className="text-2xl font-bold text-white">
                     {myTeamAgents.length}
                   </p>
                 </div>
-                <div className={`rounded-lg p-4 text-center ${currentTheme === 'helloKitty' ? 'bg-pink-200/50' : 'bg-green-500/20'}`}>
-                  <HelloKittyIcon icon={Target} iconType="target" isHelloKitty={currentTheme === 'helloKitty'} className="w-6 h-6 text-green-400 mx-auto mb-1" />
+                <div className={`rounded-lg p-4 text-center ${currentTheme === 'helloKitty' ? 'bg-pink-200/50' : currentTheme === 'runescape' ? 'bg-yellow-500/20' : 'bg-green-500/20'}`}>
+                  <HelloKittyIcon icon={Target} iconType="target" isHelloKitty={currentTheme === 'helloKitty'} isRuneScape={currentTheme === 'runescape'} className="w-6 h-6 text-green-400 mx-auto mb-1" />
                   <p className="text-green-300 text-sm">Total Sales</p>
                   <p className="text-2xl font-bold text-white">
                     {myTeamAgents.reduce(
@@ -5901,8 +6259,8 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                     )}
                   </p>
                 </div>
-                <div className={`rounded-lg p-4 text-center ${currentTheme === 'helloKitty' ? 'bg-pink-200/50' : 'bg-purple-500/20'}`}>
-                  <HelloKittyIcon icon={TrendingUp} iconType="trending" isHelloKitty={currentTheme === 'helloKitty'} className="w-6 h-6 text-purple-400 mx-auto mb-1" />
+                <div className={`rounded-lg p-4 text-center ${currentTheme === 'helloKitty' ? 'bg-pink-200/50' : currentTheme === 'runescape' ? 'bg-amber-600/20' : 'bg-purple-500/20'}`}>
+                  <HelloKittyIcon icon={TrendingUp} iconType="trending" isHelloKitty={currentTheme === 'helloKitty'} isRuneScape={currentTheme === 'runescape'} className="w-6 h-6 text-purple-400 mx-auto mb-1" />
                   <p className="text-purple-300 text-sm">Conversion</p>
                   <p className="text-2xl font-bold text-white">
                     {(() => {
@@ -5922,8 +6280,8 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                     })()}%
                   </p>
                 </div>
-                <div className={`rounded-lg p-4 text-center ${currentTheme === 'helloKitty' ? 'bg-pink-200/50' : 'bg-yellow-500/20'}`}>
-                  <HelloKittyIcon icon={DollarSign} iconType="dollar" isHelloKitty={currentTheme === 'helloKitty'} className="w-6 h-6 text-yellow-400 mx-auto mb-1" />
+                <div className={`rounded-lg p-4 text-center ${currentTheme === 'helloKitty' ? 'bg-pink-200/50' : currentTheme === 'runescape' ? 'bg-yellow-600/20' : 'bg-yellow-500/20'}`}>
+                  <HelloKittyIcon icon={DollarSign} iconType="dollar" isHelloKitty={currentTheme === 'helloKitty'} isRuneScape={currentTheme === 'runescape'} className="w-6 h-6 text-yellow-400 mx-auto mb-1" />
                   <p className="text-yellow-300 text-sm">Total Revenue</p>
                   <p className="text-2xl font-bold text-white">
                     $
@@ -6161,7 +6519,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                       >
                         <div className="flex justify-between items-start mb-4">
                           <div className="flex items-center gap-3">
-                            <HelloKittyAvatar name={member.name} isHelloKitty={currentTheme === 'helloKitty'} className="w-12 h-12" />
+                            <HelloKittyAvatar name={member.name} isHelloKitty={currentTheme === 'helloKitty'} isRuneScape={currentTheme === 'runescape'} className="w-12 h-12" />
                             <div>
                               <h5 className="font-semibold text-white">
                                 {member.name}
@@ -7603,10 +7961,11 @@ const AgentDashboard = ({ user, onSignOut }) => {
 
   return (
     <div
-      className={`min-h-screen bg-gradient-to-br ${currentThemeStyles.primary} ${currentTheme === 'helloKitty' ? 'hello-kitty-active text-gray-800' : 'text-white'}`}
+      className={`min-h-screen bg-gradient-to-br ${currentThemeStyles.primary} ${currentTheme === 'helloKitty' ? 'hello-kitty-active text-gray-800' : currentTheme === 'runescape' ? 'runescape-active text-white' : 'text-white'}`}
     >
       {/* Hello Kitty Decorations */}
       <HelloKittyDecorations isActive={currentTheme === 'helloKitty'} />
+      <RuneScapeDecorations isActive={currentTheme === 'runescape'} />
 
       <Toast
         message={toast.message}
@@ -7622,14 +7981,14 @@ const AgentDashboard = ({ user, onSignOut }) => {
               <div
                 className={`bg-gradient-to-r ${currentThemeStyles.accent} p-2 rounded-lg`}
               >
-                <HelloKittyLogo isHelloKitty={currentTheme === 'helloKitty'} className="w-6 h-6 text-white" />
+                <HelloKittyLogo isHelloKitty={currentTheme === 'helloKitty'} isRuneScape={currentTheme === 'runescape'} className="w-6 h-6 text-white" />
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-white">
                   Sales Agent Dashboard
-                  <HelloKittyBow isActive={currentTheme === 'helloKitty'} />
+                  <HelloKittyBow isActive={currentTheme === 'helloKitty'} isRuneScape={currentTheme === 'runescape'} />
                 </h1>
-                <p className={currentTheme === 'helloKitty' ? 'text-pink-700' : 'text-gray-300'}>Welcome back, {user.name}</p>
+                <p className={currentTheme === 'helloKitty' ? 'text-pink-700' : currentTheme === 'runescape' ? 'text-amber-400' : 'text-gray-300'}>Welcome back, {user.name}</p>
               </div>
             </div>
             <div className="flex items-center gap-4">
@@ -7640,7 +7999,7 @@ const AgentDashboard = ({ user, onSignOut }) => {
                 onToggleDarkMode={() => setIsDarkMode(!isDarkMode)}
               />
               <div className="relative">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center overflow-hidden ${currentTheme === 'helloKitty' ? 'bg-pink-200' : 'bg-slate-600'}`}>
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center overflow-hidden ${currentTheme === 'helloKitty' ? 'bg-pink-200' : currentTheme === 'runescape' ? 'bg-amber-900' : 'bg-slate-600'}`}>
                   {userAvatar ? (
                     <img
                       src={userAvatar}
@@ -7649,11 +8008,13 @@ const AgentDashboard = ({ user, onSignOut }) => {
                     />
                   ) : currentTheme === 'helloKitty' ? (
                     <HelloKittyFace size={28} />
+                  ) : currentTheme === 'runescape' ? (
+                    <RuneScapeGnomeChild size={28} />
                   ) : (
                     <User className="w-6 h-6 text-slate-300" />
                   )}
                 </div>
-                <label className={`absolute -bottom-1 -right-1 rounded-full p-1 cursor-pointer ${currentTheme === 'helloKitty' ? 'bg-pink-500 hover:bg-pink-600' : 'bg-blue-600 hover:bg-blue-700'}`}>
+                <label className={`absolute -bottom-1 -right-1 rounded-full p-1 cursor-pointer ${currentTheme === 'helloKitty' ? 'bg-pink-500 hover:bg-pink-600' : currentTheme === 'runescape' ? 'bg-amber-600 hover:bg-amber-700' : 'bg-blue-600 hover:bg-blue-700'}`}>
                   <Camera className="w-3 h-3 text-white" />
                   <input
                     type="file"
@@ -7663,15 +8024,15 @@ const AgentDashboard = ({ user, onSignOut }) => {
                   />
                 </label>
               </div>
-              <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${currentTheme === 'helloKitty' ? 'bg-gradient-to-r from-pink-400 to-rose-400' : 'bg-gradient-to-r from-orange-500 to-red-500'}`}>
-                {currentTheme === 'helloKitty' ? <span>💕</span> : <Flame className="w-5 h-5 text-white" />}
+              <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${currentTheme === 'helloKitty' ? 'bg-gradient-to-r from-pink-400 to-rose-400' : currentTheme === 'runescape' ? 'bg-gradient-to-r from-yellow-600 to-amber-700' : 'bg-gradient-to-r from-orange-500 to-red-500'}`}>
+                {currentTheme === 'helloKitty' ? <span>💕</span> : currentTheme === 'runescape' ? <span>🪙</span> : <Flame className="w-5 h-5 text-white" />}
                 <span className="text-white font-bold">
                   {streak} day streak!
                 </span>
               </div>
               <button
                 onClick={onSignOut}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors text-white ${currentTheme === 'helloKitty' ? 'bg-pink-600 hover:bg-pink-700' : 'bg-red-600 hover:bg-red-700'}`}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors text-white ${currentTheme === 'helloKitty' ? 'bg-pink-600 hover:bg-pink-700' : currentTheme === 'runescape' ? 'bg-amber-700 hover:bg-amber-800' : 'bg-red-600 hover:bg-red-700'}`}
               >
                 <LogOut className="w-4 h-4" />
                 Sign Out
@@ -7699,7 +8060,7 @@ const AgentDashboard = ({ user, onSignOut }) => {
                   : "text-gray-300 hover:text-white"
               }`}
             >
-              <HelloKittyIcon icon={tab.icon} iconType={tab.iconType} isHelloKitty={currentTheme === 'helloKitty'} className="w-4 h-4 inline mr-2" />
+              <HelloKittyIcon icon={tab.icon} iconType={tab.iconType} isHelloKitty={currentTheme === 'helloKitty'} isRuneScape={currentTheme === 'runescape'} className="w-4 h-4 inline mr-2" />
               {tab.label}
             </button>
           ))}
