@@ -4021,6 +4021,163 @@ const ManagerSupervisorHelp = ({ user }) => {
   );
 };
 
+// Enhanced Agent Profile modal - standalone component to avoid React reconciliation issues
+// Must be defined outside of parent dashboard components so React doesn't recreate it on every render
+const EnhancedAgentProfile = ({ agent, onClose, onViewDashboard }) => {
+  return createPortal(
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-slate-900 rounded-xl p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-6">
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-xl font-bold">
+              {(agent.name || "?")
+                .split(" ")
+                .map((n) => n[0])
+                .join("")}
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-white">{agent.name || "Unknown"}</h2>
+              <p className="text-gray-300">
+                {agent.team} • {agent.center?.toUpperCase() || "N/A"}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => {
+                if (onViewDashboard) onViewDashboard(agent);
+              }}
+              className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg text-white flex items-center gap-2"
+            >
+              <BarChart3 className="w-4 h-4" />
+              View Full Dashboard
+            </button>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-white"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+        </div>
+
+        {/* Current Performance Metrics */}
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-6">
+          <div className="bg-blue-500/20 rounded-lg p-4 text-center">
+            <p className="text-blue-300 text-sm">Leads</p>
+            <p className="text-2xl font-bold text-white">{agent.leads || 0}</p>
+          </div>
+          <div className="bg-green-500/20 rounded-lg p-4 text-center">
+            <p className="text-green-300 text-sm">Sales</p>
+            <p className="text-2xl font-bold text-white">{agent.sales || 0}</p>
+          </div>
+          <div className="bg-purple-500/20 rounded-lg p-4 text-center">
+            <p className="text-purple-300 text-sm">Conv %</p>
+            <p className="text-2xl font-bold text-white">
+              {agent.conversionRate || 0}%
+            </p>
+          </div>
+          <div className="bg-pink-500/20 rounded-lg p-4 text-center">
+            <p className="text-pink-300 text-sm">Referrals</p>
+            <p className="text-2xl font-bold text-white">{agent.referrals || 0}</p>
+          </div>
+          <div className="bg-cyan-500/20 rounded-lg p-4 text-center">
+            <p className="text-cyan-300 text-sm">Dash Sales</p>
+            <p className="text-2xl font-bold text-white">{agent.dashSales || 0}</p>
+          </div>
+          <div className="bg-yellow-500/20 rounded-lg p-4 text-center">
+            <p className="text-yellow-300 text-sm">Revenue</p>
+            <p className="text-2xl font-bold text-white">${agent.revenue || 0}</p>
+          </div>
+          <div className="bg-orange-500/20 rounded-lg p-4 text-center">
+            <p className="text-orange-300 text-sm">Ref %</p>
+            <p className="text-2xl font-bold text-white">
+              {agent.leads > 0 ? (((agent.referrals || 0) / agent.leads) * 100).toFixed(1) : 0}%
+            </p>
+          </div>
+        </div>
+
+        {/* Lead Types and Details */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <div className="bg-white/5 rounded-lg p-4">
+            <h3 className="text-white font-semibold mb-3">
+              Lead Breakdown
+            </h3>
+            <div className="space-y-2">
+              {Object.entries(
+                agent.leadsList?.reduce((acc, lead) => {
+                  if (!acc[lead.leadType]) acc[lead.leadType] = 0;
+                  acc[lead.leadType]++;
+                  return acc;
+                }, {}) || {}
+              ).map(([type, count]) => (
+                <div key={type} className="flex justify-between">
+                  <span className="text-gray-300">{type}</span>
+                  <span className="text-white font-medium">{count}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+        </div>
+
+        {/* Individual Lead Entries */}
+        <div className="bg-white/5 rounded-lg p-4">
+          <h3 className="text-white font-semibold mb-3">
+            Lead Entries ({agent.leadsList?.length || 0} total)
+          </h3>
+          <div className="max-h-64 overflow-y-auto">
+            {agent.leadsList && agent.leadsList.length > 0 ? (
+              <div className="space-y-2">
+                {agent.leadsList.map((lead, index) => (
+                  <div
+                    key={index}
+                    className="flex justify-between items-center p-2 bg-white/5 rounded"
+                  >
+                    <div>
+                      <span
+                        className={`inline-block px-2 py-1 rounded text-xs font-medium ${
+                          lead.sale
+                            ? "bg-green-500/20 text-green-400"
+                            : "bg-gray-500/20 text-gray-400"
+                        }`}
+                      >
+                        {lead.leadType}
+                      </span>
+                      {lead.clientName && (
+                        <span className="ml-2 text-white text-sm">
+                          {lead.clientName}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <span className="text-xs text-gray-400">
+                        {new Date(lead.timestamp).toLocaleTimeString()}
+                      </span>
+                      {lead.sale && (
+                        <p className="text-yellow-400 text-xs">
+                          $
+                          {(lead.commission || 115) +
+                            (lead.hra ? lead.hraValue || 15 : 0)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-gray-400 text-center py-4">
+                No leads entered today
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+};
+
 // Enhanced Manager Dashboard with real data integration
 const ManagerDashboard = ({ user, onSignOut }) => {
   console.log("=== DATE DEBUG ===");
@@ -5188,158 +5345,6 @@ const ManagerDashboard = ({ user, onSignOut }) => {
 
   const companyStats = useMemo(() => getCompanyStats(), [visibleAgents, selectedCenter, dateFilter, firebaseLeads]);
   const centers = ["denver"];
-
-  const EnhancedAgentProfile = ({ agent, onClose }) => {
-    return (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-        <div className="bg-slate-900 rounded-xl p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-          <div className="flex justify-between items-center mb-6">
-            <div className="flex items-center gap-4">
-              <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-xl font-bold">
-                {agent.name
-                  .split(" ")
-                  .map((n) => n[0])
-                  .join("")}
-              </div>
-              <div>
-                <h2 className="text-2xl font-bold text-white">{agent.name}</h2>
-                <p className="text-gray-300">
-                  {agent.team} • {agent.center?.toUpperCase() || "N/A"}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => setViewingAgentDashboard(agent)}
-                className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg text-white flex items-center gap-2"
-              >
-                <BarChart3 className="w-4 h-4" />
-                View Full Dashboard
-              </button>
-              <button
-                onClick={onClose}
-                className="text-gray-400 hover:text-white"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-          </div>
-
-          {/* Current Performance Metrics */}
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-6">
-            <div className="bg-blue-500/20 rounded-lg p-4 text-center">
-              <p className="text-blue-300 text-sm">Leads</p>
-              <p className="text-2xl font-bold text-white">{agent.leads || 0}</p>
-            </div>
-            <div className="bg-green-500/20 rounded-lg p-4 text-center">
-              <p className="text-green-300 text-sm">Sales</p>
-              <p className="text-2xl font-bold text-white">{agent.sales || 0}</p>
-            </div>
-            <div className="bg-purple-500/20 rounded-lg p-4 text-center">
-              <p className="text-purple-300 text-sm">Conv %</p>
-              <p className="text-2xl font-bold text-white">
-                {agent.conversionRate || 0}%
-              </p>
-            </div>
-            <div className="bg-pink-500/20 rounded-lg p-4 text-center">
-              <p className="text-pink-300 text-sm">Referrals</p>
-              <p className="text-2xl font-bold text-white">{agent.referrals || 0}</p>
-            </div>
-            <div className="bg-cyan-500/20 rounded-lg p-4 text-center">
-              <p className="text-cyan-300 text-sm">Dash Sales</p>
-              <p className="text-2xl font-bold text-white">{agent.dashSales || 0}</p>
-            </div>
-            <div className="bg-yellow-500/20 rounded-lg p-4 text-center">
-              <p className="text-yellow-300 text-sm">Revenue</p>
-              <p className="text-2xl font-bold text-white">${agent.revenue || 0}</p>
-            </div>
-            <div className="bg-orange-500/20 rounded-lg p-4 text-center">
-              <p className="text-orange-300 text-sm">Ref %</p>
-              <p className="text-2xl font-bold text-white">
-                {agent.leads > 0 ? ((agent.referrals / agent.leads) * 100).toFixed(1) : 0}%
-              </p>
-            </div>
-          </div>
-
-          {/* Lead Types and Details */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-            <div className="bg-white/5 rounded-lg p-4">
-              <h3 className="text-white font-semibold mb-3">
-                Lead Breakdown
-              </h3>
-              <div className="space-y-2">
-                {Object.entries(
-                  agent.leadsList?.reduce((acc, lead) => {
-                    if (!acc[lead.leadType]) acc[lead.leadType] = 0;
-                    acc[lead.leadType]++;
-                    return acc;
-                  }, {}) || {}
-                ).map(([type, count]) => (
-                  <div key={type} className="flex justify-between">
-                    <span className="text-gray-300">{type}</span>
-                    <span className="text-white font-medium">{count}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-          </div>
-
-          {/* Individual Lead Entries */}
-          <div className="bg-white/5 rounded-lg p-4">
-            <h3 className="text-white font-semibold mb-3">
-              Lead Entries ({agent.leadsList?.length || 0} total)
-            </h3>
-            <div className="max-h-64 overflow-y-auto">
-              {agent.leadsList && agent.leadsList.length > 0 ? (
-                <div className="space-y-2">
-                  {agent.leadsList.map((lead, index) => (
-                    <div
-                      key={index}
-                      className="flex justify-between items-center p-2 bg-white/5 rounded"
-                    >
-                      <div>
-                        <span
-                          className={`inline-block px-2 py-1 rounded text-xs font-medium ${
-                            lead.sale
-                              ? "bg-green-500/20 text-green-400"
-                              : "bg-gray-500/20 text-gray-400"
-                          }`}
-                        >
-                          {lead.leadType}
-                        </span>
-                        {lead.clientName && (
-                          <span className="ml-2 text-white text-sm">
-                            {lead.clientName}
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-right">
-                        <span className="text-xs text-gray-400">
-                          {new Date(lead.timestamp).toLocaleTimeString()}
-                        </span>
-                        {lead.sale && (
-                          <p className="text-yellow-400 text-xs">
-                            $
-                            {(lead.commission || 115) +
-                              (lead.hra ? lead.hraValue || 15 : 0)}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-gray-400 text-center py-4">
-                  No leads entered today
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
 
   if (viewingAgentDashboard) {
     return (
@@ -7547,6 +7552,10 @@ const ManagerDashboard = ({ user, onSignOut }) => {
         <EnhancedAgentProfile
           agent={selectedAgent}
           onClose={() => setSelectedAgent(null)}
+          onViewDashboard={(agent) => {
+            setSelectedAgent(null);
+            setViewingAgentDashboard(agent);
+          }}
         />
       )}
       <ManagerAICatAssistant leads={firebaseLeads} agents={firebaseAgents} />
@@ -9490,6 +9499,10 @@ const AdminDashboard = ({ user, onSignOut }) => {
         <EnhancedAgentProfile
           agent={selectedAgent}
           onClose={() => setSelectedAgent(null)}
+          onViewDashboard={(agent) => {
+            setSelectedAgent(null);
+            setViewingAgentDashboard(agent);
+          }}
         />
       )}
       <ManagerAICatAssistant leads={filteredLeads} agents={firebaseAgents} mode="all" />
