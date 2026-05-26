@@ -200,3 +200,34 @@
     opacity: 0.4;
   }
 }
+
+/* ---- Flashcard dropdown expand + step fade ---- */
+.flash-expand {
+  animation: flashExpand 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+}
+.flash-step {
+  animation: flashFade 0.2s ease;
+}
+
+@keyframes flashExpand {
+  from {
+    opacity: 0;
+    max-height: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    max-height: 600px;
+    transform: translateY(0);
+  }
+}
+
+@keyframes flashFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
