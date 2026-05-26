@@ -72,14 +72,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { useLeads } from "../hooks/useLeads";
-import {
-  useFirestore,
-  fetchAgentGoalsStandalone,
-  addDashCall,
-  getDashCalls,
-  updateDashCall,
-  deleteDashCall,
-} from "../hooks/useFirestore";
+import { useFirestore, fetchAgentGoalsStandalone } from "../hooks/useFirestore";
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "../firebase";
 
@@ -7770,8 +7763,7 @@ const AgentDashboard = ({ user, onSignOut }) => {
   const [formErrors, setFormErrors] = useState({});
   const [userAvatar, setUserAvatar] = useState(null);
   const [editingLead, setEditingLead] = useState(null);
-  // Dash calls (logged against a parent lead in the new Lead Log)
-  const [dashCalls, setDashCalls] = useState([]);
+  // New-dash-call input draft (dash calls persist as an array field on the lead)
   const [newDashCall, setNewDashCall] = useState({
     result: "connected",
     notes: "",
@@ -7802,17 +7794,6 @@ const AgentDashboard = ({ user, onSignOut }) => {
   const hideToast = () => {
     setToast((prev) => ({ ...prev, isVisible: false }));
   };
-
-  // Load dash calls for this agent
-  const loadDashCalls = useCallback(async () => {
-    if (!user.email) return;
-    const calls = await getDashCalls(user.email);
-    setDashCalls(calls);
-  }, [user.email]);
-
-  useEffect(() => {
-    loadDashCalls();
-  }, [loadDashCalls]);
 
   // Fetch agent goals from Firebase on mount and when tab becomes visible
   // This ensures manager's goal changes are reflected on agent's dashboard
@@ -8180,20 +8161,31 @@ const AgentDashboard = ({ user, onSignOut }) => {
     "--text": dashTokens.text || DEFAULT_DASH_TOKENS.text,
     "--text-sub": dashTokens.textSub || DEFAULT_DASH_TOKENS.textSub,
     "--text-dim": dashTokens.textDim || DEFAULT_DASH_TOKENS.textDim,
+    // Fill the viewport below the header + tab bar so the Lead Log can dominate.
+    // minHeight (not a fixed height) lets the page grow/scroll only on very short
+    // viewports where the 50vh log floor can't otherwise fit.
+    display: "flex",
+    flexDirection: "column",
+    gap: "8px",
+    minHeight: "calc(100vh - 200px)",
+    padding: "14px",
   };
 
   // Leads for the selected date, oldest-first, numbered 1..n for the log.
   const logLeads = [...selectedDateLeads].sort(
     (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
   );
-  const dashCallsForLead = (leadId) =>
-    dashCalls
-      .filter((dc) => dc.linkedLeadId === leadId)
-      .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+  // Dash calls live as an array field on their parent lead document (in the
+  // already-writable "leads" collection), so they load automatically with the
+  // lead and persist via the same updateLead path used everywhere else.
+  const dashCallsForLead = (lead) =>
+    [...((lead && lead.dashCalls) || [])].sort(
+      (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
+    );
 
   // The most recent lead is what new dash calls attach to.
   const lastLead = logLeads[logLeads.length - 1] || null;
-  const lastLeadDashCalls = lastLead ? dashCallsForLead(lastLead.id) : [];
+  const lastLeadDashCalls = lastLead ? dashCallsForLead(lastLead) : [];
 
   // Auto-cycling input mode: lead -> dash1 -> dash2 -> lead ...
   let inputMode;
@@ -8213,18 +8205,22 @@ const AgentDashboard = ({ user, onSignOut }) => {
     }
     setIsLoggingDashCall(true);
     try {
-      const result = await addDashCall({
+      const existing = dashCallsForLead(lastLead);
+      const newCall = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         result: newDashCall.result,
         notes: newDashCall.notes,
         timestamp: new Date().toISOString(),
         agentEmail: user.email,
         linkedLeadId: lastLead.id,
-        dashNumber: lastLeadDashCalls.length + 1,
+        dashNumber: existing.length + 1,
+      };
+      const result = await updateLead(lastLead.id, {
+        dashCalls: [...existing, newCall],
       });
       if (result.success) {
         setNewDashCall({ result: "connected", notes: "" });
         setFormErrors({});
-        await loadDashCalls();
         showToast("Dash call logged! 📞", "success");
       } else {
         showToast(`Error logging call: ${result.error}`, "error");
@@ -8234,14 +8230,19 @@ const AgentDashboard = ({ user, onSignOut }) => {
     }
   };
 
-  const handleDeleteDashCall = async (dashCallId) => {
-    const result = await deleteDashCall(dashCallId);
-    if (result.success) {
-      await loadDashCalls();
-      showToast("Dash call deleted", "success");
-    } else {
-      showToast(`Error deleting call: ${result.error}`, "error");
-    }
+  const handleUpdateDashCallResult = async (lead, dashCallId, newResult) => {
+    const updated = dashCallsForLead(lead).map((dc) =>
+      dc.id === dashCallId ? { ...dc, result: newResult } : dc
+    );
+    const result = await updateLead(lead.id, { dashCalls: updated });
+    if (!result.success) showToast(`Error updating call: ${result.error}`, "error");
+  };
+
+  const handleDeleteDashCall = async (lead, dashCallId) => {
+    const updated = dashCallsForLead(lead).filter((dc) => dc.id !== dashCallId);
+    const result = await updateLead(lead.id, { dashCalls: updated });
+    if (result.success) showToast("Dash call deleted", "success");
+    else showToast(`Error deleting call: ${result.error}`, "error");
   };
 
   const formatLogTime = (ts) =>
@@ -8388,11 +8389,11 @@ const AgentDashboard = ({ user, onSignOut }) => {
             {/* 1. Date Filter */}
             <div
               className="dash-card dash-card-hover dash-animate"
-              style={{ padding: "14px 18px", marginBottom: "16px", animationDelay: "0.05s" }}
+              style={{ padding: "8px 16px", flexShrink: 0, animationDelay: "0.05s" }}
             >
               <div className="flex items-center gap-3 flex-wrap">
-                <Calendar className="w-5 h-5" style={{ color: "var(--dash-sale)" }} />
-                <label className="dash-sub" style={{ fontSize: "0.8rem", fontWeight: 600 }}>
+                <Calendar className="w-4 h-4" style={{ color: "var(--dash-sale)" }} />
+                <label className="dash-sub" style={{ fontSize: "0.75rem", fontWeight: 600 }}>
                   Date Filter
                 </label>
                 <input
@@ -8400,9 +8401,9 @@ const AgentDashboard = ({ user, onSignOut }) => {
                   value={selectedDate}
                   onChange={(e) => setSelectedDate(e.target.value)}
                   className="dash-input dash-mono"
-                  style={{ padding: "7px 12px", fontSize: "0.8rem" }}
+                  style={{ padding: "5px 10px", fontSize: "0.75rem" }}
                 />
-                <span className="dash-sub" style={{ fontSize: "0.8rem" }}>
+                <span className="dash-sub" style={{ fontSize: "0.75rem" }}>
                   Viewing data for {selectedDateLabel}
                 </span>
               </div>
@@ -8412,41 +8413,43 @@ const AgentDashboard = ({ user, onSignOut }) => {
             {goals && (
               <div
                 className="dash-card dash-card-hover dash-animate"
-                style={{ padding: "18px 20px", marginBottom: "16px", animationDelay: "0.1s" }}
+                style={{ padding: "12px", flexShrink: 0, animationDelay: "0.1s" }}
               >
-                <h3 style={{ color: "var(--text)", fontSize: "1rem", fontWeight: 700, marginBottom: "14px" }}>
-                  Your Goals <span className="dash-sub" style={{ fontWeight: 500, fontSize: "0.8rem" }}>(Set by Manager)</span>
-                </h3>
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                  <div className="text-center">
-                    <p className="dash-sub" style={{ fontSize: "0.72rem", marginBottom: "4px" }}>Daily Sales</p>
-                    <p className="dash-mono" style={{ fontSize: "1.1rem", fontWeight: 700, color: metrics.totalSales >= goals.dailySales ? "var(--sale)" : "var(--warning)" }}>
-                      {metrics.totalSales} / {goals.dailySales}
-                    </p>
-                  </div>
-                  <div className="text-center">
-                    <p className="dash-sub" style={{ fontSize: "0.72rem", marginBottom: "4px" }}>Weekly Sales</p>
-                    <p className="dash-mono" style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--text)" }}>
-                      {goals.weeklySales}
-                    </p>
-                  </div>
-                  <div className="text-center">
-                    <p className="dash-sub" style={{ fontSize: "0.72rem", marginBottom: "4px" }}>Monthly Sales</p>
-                    <p className="dash-mono" style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--text)" }}>
-                      {thermostat.monthlyGoal}
-                    </p>
-                  </div>
-                  <div className="text-center">
-                    <p className="dash-sub" style={{ fontSize: "0.72rem", marginBottom: "4px" }}>Conversion Goal</p>
-                    <p className="dash-mono" style={{ fontSize: "1.1rem", fontWeight: 700, color: parseFloat(metrics.conversionRate) >= goals.conversionRate ? "var(--sale)" : "var(--warning)" }}>
-                      {metrics.conversionRate}% / {goals.conversionRate}%
-                    </p>
-                  </div>
-                  <div className="text-center">
-                    <p className="dash-sub" style={{ fontSize: "0.72rem", marginBottom: "4px" }}>Referral Goal</p>
-                    <p className="dash-mono" style={{ fontSize: "1.1rem", fontWeight: 700, color: parseFloat(metrics.referralRate) >= goals.referralRate ? "var(--sale)" : "var(--warning)" }}>
-                      {metrics.referralRate}% / {goals.referralRate}%
-                    </p>
+                <div className="flex items-center justify-between flex-wrap gap-x-4 gap-y-2">
+                  <h3 style={{ color: "var(--text)", fontSize: "0.8rem", fontWeight: 700, flexShrink: 0 }}>
+                    Your Goals <span className="dash-sub" style={{ fontWeight: 500, fontSize: "0.72rem" }}>(Set by Manager)</span>
+                  </h3>
+                  <div className="flex items-center gap-5 flex-wrap">
+                    <div className="text-center">
+                      <p className="dash-sub" style={{ fontSize: "12px", marginBottom: "2px" }}>Daily Sales</p>
+                      <p className="dash-mono" style={{ fontSize: "16px", fontWeight: 700, color: metrics.totalSales >= goals.dailySales ? "var(--sale)" : "var(--warning)" }}>
+                        {metrics.totalSales} / {goals.dailySales}
+                      </p>
+                    </div>
+                    <div className="text-center">
+                      <p className="dash-sub" style={{ fontSize: "12px", marginBottom: "2px" }}>Weekly Sales</p>
+                      <p className="dash-mono" style={{ fontSize: "16px", fontWeight: 700, color: "var(--text)" }}>
+                        {goals.weeklySales}
+                      </p>
+                    </div>
+                    <div className="text-center">
+                      <p className="dash-sub" style={{ fontSize: "12px", marginBottom: "2px" }}>Monthly Sales</p>
+                      <p className="dash-mono" style={{ fontSize: "16px", fontWeight: 700, color: "var(--text)" }}>
+                        {thermostat.monthlyGoal}
+                      </p>
+                    </div>
+                    <div className="text-center">
+                      <p className="dash-sub" style={{ fontSize: "12px", marginBottom: "2px" }}>Conversion Goal</p>
+                      <p className="dash-mono" style={{ fontSize: "16px", fontWeight: 700, color: parseFloat(metrics.conversionRate) >= goals.conversionRate ? "var(--sale)" : "var(--warning)" }}>
+                        {metrics.conversionRate}% / {goals.conversionRate}%
+                      </p>
+                    </div>
+                    <div className="text-center">
+                      <p className="dash-sub" style={{ fontSize: "12px", marginBottom: "2px" }}>Referral Goal</p>
+                      <p className="dash-mono" style={{ fontSize: "16px", fontWeight: 700, color: parseFloat(metrics.referralRate) >= goals.referralRate ? "var(--sale)" : "var(--warning)" }}>
+                        {metrics.referralRate}% / {goals.referralRate}%
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -8455,23 +8458,26 @@ const AgentDashboard = ({ user, onSignOut }) => {
             {/* 3. Monthly Progress */}
             <div
               className="dash-card dash-animate"
-              style={{ padding: "22px 24px", marginBottom: "16px", animationDelay: "0.15s" }}
+              style={{ padding: "12px", flexShrink: 0, animationDelay: "0.15s" }}
             >
-              <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+              <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
                 <div className="flex items-center gap-2">
-                  <Flame className="w-5 h-5" style={{ color: "var(--warning)" }} />
-                  <h3 style={{ color: "var(--text)", fontSize: "1.05rem", fontWeight: 700 }}>
+                  <Flame className="w-4 h-4" style={{ color: "var(--warning)" }} />
+                  <h3 style={{ color: "var(--text)", fontSize: "14px", fontWeight: 700 }}>
                     Monthly Progress
                   </h3>
+                  <span className="dash-sub" style={{ fontSize: "12px" }}>
+                    · {thermostat.monthlySales} sales · {thermostat.progress.toFixed(1)}% to {thermostat.monthlyGoal}
+                  </span>
                 </div>
-                <div className="text-right">
-                  <div className="dash-mono" style={{ fontSize: "1.4rem", fontWeight: 700, color: "var(--sale)" }}>
+                <div className="flex items-baseline gap-2">
+                  <div className="dash-mono" style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--sale)" }}>
                     ${thermostat.monthlyRevenue.toLocaleString()}
                   </div>
-                  <div className="dash-sub" style={{ fontSize: "0.75rem" }}>Revenue This Month</div>
+                  <div className="dash-sub" style={{ fontSize: "12px" }}>this month</div>
                 </div>
               </div>
-              <div className="dash-progress-track" style={{ marginBottom: "8px" }}>
+              <div className="dash-progress-track" style={{ height: "12px", marginBottom: "6px" }}>
                 <div className="dash-progress-fill" style={{ width: `${thermostat.progress}%` }} />
                 {progressMarks.map((mark) => (
                   <div
@@ -8487,34 +8493,26 @@ const AgentDashboard = ({ user, onSignOut }) => {
                   />
                 ))}
               </div>
-              <div className="flex justify-between dash-mono dash-dim" style={{ fontSize: "0.7rem", marginBottom: "12px" }}>
+              <div className="flex justify-between dash-mono dash-dim" style={{ fontSize: "12px" }}>
                 <span>0</span>
                 <span>{Math.floor(thermostat.monthlyGoal * 0.25)}</span>
                 <span>{Math.floor(thermostat.monthlyGoal * 0.5)}</span>
                 <span>{Math.floor(thermostat.monthlyGoal * 0.75)}</span>
                 <span>{thermostat.monthlyGoal} Sales</span>
               </div>
-              <div className="text-center">
-                <div style={{ color: "var(--text)", fontSize: "1rem", fontWeight: 600 }}>
-                  {thermostat.monthlySales} Sales This Month
-                </div>
-                <div className="dash-sub" style={{ fontSize: "0.8rem" }}>
-                  {thermostat.progress.toFixed(1)}% to {thermostat.monthlyGoal} sales goal
-                </div>
-              </div>
             </div>
 
             {/* 4. Stat bento grid */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3" style={{ marginBottom: "16px" }}>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2" style={{ flexShrink: 0 }}>
               {statCards.map((metric, i) => (
                 <div
                   key={metric.label}
                   className="dash-stat dash-animate"
-                  style={{ animationDelay: `${0.2 + i * 0.04}s` }}
+                  style={{ padding: "10px 14px", animationDelay: `${0.2 + i * 0.04}s` }}
                 >
                   <div className="flex items-start justify-between">
                     <div>
-                      <p className="dash-sub" style={{ fontSize: "0.72rem", marginBottom: "6px" }}>
+                      <p className="dash-sub" style={{ fontSize: "11px", marginBottom: "2px" }}>
                         {metric.label}
                       </p>
                       <AnimatedNumber
@@ -8523,51 +8521,51 @@ const AgentDashboard = ({ user, onSignOut }) => {
                         prefix={metric.prefix || ""}
                         suffix={metric.suffix || ""}
                         className="dash-mono"
-                        style={{ fontSize: "1.45rem", fontWeight: 700, color: metric.color }}
+                        style={{ fontSize: "20px", fontWeight: 700, color: metric.color }}
                       />
                     </div>
-                    <metric.icon className="w-5 h-5" style={{ color: metric.color, opacity: 0.85 }} />
+                    <metric.icon className="w-4 h-4" style={{ color: metric.color, opacity: 0.85 }} />
                   </div>
                 </div>
               ))}
             </div>
 
             {/* 5. Best Conversion + Best Sales */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3" style={{ marginBottom: "16px" }}>
-              <div className="dash-card dash-card-hover dash-animate" style={{ padding: "18px 20px", animationDelay: "0.45s" }}>
-                <div className="flex items-center gap-2 mb-4">
-                  <Trophy className="w-5 h-5" style={{ color: "var(--sale)" }} />
-                  <h3 style={{ color: "var(--text)", fontSize: "1rem", fontWeight: 700 }}>Best Conversion Rates</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2" style={{ flexShrink: 0 }}>
+              <div className="dash-card dash-card-hover dash-animate" style={{ padding: "12px", animationDelay: "0.45s" }}>
+                <div className="flex items-center gap-2 mb-2">
+                  <Trophy className="w-4 h-4" style={{ color: "var(--sale)" }} />
+                  <h3 style={{ color: "var(--text)", fontSize: "12px", fontWeight: 700 }}>Best Conversion Rates</h3>
                 </div>
-                <div className="space-y-3">
+                <div>
                   {[
                     { label: "Best Day", v: allTimeBests.bestDay.rate },
                     { label: "Best Week", v: allTimeBests.bestWeek.rate },
                     { label: "Best Month", v: allTimeBests.bestMonth.rate },
                   ].map((row) => (
-                    <div key={row.label} className="flex justify-between items-center">
-                      <span className="dash-sub" style={{ fontSize: "0.85rem" }}>{row.label}:</span>
-                      <span className="dash-mono" style={{ color: "var(--sale)", fontWeight: 700 }}>
+                    <div key={row.label} className="flex justify-between items-center" style={{ padding: "4px 0" }}>
+                      <span className="dash-sub" style={{ fontSize: "12px" }}>{row.label}:</span>
+                      <span className="dash-mono" style={{ color: "var(--sale)", fontWeight: 700, fontSize: "12px" }}>
                         {row.v.toFixed(1)}%
                       </span>
                     </div>
                   ))}
                 </div>
               </div>
-              <div className="dash-card dash-card-hover dash-animate" style={{ padding: "18px 20px", animationDelay: "0.5s" }}>
-                <div className="flex items-center gap-2 mb-4">
-                  <Zap className="w-5 h-5" style={{ color: "var(--warning)" }} />
-                  <h3 style={{ color: "var(--text)", fontSize: "1rem", fontWeight: 700 }}>Best Sales Performance</h3>
+              <div className="dash-card dash-card-hover dash-animate" style={{ padding: "12px", animationDelay: "0.5s" }}>
+                <div className="flex items-center gap-2 mb-2">
+                  <Zap className="w-4 h-4" style={{ color: "var(--warning)" }} />
+                  <h3 style={{ color: "var(--text)", fontSize: "12px", fontWeight: 700 }}>Best Sales Performance</h3>
                 </div>
-                <div className="space-y-3">
+                <div>
                   {[
                     { label: "Best Day", v: allTimeBests.bestDaySales.sales },
                     { label: "Best Week", v: allTimeBests.bestWeekSales.sales },
                     { label: "Best Month", v: allTimeBests.bestMonthSales.sales },
                   ].map((row) => (
-                    <div key={row.label} className="flex justify-between items-center">
-                      <span className="dash-sub" style={{ fontSize: "0.85rem" }}>{row.label}:</span>
-                      <span className="dash-mono" style={{ color: "var(--warning)", fontWeight: 700 }}>
+                    <div key={row.label} className="flex justify-between items-center" style={{ padding: "4px 0" }}>
+                      <span className="dash-sub" style={{ fontSize: "12px" }}>{row.label}:</span>
+                      <span className="dash-mono" style={{ color: "var(--warning)", fontWeight: 700, fontSize: "12px" }}>
                         {row.v} sales
                       </span>
                     </div>
@@ -8576,9 +8574,20 @@ const AgentDashboard = ({ user, onSignOut }) => {
               </div>
             </div>
 
-            {/* 6. Lead Log */}
-            <div className="dash-card dash-animate" style={{ padding: "18px 20px", animationDelay: "0.55s" }}>
-              <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+            {/* 6. Lead Log — fills all remaining vertical space */}
+            <div
+              className="dash-card dash-animate"
+              style={{
+                padding: "16px",
+                animationDelay: "0.55s",
+                flex: "1 1 auto",
+                minHeight: "50vh",
+                display: "flex",
+                flexDirection: "column",
+                overflow: "hidden",
+              }}
+            >
+              <div className="flex items-center justify-between mb-3 flex-wrap gap-2" style={{ flexShrink: 0 }}>
                 <div className="flex items-center gap-2">
                   <FileText className="w-5 h-5" style={{ color: "var(--referral)" }} />
                   <h3 style={{ color: "var(--text)", fontSize: "1.05rem", fontWeight: 700 }}>Lead Log</h3>
@@ -8592,8 +8601,8 @@ const AgentDashboard = ({ user, onSignOut }) => {
                 </span>
               </div>
 
-              {/* Scrollable log */}
-              <div className="lead-log-scroll" style={{ maxHeight: "60vh", paddingRight: "4px" }}>
+              {/* Scrollable log — grows to fill the card; only this scrolls */}
+              <div className="lead-log-scroll" style={{ flex: "1 1 auto", minHeight: 0, paddingRight: "4px" }}>
                 {logLeads.length === 0 ? (
                   <div className="dash-sub text-center" style={{ padding: "40px 0", fontSize: "0.9rem" }}>
                     No leads for {selectedDateLabel}. Log your first lead below!
@@ -8603,7 +8612,7 @@ const AgentDashboard = ({ user, onSignOut }) => {
                     {logLeads.map((lead, idx) => {
                       const color = getLeadTypeColor(lead.leadType);
                       const sale = isSaleLeadType(lead.leadType);
-                      const calls = dashCallsForLead(lead.id);
+                      const calls = dashCallsForLead(lead);
                       return (
                         <div key={lead.id}>
                           {/* Lead row */}
@@ -8751,11 +8760,7 @@ const AgentDashboard = ({ user, onSignOut }) => {
                                 </span>
                                 <select
                                   value={dc.result}
-                                  onChange={async (e) => {
-                                    const res = await updateDashCall(dc.id, { result: e.target.value });
-                                    if (res.success) loadDashCalls();
-                                    else showToast(`Error updating call: ${res.error}`, "error");
-                                  }}
+                                  onChange={(e) => handleUpdateDashCallResult(lead, dc.id, e.target.value)}
                                   className="dash-select dash-mono"
                                   style={{
                                     background: hexToRgba(meta.color, 0.15),
@@ -8780,7 +8785,7 @@ const AgentDashboard = ({ user, onSignOut }) => {
                                   {formatLogTime(dc.timestamp)}
                                 </span>
                                 <button
-                                  onClick={() => handleDeleteDashCall(dc.id)}
+                                  onClick={() => handleDeleteDashCall(lead, dc.id)}
                                   title="Delete dash call"
                                   style={{ color: "var(--text-dim)", flexShrink: 0, display: "flex" }}
                                 >
@@ -8796,8 +8801,8 @@ const AgentDashboard = ({ user, onSignOut }) => {
                 )}
               </div>
 
-              {/* Auto-cycling input row */}
-              <div style={{ marginTop: "14px", paddingTop: "14px", borderTop: "1px solid var(--border)" }}>
+              {/* Auto-cycling input row — pinned below the scroll area */}
+              <div style={{ marginTop: "12px", paddingTop: "12px", borderTop: "1px solid var(--border)", flexShrink: 0 }}>
                 {inputMode === "lead" ? (
                   <div>
                     <div className="flex items-center gap-2" style={{ marginBottom: "10px" }}>
