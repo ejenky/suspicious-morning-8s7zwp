@@ -8821,9 +8821,9 @@ const AgentDashboard = ({ user, onSignOut }) => {
             { key: "analytics", label: "Analytics", icon: BarChart3, iconType: "chart" },
             // Training reference tabs (replaced Leaderboard / Notifications / Supervisor Help / PvP)
             { key: "rebuttals", label: "Rebuttals", icon: Shield, iconType: "rebuttals" },
+            { key: "planselection", label: "Plan Selection", icon: FileText, iconType: "planselection" },
             { key: "pitches", label: "Pitches", icon: MessageSquare, iconType: "pitches" },
             { key: "seps", label: "SEPs", icon: Calendar, iconType: "seps" },
-            { key: "lines", label: "Lines", icon: FileText, iconType: "lines" },
             // --- OLD TABS (commented out, restore if needed) ---
             // { key: "leaderboards", label: "Leaderboard", icon: Crown, iconType: "trophy" },
             // { key: "notifications", label: "Notifications", icon: Bell, iconType: "bell" },
@@ -9495,7 +9495,7 @@ const AgentDashboard = ({ user, onSignOut }) => {
             rootStyle={tabRootStyle}
           />
         )}
-        {activeTab === "lines" && (
+        {activeTab === "planselection" && (
           <div
             className="dash-root"
             style={{
@@ -9508,12 +9508,12 @@ const AgentDashboard = ({ user, onSignOut }) => {
               className="dash-card dash-animate"
               style={{ padding: "40px", textAlign: "center", maxWidth: "480px", animationDelay: "0.05s" }}
             >
-              <FileText className="w-10 h-10" style={{ color: "var(--referral)", margin: "0 auto 12px" }} />
+              <div style={{ fontSize: "2.5rem", marginBottom: "8px" }}>📋</div>
               <h3 style={{ color: "var(--text)", fontSize: "1.1rem", fontWeight: 700, marginBottom: "6px" }}>
-                Lines
+                Plan Selection — Coming Soon
               </h3>
               <p className="dash-sub" style={{ fontSize: "0.9rem" }}>
-                Lines content coming soon.
+                This tab is a placeholder. Plan Selection tools will appear here.
               </p>
             </div>
           </div>
