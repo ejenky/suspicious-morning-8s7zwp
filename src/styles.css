@@ -1,7 +1,202 @@
 .App {
   font-family: sans-serif;
   text-align: center;
-  @tailwind base;
-  @tailwind components;
-  @tailwind utilities;
+}
+
+/* =============================================================================
+   DASHBOARD "BENTO DARK" DESIGN SYSTEM
+   Data colors + radii + fonts are global (consistent across all themes).
+   Per-theme surface tokens (--bg, --card, --card-hover, --border, text tokens)
+   are set inline on .dash-root so each theme can override them.
+   ============================================================================= */
+:root {
+  /* Data colors — stay consistent across every theme */
+  --sale: #84cc16;
+  --dash-sale: #22d3ee;
+  --referral: #8b5cf6;
+  --negative: #f43f5e;
+  --warning: #f59e0b;
+  --callback: #22d3ee;
+  --pink: #ec4899;
+
+  /* Component tokens */
+  --radius: 14px;
+  --radius-sm: 10px;
+  --radius-xs: 8px;
+  --font: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* Base palette fallbacks (default/dark) — themes override on .dash-root */
+  --bg: #0e0e14;
+  --card: #1a1a26;
+  --card-hover: #1f1f2e;
+  --border: rgba(255, 255, 255, 0.05);
+  --text: #f0f0f5;
+  --text-sub: #7a7a8e;
+  --text-dim: #3d3d50;
+}
+
+/* Root container for the dashboard tab */
+.dash-root {
+  font-family: var(--font);
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+.dash-mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.dash-sub {
+  color: var(--text-sub);
+}
+.dash-dim {
+  color: var(--text-dim);
+}
+
+/* ---- Cards ---- */
+.dash-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  transition:
+    background 0.18s ease,
+    transform 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.18s ease;
+}
+.dash-card-hover:hover {
+  background: var(--card-hover);
+  transform: translateY(-1px);
+}
+
+/* ---- Stat bento cards ---- */
+.dash-stat {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  transition:
+    background 0.18s ease,
+    transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.dash-stat:hover {
+  background: var(--card-hover);
+  transform: translateY(-1px);
+}
+
+/* ---- Lead log scroll container ---- */
+.lead-log-scroll {
+  overflow-y: auto;
+}
+.lead-log-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.lead-log-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.lead-log-scroll::-webkit-scrollbar-thumb {
+  background: rgba(139, 92, 246, 0.25);
+  border-radius: 10px;
+}
+
+/* ---- Lead rows ---- */
+.dash-lead-row {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  transition:
+    background 0.16s ease,
+    transform 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.dash-lead-row:hover {
+  background: var(--card-hover);
+  transform: translateY(-1px);
+}
+
+/* ---- Dash call rows (subtler, indented) ---- */
+.dash-call-row {
+  background: transparent;
+  border-radius: 10px;
+  transition: background 0.16s ease;
+}
+.dash-call-row:hover {
+  background: var(--card-hover);
+}
+
+/* ---- Inputs ---- */
+.dash-input,
+.dash-select,
+.dash-textarea {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: var(--font);
+  transition: border-color 0.16s ease;
+}
+.dash-input::placeholder,
+.dash-textarea::placeholder {
+  color: var(--text-dim);
+}
+.dash-root input:focus,
+.dash-root select:focus,
+.dash-root textarea:focus {
+  outline: none;
+  border-color: rgba(139, 92, 246, 0.4);
+}
+.dash-select option {
+  background: var(--card);
+  color: var(--text);
+}
+
+/* ---- Progress bar ---- */
+.dash-progress-track {
+  position: relative;
+  height: 14px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.dash-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--referral), var(--dash-sale));
+  border-radius: 999px;
+  transition: width 0.9s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ---- Live pulse dot ---- */
+.dash-live-dot {
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+/* ---- Entrance animation ---- */
+.dash-animate {
+  opacity: 0;
+  animation: fadeUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
 }

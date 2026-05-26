@@ -5,6 +5,7 @@ import {
   getDocs,
   doc,
   updateDoc,
+  deleteDoc,
   getDoc,
   setDoc,
   Timestamp,
@@ -139,6 +140,72 @@ export const clearAgentGoalsCache = (agentEmail) => {
     agentGoalsCache.delete(agentEmail);
   } else {
     agentGoalsCache.clear();
+  }
+};
+
+// =============================================================================
+// DASH CALL CRUD
+// Dash calls are stored in a top-level "dashCalls" collection, keyed by the
+// agent's email and linked to a parent lead via linkedLeadId. Follows the same
+// pattern as the lead functions (addDoc / getDocs / deleteDoc).
+// Shape:
+//   { result, notes, timestamp, agentEmail, linkedLeadId, dashNumber }
+// =============================================================================
+export const addDashCall = async (dashCallData) => {
+  try {
+    const dashCallsCollection = collection(db, "dashCalls");
+    const docRef = await addDoc(dashCallsCollection, {
+      result: dashCallData.result || "no_answer",
+      notes: dashCallData.notes || "",
+      agentEmail: dashCallData.agentEmail || null,
+      linkedLeadId: dashCallData.linkedLeadId || null,
+      dashNumber: dashCallData.dashNumber || null,
+      timestamp: dashCallData.timestamp || new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+    });
+    return { success: true, id: docRef.id };
+  } catch (error) {
+    console.error("Error adding dash call:", error);
+    return { success: false, error: error.message };
+  }
+};
+
+export const getDashCalls = async (agentEmail) => {
+  if (!agentEmail) return [];
+  try {
+    const dashCallsQuery = query(
+      collection(db, "dashCalls"),
+      where("agentEmail", "==", agentEmail)
+    );
+    const snapshot = await getDocs(dashCallsQuery);
+    return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+  } catch (error) {
+    console.error("Error fetching dash calls:", error);
+    return [];
+  }
+};
+
+export const updateDashCall = async (dashCallId, updateData) => {
+  try {
+    const dashCallDocRef = doc(db, "dashCalls", dashCallId);
+    await updateDoc(dashCallDocRef, {
+      ...updateData,
+      updatedAt: new Date().toISOString(),
+    });
+    return { success: true };
+  } catch (error) {
+    console.error("Error updating dash call:", error);
+    return { success: false, error: error.message };
+  }
+};
+
+export const deleteDashCall = async (dashCallId) => {
+  try {
+    await deleteDoc(doc(db, "dashCalls", dashCallId));
+    return { success: true };
+  } catch (error) {
+    console.error("Error deleting dash call:", error);
+    return { success: false, error: error.message };
   }
 };
 
