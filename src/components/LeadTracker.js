@@ -1063,7 +1063,45 @@ const helloKittyIconEmojis = {
 const helloKittyFaceTypes = ['shield', 'users', 'user', 'chart'];
 
 // Themed Icon Component - shows themed face or emoji when special themes are active
-const HelloKittyIcon = ({ icon: Icon, iconType, isHelloKitty, isRuneScape, className = "", size, ...props }) => {
+const HALO_ICON_MAP = {
+  target: "helmet",
+  chart: "scan",
+  rebuttals: "shield",
+  planselection: "datapad",
+  pitches: "sword",
+  seps: "waypoint",
+  trophy: "medal",
+  star: "medal",
+  dollar: "credit",
+  users: "fireteam",
+  user: "helmet",
+  trending: "scan",
+  referral: "fists",
+  bell: "comm",
+  headphones: "comm",
+};
+const renderHaloIcon = (kind, props) => {
+  switch (kind) {
+    case "helmet": return <HaloSpartanHelmet {...props} />;
+    case "scan": return <HaloVisrScan {...props} />;
+    case "shield": return <HaloShieldIcon {...props} />;
+    case "datapad": return <HaloDatapad {...props} />;
+    case "sword": return <HaloEnergySword {...props} />;
+    case "waypoint": return <HaloWaypointIcon {...props} />;
+    case "medal": return <HaloMedalIcon {...props} />;
+    case "credit": return <HaloCredit {...props} />;
+    case "fireteam": return <HaloFireteam {...props} />;
+    case "fists": return <HaloFists {...props} />;
+    case "comm": return <HaloCommHelmet {...props} />;
+    default: return null;
+  }
+};
+
+const HelloKittyIcon = ({ icon: Icon, iconType, isHelloKitty, isRuneScape, isHalo, className = "", size, ...props }) => {
+  if (isHalo) {
+    const kind = HALO_ICON_MAP[iconType];
+    if (kind) return renderHaloIcon(kind, { size: size || 20, className });
+  }
   if (isHelloKitty) {
     // Use Hello Kitty face for user/avatar related icons
     if (helloKittyFaceTypes.includes(iconType)) {
@@ -1127,7 +1165,7 @@ const HelloKittyAvatar = ({ name, isHelloKitty, isRuneScape, className = "" }) =
 };
 
 // Themed Logo Component for header
-const HelloKittyLogo = ({ isHelloKitty, isRuneScape, className = "" }) => {
+const HelloKittyLogo = ({ isHelloKitty, isRuneScape, isHalo, className = "" }) => {
   if (isHelloKitty) {
     return (
       <div className={`flex items-center justify-center ${className}`}>
@@ -1139,6 +1177,13 @@ const HelloKittyLogo = ({ isHelloKitty, isRuneScape, className = "" }) => {
     return (
       <div className={`flex items-center justify-center ${className}`}>
         <RuneScapeGoldCoin size={28} />
+      </div>
+    );
+  }
+  if (isHalo) {
+    return (
+      <div className={`flex items-center justify-center ${className}`}>
+        <HaloSpartanHelmet size={26} style={{ color: "#fff" }} />
       </div>
     );
   }
@@ -1461,6 +1506,152 @@ const runescapeIconEmojis = {
 const runescapeFaceTypes = ['shield', 'users', 'user', 'chart'];
 
 // =============================================================================
+// HALO SVG ICON LIBRARY
+// Simple, iconic, currentColor-based silhouettes (so they inherit `color` /
+// style={{color}}). Used by HaloDecorations (scaled up) and by the themed icon
+// swaps in HelloKittyIcon / HelloKittyLogo and the dashboard when a halo theme
+// is active. Inline only — no external image files.
+// =============================================================================
+const HaloSpartanHelmet = ({ size = 24, className = "", style }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} className={className} style={style} fill="none" stroke="currentColor" strokeWidth="1.4">
+    <path d="M12 3.5c4 0 6.5 2.6 6.5 6.2v3.2c0 2.4-1.7 4.1-4 4.6l-1 .4h-3l-1-.4c-2.3-.5-4-2.2-4-4.6V9.7C5.5 6.1 8 3.5 12 3.5Z" />
+    <path d="M8 10.5 16 10.5 14.3 14 9.7 14Z" fill="currentColor" stroke="none" />
+    <path d="M9.5 17.7 9 20M14.5 17.7 15 20" strokeLinecap="round" />
+  </svg>
+);
+
+const HaloEnergySword = ({ size = 24, className = "", style }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} className={className} style={style} fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+    <path d="M9.5 3.2 10.2 12M14.5 3.2 13.8 12" />
+    <path d="M8.8 12.6 15.2 12.6 13.8 14.6 10.2 14.6Z" fill="currentColor" stroke="none" />
+    <rect x="11" y="14.6" width="2" height="6" rx="0.6" fill="currentColor" stroke="none" />
+  </svg>
+);
+
+const HaloCrossedSwords = ({ size = 24, className = "", style }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} className={className} style={style} fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
+    <path d="M4 4 14 14M20 4 10 14" />
+    <path d="M3 17 7 21M21 17 17 21" />
+    <path d="M11 15 8 18M13 15 16 18" />
+  </svg>
+);
+
+const HaloWaypointIcon = ({ size = 24, className = "", style }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} className={className} style={style}>
+    <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.7" />
+    <path d="M12 5 L18 16 L12 13 L6 16 Z" fill="currentColor" />
+  </svg>
+);
+
+const HaloReticle = ({ size = 24, className = "", style }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} className={className} style={style} fill="none" stroke="currentColor" strokeWidth="1.3">
+    <circle cx="12" cy="12" r="7" />
+    <path d="M12 2v4M12 18v4M2 12h4M18 12h4" strokeLinecap="round" />
+    <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none" />
+  </svg>
+);
+
+const HaloVisrScan = ({ size = 24, className = "", style }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} className={className} style={style} fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
+    <path d="M4 6V4h2M18 4h2v2M20 18v2h-2M6 20H4v-2" />
+    <path d="M6 9h12M6 12h12M6 15h7" opacity="0.85" />
+  </svg>
+);
+
+const HaloShieldIcon = ({ size = 24, className = "", style }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} className={className} style={style} fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round">
+    <path d="M12 3 19 6v5c0 4.4-3 7.6-7 9-4-1.4-7-4.6-7-9V6Z" />
+    <path d="M8.5 11.5 11 14 15.5 8.5" strokeLinecap="round" />
+  </svg>
+);
+
+const HaloMedalIcon = ({ size = 24, className = "", style }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} className={className} style={style} fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round">
+    <path d="M12 3 18 6.5v7L12 17 6 13.5v-7Z" />
+    <path d="M9 9.5 11 12 15 7.5" strokeLinecap="round" />
+    <path d="M9 17 8 21l4-2 4 2-1-4" />
+  </svg>
+);
+
+const HaloDatapad = ({ size = 24, className = "", style }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} className={className} style={style} fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
+    <rect x="4" y="3" width="16" height="18" rx="2" />
+    <path d="M7 7h10M7 11h10M7 15h6" opacity="0.85" />
+  </svg>
+);
+
+const HaloCommHelmet = ({ size = 24, className = "", style }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} className={className} style={style} fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
+    <path d="M7 11c0-2.8 2.2-5 5-5s5 2.2 5 5v3.5c0 1.6-1.2 2.8-2.8 3l-.7.3h-3l-.7-.3C8.2 17.3 7 16.1 7 14.5Z" />
+    <path d="M9 12 15 12 13.8 14.6 10.2 14.6Z" fill="currentColor" stroke="none" />
+    <path d="M4.5 8.5C3.7 9.6 3.7 11 4.5 12M19.5 8.5c.8 1.1.8 2.5 0 3.5" opacity="0.8" />
+  </svg>
+);
+
+const HaloCortanaChip = ({ size = 24, className = "", style }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} className={className} style={style} fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
+    <rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor" fillOpacity="0.18" />
+    <path d="M10 4v3M14 4v3M10 17v3M14 17v3M4 10h3M4 14h3M17 10h3M17 14h3" />
+  </svg>
+);
+
+const HaloFireteam = ({ size = 24, className = "", style }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} className={className} style={style} fill="none" stroke="currentColor" strokeWidth="1.2">
+    <path d="M7 9c0-1.8 1.3-3 3-3s3 1.2 3 3v2c0 1.4-1 2.4-2.3 2.6L10 14H9l-.7-.4C7 13.4 7 12.4 7 11Z" transform="translate(-3 0)" />
+    <path d="M7 9c0-1.8 1.3-3 3-3s3 1.2 3 3v2c0 1.4-1 2.4-2.3 2.6L10 14H9l-.7-.4C7 13.4 7 12.4 7 11Z" transform="translate(7 0)" />
+    <path d="M10 12h4" strokeLinecap="round" opacity="0.8" />
+  </svg>
+);
+
+const HaloFists = ({ size = 24, className = "", style }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} className={className} style={style} fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round">
+    <rect x="3" y="9" width="7" height="6" rx="1.5" />
+    <rect x="14" y="9" width="7" height="6" rx="1.5" />
+    <path d="M10 12h4" strokeLinecap="round" />
+  </svg>
+);
+
+const HaloCredit = ({ size = 24, className = "", style }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} className={className} style={style}>
+    <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.7" />
+    <text x="12" y="15.5" textAnchor="middle" fontSize="9" fontWeight="700" fill="currentColor" fontFamily="'Share Tech Mono', monospace">cR</text>
+  </svg>
+);
+
+const HaloUNSCEagle = ({ size = 24, className = "", style }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} className={className} style={style} fill="none" stroke="currentColor" strokeWidth="1.2">
+    <circle cx="12" cy="12" r="6" opacity="0.6" />
+    <path d="M12 6c-1.4 1.5-3.5 2.2-6 2 1 2.4 3 3.7 6 4 3-0.3 5-1.6 6-4-2.5.2-4.6-.5-6-2Z" fill="currentColor" stroke="none" />
+    <path d="M12 12v5M9.5 16h5" strokeLinecap="round" />
+  </svg>
+);
+
+// Large background decoration SVGs (low-opacity silhouettes)
+const HaloRingArc = ({ className = "", style }) => (
+  <svg viewBox="0 0 200 200" className={className} style={style}>
+    <circle cx="100" cy="100" r="88" fill="none" stroke="currentColor" strokeWidth="10" opacity="0.5" />
+    <circle cx="100" cy="100" r="74" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.7" strokeDasharray="6 10" />
+    <circle cx="100" cy="100" r="96" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.5" />
+  </svg>
+);
+
+const HaloWarthog = ({ className = "", style }) => (
+  <svg viewBox="0 0 64 32" className={className} style={style} fill="currentColor">
+    <path d="M2 20h6l3-6h16l4 4h25l5 3v5H58a5 5 0 0 0-10 0H20a5 5 0 0 0-10 0H2Z" opacity="0.9" />
+    <circle cx="15" cy="26" r="4" /><circle cx="53" cy="26" r="4" />
+    <rect x="44" y="8" width="14" height="3" rx="1" />
+  </svg>
+);
+
+const HaloBattleRifle = ({ className = "", style }) => (
+  <svg viewBox="0 0 64 24" className={className} style={style} fill="currentColor">
+    <path d="M2 9h40v4H30l-2 6h-4l1-6H10l-2 5H4l1-5H2Z" opacity="0.9" />
+    <rect x="42" y="8" width="18" height="3" rx="1" />
+    <rect x="20" y="4" width="8" height="3" rx="1" />
+  </svg>
+);
+
+// =============================================================================
 // HALO ("VISR OS") DECORATIONS — overlay + scoped .halo-active CSS.
 // Mirrors the HelloKitty / RuneScape decoration pattern: only mounts when a
 // halo theme is active, and carries all halo-specific styling in a <style>
@@ -1475,6 +1666,24 @@ const HaloDecorations = ({ isActive }) => {
       <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
         <div className="halo-grid" />
         <div className="halo-scanlines" />
+        {/* Master Chief helmet ghosted behind the header */}
+        <HaloSpartanHelmet size={240} className="halo-deco halo-helmet-hdr" style={{ color: "var(--halo-accent)" }} />
+        {/* Large slowly-rotating Halo ring in the upper-right */}
+        <HaloRingArc className="halo-deco halo-ring-ur" style={{ color: "var(--halo-accent)" }} />
+        {/* Big slow ring ghosted behind the content / lead log */}
+        <HaloRingArc className="halo-deco halo-ring-bg" style={{ color: "var(--halo-accent)" }} />
+        {/* Crossed Energy Swords, mid-right */}
+        <HaloCrossedSwords size={130} className="halo-deco halo-swords" style={{ color: "var(--halo-accent)" }} />
+        {/* Battle Rifle, mid-left */}
+        <HaloBattleRifle className="halo-deco halo-rifle" style={{ color: "var(--halo-accent)" }} />
+        {/* Warthog, bottom-left */}
+        <HaloWarthog className="halo-deco halo-warthog" style={{ color: "var(--halo-accent)" }} />
+        {/* UNSC eagle, bottom-right */}
+        <HaloUNSCEagle size={120} className="halo-deco halo-eagle" style={{ color: "var(--halo-accent)" }} />
+        {/* Drifting plasma orbs */}
+        <span className="halo-plasma halo-plasma-1" />
+        <span className="halo-plasma halo-plasma-2" />
+        {/* Viewport corner HUD brackets */}
         <div className="halo-bracket halo-bracket-tl" />
         <div className="halo-bracket halo-bracket-tr" />
         <div className="halo-bracket halo-bracket-bl" />
@@ -1553,36 +1762,80 @@ const HaloDecorations = ({ isActive }) => {
         .halo-bracket-bl { bottom: 14px; left: 10px; border-right: none; border-top: none; }
         .halo-bracket-br { bottom: 14px; right: 10px; border-left: none; border-top: none; }
 
-        /* VISR card chrome: chamfered corners + accent border + inset glow +
-           bright top-left leading stroke. (clip-path clips outer glows, so the
-           glow is applied inset.) */
+        /* VISR card chrome: accent border + inset glow + 4 HUD corner brackets.
+           Brackets are painted on a ::after overlay (not the card background) so
+           the card's hover background-change can't wipe them. */
         .halo-active .dash-card,
         .halo-active .dash-stat {
           position: relative;
           border-color: var(--halo-accent-dim) !important;
-          box-shadow: inset 0 0 14px -6px var(--halo-accent);
-          clip-path: polygon(
-            0 7px, 7px 0,
-            calc(100% - 7px) 0, 100% 7px,
-            100% calc(100% - 7px), calc(100% - 7px) 100%,
-            7px 100%, 0 calc(100% - 7px)
-          );
+          box-shadow: inset 0 0 14px -7px var(--halo-accent);
         }
-        .halo-active .dash-card::before {
+        .halo-active .dash-card::after,
+        .halo-active .dash-stat::after {
           content: "";
           position: absolute;
-          top: 0;
-          left: 0;
-          height: 2px;
-          width: 34%;
-          background: var(--halo-accent);
-          box-shadow: 0 0 8px var(--halo-accent);
+          inset: 0;
+          pointer-events: none;
+          background-image:
+            linear-gradient(var(--halo-accent), var(--halo-accent)),
+            linear-gradient(var(--halo-accent), var(--halo-accent)),
+            linear-gradient(var(--halo-accent), var(--halo-accent)),
+            linear-gradient(var(--halo-accent), var(--halo-accent)),
+            linear-gradient(var(--halo-accent), var(--halo-accent)),
+            linear-gradient(var(--halo-accent), var(--halo-accent)),
+            linear-gradient(var(--halo-accent), var(--halo-accent)),
+            linear-gradient(var(--halo-accent), var(--halo-accent));
+          background-repeat: no-repeat;
+          background-size:
+            13px 2px, 2px 13px,
+            13px 2px, 2px 13px,
+            13px 2px, 2px 13px,
+            13px 2px, 2px 13px;
+          background-position:
+            left 5px top 5px, left 5px top 5px,
+            right 5px top 5px, right 5px top 5px,
+            left 5px bottom 5px, left 5px bottom 5px,
+            right 5px bottom 5px, right 5px bottom 5px;
+          opacity: 0.85;
         }
 
-        /* Monthly-progress bar reads as an energy shield */
+        /* Monthly-progress bar reads as an energy shield with Forerunner light traces */
         .halo-active .dash-progress-fill {
+          position: relative;
+          overflow: hidden;
           background: linear-gradient(90deg, var(--halo-accent-dim), var(--halo-accent-glow)) !important;
           box-shadow: 0 0 10px var(--halo-accent);
+        }
+        .halo-active .dash-progress-fill::after {
+          content: "";
+          position: absolute;
+          inset: 0;
+          background: repeating-linear-gradient(90deg, transparent 0, transparent 18px, rgba(255,177,85,0.55) 19px, transparent 20px);
+          animation: halo-trace 2.6s linear infinite;
+        }
+
+        /* Energy-sword ignition glow on hover */
+        .halo-active button,
+        .halo-active .dash-lead-row {
+          transition: box-shadow 0.2s ease, background 0.16s ease, transform 0.16s ease;
+        }
+        .halo-active button:hover {
+          box-shadow: 0 0 14px -2px var(--halo-accent);
+        }
+        .halo-active .dash-lead-row:hover {
+          box-shadow: inset 0 0 0 1px var(--halo-accent), 0 0 16px -6px var(--halo-accent);
+        }
+
+        /* Streak badge: sweeping energy-shield shimmer */
+        .halo-active .halo-streak { position: relative; overflow: hidden; }
+        .halo-active .halo-streak::after {
+          content: "";
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent);
+          transform: translateX(-100%);
+          animation: halo-recharge 2.4s linear infinite;
         }
 
         /* Inputs glow with the active accent on focus */
@@ -1598,9 +1851,47 @@ const HaloDecorations = ({ isActive }) => {
           background: var(--halo-accent-dim);
         }
 
+        /* Background decoration SVGs */
+        .halo-deco { position: absolute; color: var(--halo-accent); }
+        .halo-helmet-hdr { top: -36px; left: 50%; margin-left: -120px; opacity: 0.05; }
+        .halo-ring-ur { top: -130px; right: -130px; width: 380px; height: 380px; opacity: 0.05; animation: halo-spin 120s linear infinite; }
+        .halo-ring-bg { bottom: -180px; left: 50%; margin-left: -270px; width: 540px; height: 540px; opacity: 0.04; animation: halo-spin 200s linear infinite reverse; }
+        .halo-swords { top: 38%; right: 22px; width: 130px; height: 130px; opacity: 0.08; }
+        .halo-rifle { top: 56%; left: 14px; width: 210px; opacity: 0.06; }
+        .halo-warthog { bottom: 28px; left: 26px; width: 210px; opacity: 0.06; }
+        .halo-eagle { bottom: 38px; right: 38px; width: 120px; height: 120px; opacity: 0.07; }
+
+        /* Drifting plasma orbs */
+        .halo-plasma {
+          position: absolute;
+          width: 10px; height: 10px; border-radius: 50%;
+          background: #4FB6FF;
+          box-shadow: 0 0 14px 4px rgba(79,182,255,0.6);
+          opacity: 0.4;
+          animation: halo-plasma-pulse 3s ease-in-out infinite;
+        }
+        .halo-plasma-1 { top: 28%; left: 17%; }
+        .halo-plasma-2 { top: 72%; right: 20%; animation-delay: 1.3s; }
+
         @keyframes halo-recharge {
           0% { transform: translateX(-100%); }
           100% { transform: translateX(100%); }
+        }
+        @keyframes halo-spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        @keyframes halo-trace {
+          0% { background-position: 0 0; }
+          100% { background-position: 40px 0; }
+        }
+        @keyframes halo-plasma-pulse {
+          0%, 100% { transform: scale(1); opacity: 0.3; }
+          50% { transform: scale(1.4); opacity: 0.65; }
+        }
+        @keyframes halo-ping {
+          0% { transform: translate(-50%, -50%) scale(0.4); opacity: 0.85; }
+          100% { transform: translate(-50%, -50%) scale(2.6); opacity: 0; }
         }
       `}</style>
     </>
@@ -6240,7 +6531,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
               <div
                 className={`bg-gradient-to-r ${currentThemeStyles.accent} p-2 rounded-lg`}
               >
-                <HelloKittyLogo isHelloKitty={currentTheme === 'helloKitty'} isRuneScape={currentTheme === 'runescape'} className="w-6 h-6" />
+                <HelloKittyLogo isHelloKitty={currentTheme === 'helloKitty'} isRuneScape={currentTheme === 'runescape'} isHalo={isHaloTheme(currentTheme)} className="w-6 h-6" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
@@ -6337,7 +6628,7 @@ const ManagerDashboard = ({ user, onSignOut }) => {
                   : "text-gray-300 hover:text-white"
               }`}
             >
-              <HelloKittyIcon icon={tab.icon} iconType={tab.iconType} isHelloKitty={currentTheme === 'helloKitty'} isRuneScape={currentTheme === 'runescape'} className="w-4 h-4 inline mr-2" />
+              <HelloKittyIcon icon={tab.icon} iconType={tab.iconType} isHelloKitty={currentTheme === 'helloKitty'} isRuneScape={currentTheme === 'runescape'} isHalo={isHaloTheme(currentTheme)} className="w-4 h-4 inline mr-2" />
               {tab.label}
             </button>
           ))}
@@ -8970,7 +9261,7 @@ const AgentDashboard = ({ user, onSignOut }) => {
               <div
                 className={`bg-gradient-to-r ${currentThemeStyles.accent} p-2 rounded-lg`}
               >
-                <HelloKittyLogo isHelloKitty={currentTheme === 'helloKitty'} isRuneScape={currentTheme === 'runescape'} className="w-6 h-6 text-white" />
+                <HelloKittyLogo isHelloKitty={currentTheme === 'helloKitty'} isRuneScape={currentTheme === 'runescape'} isHalo={isHaloTheme(currentTheme)} className="w-6 h-6 text-white" />
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-white">
@@ -9013,7 +9304,7 @@ const AgentDashboard = ({ user, onSignOut }) => {
                   />
                 </label>
               </div>
-              <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${currentTheme === 'helloKitty' ? 'bg-gradient-to-r from-pink-400 to-rose-400' : currentTheme === 'runescape' ? 'bg-gradient-to-r from-yellow-600 to-amber-700' : 'bg-gradient-to-r from-orange-500 to-red-500'}`}>
+              <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${isHalo ? 'halo-streak' : ''} ${currentTheme === 'helloKitty' ? 'bg-gradient-to-r from-pink-400 to-rose-400' : currentTheme === 'runescape' ? 'bg-gradient-to-r from-yellow-600 to-amber-700' : 'bg-gradient-to-r from-orange-500 to-red-500'}`}>
                 {currentTheme === 'helloKitty' ? <span>💕</span> : currentTheme === 'runescape' ? <span>🪙</span> : <Flame className="w-5 h-5 text-white" />}
                 <span className="text-white font-bold">
                   {isHalo ? `${streak}-Day ${haloSpree(streak)}` : `${streak} day streak!`}
@@ -9055,7 +9346,7 @@ const AgentDashboard = ({ user, onSignOut }) => {
                   : "text-gray-300 hover:text-white"
               }`}
             >
-              <HelloKittyIcon icon={tab.icon} iconType={tab.iconType} isHelloKitty={currentTheme === 'helloKitty'} isRuneScape={currentTheme === 'runescape'} className="w-4 h-4 inline mr-2" />
+              <HelloKittyIcon icon={tab.icon} iconType={tab.iconType} isHelloKitty={currentTheme === 'helloKitty'} isRuneScape={currentTheme === 'runescape'} isHalo={isHaloTheme(currentTheme)} className="w-4 h-4 inline mr-2" />
               {tab.label}
             </button>
           ))}
@@ -9079,12 +9370,12 @@ const AgentDashboard = ({ user, onSignOut }) => {
             thermostat.monthlyGoal,
           ];
           const statCards = [
-            { label: "Leads Today", icon: Users, color: "var(--dash-sale)", value: metrics.totalLeads },
-            { label: "Sales Today", icon: Target, color: "var(--sale)", value: metrics.totalSales },
-            { label: "Conversion Rate", icon: TrendingUp, color: "#60a5fa", value: parseFloat(metrics.conversionRate) || 0, decimals: 1, suffix: "%" },
-            { label: "Revenue Today", icon: DollarSign, color: "var(--warning)", value: metrics.totalRevenue, prefix: "$" },
-            { label: "Referral Rate", icon: UserPlus, color: "var(--referral)", value: parseFloat(metrics.referralRate) || 0, decimals: 1, suffix: "%" },
-            { label: "Referrals", icon: Award, color: "var(--pink)", value: metrics.totalReferrals },
+            { label: "Leads Today", icon: Users, halo: HaloWaypointIcon, color: "var(--dash-sale)", value: metrics.totalLeads },
+            { label: "Sales Today", icon: Target, halo: HaloEnergySword, color: "var(--sale)", value: metrics.totalSales },
+            { label: "Conversion Rate", icon: TrendingUp, halo: HaloVisrScan, color: "#60a5fa", value: parseFloat(metrics.conversionRate) || 0, decimals: 1, suffix: "%" },
+            { label: "Revenue Today", icon: DollarSign, halo: HaloCredit, color: "var(--warning)", value: metrics.totalRevenue, prefix: "$" },
+            { label: "Referral Rate", icon: UserPlus, halo: HaloFireteam, color: "var(--referral)", value: parseFloat(metrics.referralRate) || 0, decimals: 1, suffix: "%" },
+            { label: "Referrals", icon: Award, halo: HaloFists, color: "var(--pink)", value: metrics.totalReferrals },
           ];
           const dashNum = inputMode === "dash1" ? 1 : 2;
           return (
@@ -9095,7 +9386,7 @@ const AgentDashboard = ({ user, onSignOut }) => {
               style={{ padding: "8px 16px", flexShrink: 0, animationDelay: "0.05s" }}
             >
               <div className="flex items-center gap-3 flex-wrap">
-                <Calendar className="w-4 h-4" style={{ color: "var(--dash-sale)" }} />
+                {isHalo ? <HaloDatapad size={16} style={{ color: "var(--dash-sale)" }} /> : <Calendar className="w-4 h-4" style={{ color: "var(--dash-sale)" }} />}
                 <label className="dash-sub" style={{ fontSize: "0.75rem", fontWeight: 600 }}>
                   Date Filter
                 </label>
@@ -9119,7 +9410,8 @@ const AgentDashboard = ({ user, onSignOut }) => {
                 style={{ padding: "12px", flexShrink: 0, animationDelay: "0.1s" }}
               >
                 <div className="flex items-center justify-between flex-wrap gap-x-4 gap-y-2">
-                  <h3 style={{ color: "var(--text)", fontSize: "0.8rem", fontWeight: 700, flexShrink: 0 }}>
+                  <h3 style={{ color: "var(--text)", fontSize: "0.8rem", fontWeight: 700, flexShrink: 0, display: "flex", alignItems: "center", gap: "6px" }}>
+                    {isHalo && <HaloReticle size={15} style={{ color: "var(--halo-accent)" }} />}
                     Your Goals <span className="dash-sub" style={{ fontWeight: 500, fontSize: "0.72rem" }}>(Set by Manager)</span>
                   </h3>
                   <div className="flex items-center gap-5 flex-wrap">
@@ -9227,7 +9519,11 @@ const AgentDashboard = ({ user, onSignOut }) => {
                         style={{ fontSize: "20px", fontWeight: 700, color: metric.color }}
                       />
                     </div>
-                    <metric.icon className="w-4 h-4" style={{ color: metric.color, opacity: 0.85 }} />
+                    {isHalo && metric.halo ? (
+                      <metric.halo size={16} style={{ color: metric.color, opacity: 0.9 }} />
+                    ) : (
+                      <metric.icon className="w-4 h-4" style={{ color: metric.color, opacity: 0.85 }} />
+                    )}
                   </div>
                 </div>
               ))}
@@ -9237,7 +9533,7 @@ const AgentDashboard = ({ user, onSignOut }) => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2" style={{ flexShrink: 0 }}>
               <div className="dash-card dash-card-hover dash-animate" style={{ padding: "12px", animationDelay: "0.45s" }}>
                 <div className="flex items-center gap-2 mb-2">
-                  <Trophy className="w-4 h-4" style={{ color: "var(--sale)" }} />
+                  {isHalo ? <HaloMedalIcon size={16} style={{ color: "var(--sale)" }} /> : <Trophy className="w-4 h-4" style={{ color: "var(--sale)" }} />}
                   <h3 style={{ color: "var(--text)", fontSize: "12px", fontWeight: 700 }}>Best Conversion Rates</h3>
                 </div>
                 <div>
@@ -9257,7 +9553,7 @@ const AgentDashboard = ({ user, onSignOut }) => {
               </div>
               <div className="dash-card dash-card-hover dash-animate" style={{ padding: "12px", animationDelay: "0.5s" }}>
                 <div className="flex items-center gap-2 mb-2">
-                  <Zap className="w-4 h-4" style={{ color: "var(--warning)" }} />
+                  {isHalo ? <HaloMedalIcon size={16} style={{ color: "var(--warning)" }} /> : <Zap className="w-4 h-4" style={{ color: "var(--warning)" }} />}
                   <h3 style={{ color: "var(--text)", fontSize: "12px", fontWeight: 700 }}>Best Sales Performance</h3>
                 </div>
                 <div>
@@ -9295,8 +9591,12 @@ const AgentDashboard = ({ user, onSignOut }) => {
                   <FileText className="w-5 h-5" style={{ color: "var(--referral)" }} />
                   <h3 style={{ color: "var(--text)", fontSize: "1.05rem", fontWeight: 700 }}>Lead Log</h3>
                   <span className="flex items-center gap-1" style={{ marginLeft: "4px" }}>
-                    <span className="dash-live-dot" style={{ width: "7px", height: "7px", borderRadius: "50%", background: "var(--sale)", display: "inline-block" }} />
-                    <span className="dash-mono" style={{ fontSize: "0.6rem", fontWeight: 700, letterSpacing: "0.1em", color: "var(--sale)" }}>LIVE</span>
+                    {isHalo ? (
+                      <HaloCortanaChip size={14} className="dash-live-dot" style={{ color: "var(--halo-accent)" }} />
+                    ) : (
+                      <span className="dash-live-dot" style={{ width: "7px", height: "7px", borderRadius: "50%", background: "var(--sale)", display: "inline-block" }} />
+                    )}
+                    <span className="dash-mono" style={{ fontSize: "0.6rem", fontWeight: 700, letterSpacing: "0.1em", color: isHalo ? "var(--halo-accent)" : "var(--sale)" }}>LIVE</span>
                   </span>
                 </div>
                 <span className="dash-sub" style={{ fontSize: "0.78rem" }}>
@@ -9308,7 +9608,14 @@ const AgentDashboard = ({ user, onSignOut }) => {
               <div className="lead-log-scroll" style={{ flex: "1 1 auto", minHeight: 0, paddingRight: "4px" }}>
                 {logLeads.length === 0 ? (
                   <div className="dash-sub text-center" style={{ padding: "40px 0", fontSize: "0.9rem" }}>
-                    No leads for {selectedDateLabel}. Log your first lead below!
+                    {isHalo ? (
+                      <>
+                        <HaloSpartanHelmet size={88} style={{ color: "var(--halo-accent)", opacity: 0.35, margin: "0 auto 10px" }} />
+                        <div>No contacts on radar.</div>
+                      </>
+                    ) : (
+                      <>No leads for {selectedDateLabel}. Log your first lead below!</>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-3">
@@ -9457,7 +9764,11 @@ const AgentDashboard = ({ user, onSignOut }) => {
                                   borderLeft: "2px solid var(--border)",
                                 }}
                               >
-                                <span style={{ fontSize: "0.8rem", flexShrink: 0 }}>📞</span>
+                                {isHalo ? (
+                                  <HaloCommHelmet size={14} style={{ color: "var(--halo-accent)", flexShrink: 0 }} />
+                                ) : (
+                                  <span style={{ fontSize: "0.8rem", flexShrink: 0 }}>📞</span>
+                                )}
                                 <span className="dash-mono dash-dim" style={{ fontSize: "0.62rem", fontWeight: 700, letterSpacing: "0.06em", flexShrink: 0 }}>
                                   DASH {dc.dashNumber || ci + 1}
                                 </span>
@@ -9624,7 +9935,11 @@ const AgentDashboard = ({ user, onSignOut }) => {
                 ) : (
                   <div>
                     <div className="flex items-center gap-2 flex-wrap" style={{ marginBottom: "10px" }}>
-                      <span style={{ fontSize: "0.85rem" }}>📞</span>
+                      {isHalo ? (
+                        <HaloCommHelmet size={15} style={{ color: "var(--dash-sale)" }} />
+                      ) : (
+                        <span style={{ fontSize: "0.85rem" }}>📞</span>
+                      )}
                       <span className="dash-mono" style={{ fontSize: "0.7rem", fontWeight: 700, letterSpacing: "0.08em", color: "var(--dash-sale)" }}>
                         DASH CALL {dashNum}
                       </span>
