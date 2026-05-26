@@ -72,7 +72,14 @@ import {
 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { useLeads } from "../hooks/useLeads";
-import { useFirestore, fetchAgentGoalsStandalone } from "../hooks/useFirestore";
+import {
+  useFirestore,
+  fetchAgentGoalsStandalone,
+  addDashCall,
+  getDashCalls,
+  updateDashCall,
+  deleteDashCall,
+} from "../hooks/useFirestore";
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "../firebase";
 
@@ -85,48 +92,224 @@ const mockAgents = [];
 const mockFive9Data = {};
 
 // Theme system
+// NOTE: the `dash` sub-object holds the new "bento dark" Dashboard-tab surface
+// tokens. Data colors (sale/dash-sale/referral/etc.) live in styles.css :root and
+// stay consistent across every theme — only the surface tokens change per theme.
 const themes = {
   default: {
     primary: "from-indigo-900 via-purple-900 to-pink-900",
     accent: "from-blue-500 to-purple-600",
     card: "bg-white/10",
+    dash: {
+      bg: "#0e0e14",
+      card: "#1a1a26",
+      cardHover: "#1f1f2e",
+      border: "rgba(255,255,255,0.05)",
+    },
   },
   ocean: {
     primary: "from-blue-900 via-cyan-900 to-teal-900",
     accent: "from-cyan-500 to-blue-600",
     card: "bg-blue-500/10",
+    dash: {
+      bg: "#0a1628",
+      card: "#0f2035",
+      cardHover: "#132940",
+      border: "rgba(255,255,255,0.06)",
+    },
   },
   forest: {
     primary: "from-green-900 via-emerald-900 to-teal-900",
     accent: "from-green-500 to-emerald-600",
     card: "bg-green-500/10",
+    dash: {
+      bg: "#0a1410",
+      card: "#0f1f18",
+      cardHover: "#132a20",
+      border: "rgba(255,255,255,0.06)",
+    },
   },
   sunset: {
     primary: "from-orange-900 via-red-900 to-pink-900",
     accent: "from-orange-500 to-red-600",
     card: "bg-orange-500/10",
+    dash: {
+      bg: "#1a0e0a",
+      card: "#261612",
+      cardHover: "#2e1c16",
+      border: "rgba(255,255,255,0.06)",
+    },
   },
   midnight: {
     primary: "from-slate-900 via-gray-900 to-black",
     accent: "from-gray-500 to-slate-600",
     card: "bg-slate-500/10",
+    dash: {
+      bg: "#0a0a0e",
+      card: "#14141a",
+      cardHover: "#1a1a22",
+      border: "rgba(255,255,255,0.05)",
+    },
   },
   aurora: {
     primary: "from-violet-900 via-purple-900 to-fuchsia-900",
     accent: "from-violet-500 to-fuchsia-600",
     card: "bg-violet-500/10",
+    dash: {
+      bg: "#100a1a",
+      card: "#1a1228",
+      cardHover: "#221830",
+      border: "rgba(255,255,255,0.06)",
+    },
   },
   helloKitty: {
     primary: "from-pink-400 via-pink-300 to-rose-200",
     accent: "from-pink-500 to-red-400",
     card: "bg-white/30",
     isLight: true,
+    // Keep Hello Kitty light — pink surfaces, dark text.
+    dash: {
+      bg: "#fff0f6",
+      card: "#ffffff",
+      cardHover: "#fff5fa",
+      border: "rgba(219,39,119,0.25)",
+      text: "#4a1942",
+      textSub: "#9b5d8b",
+      textDim: "#c98bb3",
+      isLight: true,
+    },
   },
   runescape: {
     primary: "from-stone-950 via-amber-950 to-yellow-950",
     accent: "from-yellow-600 to-amber-700",
     card: "bg-amber-500/10",
+    dash: {
+      bg: "#0e0c08",
+      card: "#1a1710",
+      cardHover: "#221f16",
+      border: "rgba(255,255,255,0.06)",
+    },
   },
+};
+
+// Default "bento dark" tokens used as a fallback if a theme lacks `dash`.
+const DEFAULT_DASH_TOKENS = {
+  bg: "#0e0e14",
+  card: "#1a1a26",
+  cardHover: "#1f1f2e",
+  border: "rgba(255,255,255,0.05)",
+  text: "#f0f0f5",
+  textSub: "#7a7a8e",
+  textDim: "#3d3d50",
+};
+
+// Data colors for lead types (consistent across all themes).
+const DASH_DATA_COLORS = {
+  sale: "#84cc16",
+  dashSale: "#22d3ee",
+  referral: "#8b5cf6",
+  negative: "#f43f5e",
+  warning: "#f59e0b",
+  callback: "#22d3ee",
+  pink: "#ec4899",
+  neutral: "#7a7a8e",
+};
+
+// Map a lead type string to its data color.
+const getLeadTypeColor = (leadType = "") => {
+  if (leadType.startsWith("Dash Sale")) return DASH_DATA_COLORS.dashSale;
+  if (leadType.startsWith("Referral Sale")) return DASH_DATA_COLORS.referral;
+  if (leadType.startsWith("Sale")) return DASH_DATA_COLORS.sale;
+  if (leadType.startsWith("Immediate Dc") || leadType.startsWith("Third Party"))
+    return DASH_DATA_COLORS.negative;
+  if (
+    leadType.startsWith("No SEP") ||
+    leadType.startsWith("No Value") ||
+    leadType.startsWith("Med Supp")
+  )
+    return DASH_DATA_COLORS.warning;
+  if (
+    leadType.startsWith("Tier 1") ||
+    leadType.startsWith("Not Appointed") ||
+    leadType.startsWith("Spanish")
+  )
+    return DASH_DATA_COLORS.pink;
+  return DASH_DATA_COLORS.neutral;
+};
+
+const isSaleLeadType = (leadType = "") =>
+  ["Sale", "Dash Sale", "Referral Sale"].some((t) => leadType.startsWith(t));
+
+// Convert a hex color to an rgba() string with the given alpha.
+const hexToRgba = (hex, alpha = 1) => {
+  const m = hex.replace("#", "");
+  const full =
+    m.length === 3
+      ? m
+          .split("")
+          .map((c) => c + c)
+          .join("")
+      : m;
+  const r = parseInt(full.slice(0, 2), 16);
+  const g = parseInt(full.slice(2, 4), 16);
+  const b = parseInt(full.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
+
+// Animated number counter — eases from 0 to `value` over ~900ms on mount and
+// whenever `value` changes (handles async data load).
+const AnimatedNumber = ({
+  value = 0,
+  decimals = 0,
+  prefix = "",
+  suffix = "",
+  className = "",
+  style,
+  duration = 900,
+}) => {
+  const [display, setDisplay] = React.useState(0);
+  const rafRef = React.useRef(null);
+  const target = Number(value) || 0;
+
+  React.useEffect(() => {
+    const start = performance.now();
+    const from = 0;
+    const animate = (now) => {
+      const elapsed = now - start;
+      const t = Math.min(elapsed / duration, 1);
+      // ease-out cubic
+      const eased = 1 - Math.pow(1 - t, 3);
+      setDisplay(from + (target - from) * eased);
+      if (t < 1) {
+        rafRef.current = requestAnimationFrame(animate);
+      } else {
+        setDisplay(target);
+      }
+    };
+    rafRef.current = requestAnimationFrame(animate);
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, [target, duration]);
+
+  return (
+    <span className={className} style={style}>
+      {prefix}
+      {display.toLocaleString(undefined, {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals,
+      })}
+      {suffix}
+    </span>
+  );
+};
+
+// Human-readable label + color for a dash-call result.
+const DASH_RESULT_META = {
+  connected: { label: "Connected", color: "#84cc16" },
+  no_answer: { label: "No Answer", color: "#f43f5e" },
+  voicemail: { label: "Voicemail", color: "#f59e0b" },
+  busy: { label: "Busy", color: "#8b5cf6" },
 };
 
 // Hello Kitty Decorations Component
@@ -7587,6 +7770,13 @@ const AgentDashboard = ({ user, onSignOut }) => {
   const [formErrors, setFormErrors] = useState({});
   const [userAvatar, setUserAvatar] = useState(null);
   const [editingLead, setEditingLead] = useState(null);
+  // Dash calls (logged against a parent lead in the new Lead Log)
+  const [dashCalls, setDashCalls] = useState([]);
+  const [newDashCall, setNewDashCall] = useState({
+    result: "connected",
+    notes: "",
+  });
+  const [isLoggingDashCall, setIsLoggingDashCall] = useState(false);
   const [selectedDate, setSelectedDate] = useState(() => {
     const today = new Date();
     const year = today.getFullYear();
@@ -7612,6 +7802,17 @@ const AgentDashboard = ({ user, onSignOut }) => {
   const hideToast = () => {
     setToast((prev) => ({ ...prev, isVisible: false }));
   };
+
+  // Load dash calls for this agent
+  const loadDashCalls = useCallback(async () => {
+    if (!user.email) return;
+    const calls = await getDashCalls(user.email);
+    setDashCalls(calls);
+  }, [user.email]);
+
+  useEffect(() => {
+    loadDashCalls();
+  }, [loadDashCalls]);
 
   // Fetch agent goals from Firebase on mount and when tab becomes visible
   // This ensures manager's goal changes are reflected on agent's dashboard
@@ -7968,6 +8169,87 @@ const AgentDashboard = ({ user, onSignOut }) => {
     referralRate: 15,
   };
 
+  // ---- New Lead Log derived data -------------------------------------------
+  // Dashboard surface tokens for the active theme (bento dark).
+  const dashTokens = { ...DEFAULT_DASH_TOKENS, ...(currentThemeStyles.dash || {}) };
+  const dashRootStyle = {
+    "--bg": dashTokens.bg,
+    "--card": dashTokens.card,
+    "--card-hover": dashTokens.cardHover,
+    "--border": dashTokens.border,
+    "--text": dashTokens.text || DEFAULT_DASH_TOKENS.text,
+    "--text-sub": dashTokens.textSub || DEFAULT_DASH_TOKENS.textSub,
+    "--text-dim": dashTokens.textDim || DEFAULT_DASH_TOKENS.textDim,
+  };
+
+  // Leads for the selected date, oldest-first, numbered 1..n for the log.
+  const logLeads = [...selectedDateLeads].sort(
+    (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
+  );
+  const dashCallsForLead = (leadId) =>
+    dashCalls
+      .filter((dc) => dc.linkedLeadId === leadId)
+      .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+  // The most recent lead is what new dash calls attach to.
+  const lastLead = logLeads[logLeads.length - 1] || null;
+  const lastLeadDashCalls = lastLead ? dashCallsForLead(lastLead.id) : [];
+
+  // Auto-cycling input mode: lead -> dash1 -> dash2 -> lead ...
+  let inputMode;
+  if (!lastLead || lastLeadDashCalls.length >= 2) inputMode = "lead";
+  else if (lastLeadDashCalls.length === 0) inputMode = "dash1";
+  else inputMode = "dash2";
+
+  const handleAddDashCall = async () => {
+    if (isLoggingDashCall) return;
+    if (!lastLead) {
+      showToast("Log a lead first before logging a dash call", "error");
+      return;
+    }
+    if (!newDashCall.notes.trim()) {
+      setFormErrors({ dashNotes: "Notes are required" });
+      return;
+    }
+    setIsLoggingDashCall(true);
+    try {
+      const result = await addDashCall({
+        result: newDashCall.result,
+        notes: newDashCall.notes,
+        timestamp: new Date().toISOString(),
+        agentEmail: user.email,
+        linkedLeadId: lastLead.id,
+        dashNumber: lastLeadDashCalls.length + 1,
+      });
+      if (result.success) {
+        setNewDashCall({ result: "connected", notes: "" });
+        setFormErrors({});
+        await loadDashCalls();
+        showToast("Dash call logged! 📞", "success");
+      } else {
+        showToast(`Error logging call: ${result.error}`, "error");
+      }
+    } finally {
+      setIsLoggingDashCall(false);
+    }
+  };
+
+  const handleDeleteDashCall = async (dashCallId) => {
+    const result = await deleteDashCall(dashCallId);
+    if (result.success) {
+      await loadDashCalls();
+      showToast("Dash call deleted", "success");
+    } else {
+      showToast(`Error deleting call: ${result.error}`, "error");
+    }
+  };
+
+  const formatLogTime = (ts) =>
+    new Date(ts).toLocaleTimeString([], {
+      hour: "numeric",
+      minute: "2-digit",
+    });
+
   return (
     <div
       className={`min-h-screen bg-gradient-to-br ${currentThemeStyles.primary} ${currentTheme === 'helloKitty' ? 'hello-kitty-active text-gray-800' : currentTheme === 'runescape' ? 'runescape-active text-white' : 'text-white'}`}
@@ -8074,90 +8356,95 @@ const AgentDashboard = ({ user, onSignOut }) => {
             </button>
           ))}
         </div>
-        {activeTab === "dashboard" && (
-          <>
-            {/* Date Filter */}
+        {activeTab === "dashboard" && (() => {
+          const selectedDateLabel = (() => {
+            const [y, m, d] = selectedDate.split("-").map(Number);
+            return new Date(y, m - 1, d).toLocaleDateString();
+          })();
+          const leadFormValid =
+            !!newLead.leadType &&
+            !!newLead.crmLink &&
+            !!newLead.notes.trim() &&
+            (!newLead.sale ||
+              (!!newLead.carrier && !!newLead.clientName.trim()));
+          const progressMarks = [
+            0,
+            Math.floor(thermostat.monthlyGoal * 0.25),
+            Math.floor(thermostat.monthlyGoal * 0.5),
+            Math.floor(thermostat.monthlyGoal * 0.75),
+            thermostat.monthlyGoal,
+          ];
+          const statCards = [
+            { label: "Leads Today", icon: Users, color: "var(--dash-sale)", value: metrics.totalLeads },
+            { label: "Sales Today", icon: Target, color: "var(--sale)", value: metrics.totalSales },
+            { label: "Conversion Rate", icon: TrendingUp, color: "#60a5fa", value: parseFloat(metrics.conversionRate) || 0, decimals: 1, suffix: "%" },
+            { label: "Revenue Today", icon: DollarSign, color: "var(--warning)", value: metrics.totalRevenue, prefix: "$" },
+            { label: "Referral Rate", icon: UserPlus, color: "var(--referral)", value: parseFloat(metrics.referralRate) || 0, decimals: 1, suffix: "%" },
+            { label: "Referrals", icon: Award, color: "var(--pink)", value: metrics.totalReferrals },
+          ];
+          const dashNum = inputMode === "dash1" ? 1 : 2;
+          return (
+          <div className="dash-root" style={dashRootStyle}>
+            {/* 1. Date Filter */}
             <div
-              className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-4 mb-6 border border-white/20`}
+              className="dash-card dash-card-hover dash-animate"
+              style={{ padding: "14px 18px", marginBottom: "16px", animationDelay: "0.05s" }}
             >
-              <div className="flex items-center gap-4">
-                <Calendar className="w-5 h-5 text-blue-400" />
-                <label className="text-sm font-medium text-gray-300">
-                  Date Filter:
+              <div className="flex items-center gap-3 flex-wrap">
+                <Calendar className="w-5 h-5" style={{ color: "var(--dash-sale)" }} />
+                <label className="dash-sub" style={{ fontSize: "0.8rem", fontWeight: 600 }}>
+                  Date Filter
                 </label>
                 <input
                   type="date"
                   value={selectedDate}
                   onChange={(e) => setSelectedDate(e.target.value)}
-                  className="bg-slate-800 border border-white/20 rounded px-3 py-2 text-white"
+                  className="dash-input dash-mono"
+                  style={{ padding: "7px 12px", fontSize: "0.8rem" }}
                 />
-                <span className="text-sm text-gray-300">
-                  Viewing data for{" "}
-                  {(() => {
-                    const [year, month, day] = selectedDate
-                      .split("-")
-                      .map(Number);
-                    return new Date(year, month - 1, day).toLocaleDateString();
-                  })()}
+                <span className="dash-sub" style={{ fontSize: "0.8rem" }}>
+                  Viewing data for {selectedDateLabel}
                 </span>
               </div>
             </div>
 
-            {/* Goals Display */}
+            {/* 2. Goals */}
             {goals && (
               <div
-                className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-4 mb-6 border border-white/20`}
+                className="dash-card dash-card-hover dash-animate"
+                style={{ padding: "18px 20px", marginBottom: "16px", animationDelay: "0.1s" }}
               >
-                <h3 className="text-lg font-semibold text-white mb-3">
-                  Your Goals (Set by Manager)
+                <h3 style={{ color: "var(--text)", fontSize: "1rem", fontWeight: 700, marginBottom: "14px" }}>
+                  Your Goals <span className="dash-sub" style={{ fontWeight: 500, fontSize: "0.8rem" }}>(Set by Manager)</span>
                 </h3>
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                   <div className="text-center">
-                    <p className="text-gray-300 text-sm">Daily Sales</p>
-                    <p
-                      className={`text-xl font-bold ${
-                        metrics.totalSales >= goals.dailySales
-                          ? "text-green-400"
-                          : "text-yellow-400"
-                      }`}
-                    >
+                    <p className="dash-sub" style={{ fontSize: "0.72rem", marginBottom: "4px" }}>Daily Sales</p>
+                    <p className="dash-mono" style={{ fontSize: "1.1rem", fontWeight: 700, color: metrics.totalSales >= goals.dailySales ? "var(--sale)" : "var(--warning)" }}>
                       {metrics.totalSales} / {goals.dailySales}
                     </p>
                   </div>
                   <div className="text-center">
-                    <p className="text-gray-300 text-sm">Weekly Sales</p>
-                    <p className="text-xl font-bold text-white">
+                    <p className="dash-sub" style={{ fontSize: "0.72rem", marginBottom: "4px" }}>Weekly Sales</p>
+                    <p className="dash-mono" style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--text)" }}>
                       {goals.weeklySales}
                     </p>
                   </div>
                   <div className="text-center">
-                    <p className="text-gray-300 text-sm">Monthly Sales</p>
-                    <p className="text-xl font-bold text-white">
+                    <p className="dash-sub" style={{ fontSize: "0.72rem", marginBottom: "4px" }}>Monthly Sales</p>
+                    <p className="dash-mono" style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--text)" }}>
                       {thermostat.monthlyGoal}
                     </p>
                   </div>
                   <div className="text-center">
-                    <p className="text-gray-300 text-sm">Conversion Goal</p>
-                    <p
-                      className={`text-xl font-bold ${
-                        parseFloat(metrics.conversionRate) >=
-                        goals.conversionRate
-                          ? "text-green-400"
-                          : "text-yellow-400"
-                      }`}
-                    >
+                    <p className="dash-sub" style={{ fontSize: "0.72rem", marginBottom: "4px" }}>Conversion Goal</p>
+                    <p className="dash-mono" style={{ fontSize: "1.1rem", fontWeight: 700, color: parseFloat(metrics.conversionRate) >= goals.conversionRate ? "var(--sale)" : "var(--warning)" }}>
                       {metrics.conversionRate}% / {goals.conversionRate}%
                     </p>
                   </div>
                   <div className="text-center">
-                    <p className="text-gray-300 text-sm">Referral Goal</p>
-                    <p
-                      className={`text-xl font-bold ${
-                        parseFloat(metrics.referralRate) >= goals.referralRate
-                          ? "text-green-400"
-                          : "text-yellow-400"
-                      }`}
-                    >
+                    <p className="dash-sub" style={{ fontSize: "0.72rem", marginBottom: "4px" }}>Referral Goal</p>
+                    <p className="dash-mono" style={{ fontSize: "1.1rem", fontWeight: 700, color: parseFloat(metrics.referralRate) >= goals.referralRate ? "var(--sale)" : "var(--warning)" }}>
                       {metrics.referralRate}% / {goals.referralRate}%
                     </p>
                   </div>
@@ -8165,54 +8452,42 @@ const AgentDashboard = ({ user, onSignOut }) => {
               </div>
             )}
 
+            {/* 3. Monthly Progress */}
             <div
-              className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-6 mb-6 border border-white/20`}
+              className="dash-card dash-animate"
+              style={{ padding: "22px 24px", marginBottom: "16px", animationDelay: "0.15s" }}
             >
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                 <div className="flex items-center gap-2">
-                  <Flame className="w-6 h-6 text-orange-500" />
-                  <h3 className="text-xl font-semibold text-white">
+                  <Flame className="w-5 h-5" style={{ color: "var(--warning)" }} />
+                  <h3 style={{ color: "var(--text)", fontSize: "1.05rem", fontWeight: 700 }}>
                     Monthly Progress
                   </h3>
                 </div>
                 <div className="text-right">
-                  <div className="text-2xl font-bold text-white">
+                  <div className="dash-mono" style={{ fontSize: "1.4rem", fontWeight: 700, color: "var(--sale)" }}>
                     ${thermostat.monthlyRevenue.toLocaleString()}
                   </div>
-                  <div className="text-sm text-gray-300">
-                    Revenue This Month
-                  </div>
+                  <div className="dash-sub" style={{ fontSize: "0.75rem" }}>Revenue This Month</div>
                 </div>
               </div>
-              <div className="relative h-8 bg-slate-700 rounded-full overflow-hidden mb-2">
-                <div
-                  className={`h-full bg-gradient-to-r ${currentThemeStyles.accent} transition-all duration-1000 relative`}
-                  style={{ width: `${thermostat.progress}%` }}
-                >
-                  <div className="absolute right-2 top-1/2 transform -translate-y-1/2 text-white text-sm font-bold">
-                    {thermostat.monthlySales}
-                  </div>
-                </div>
-                <div className="absolute inset-0 flex items-center justify-between px-1">
-                  {[
-                    0,
-                    Math.floor(thermostat.monthlyGoal * 0.25),
-                    Math.floor(thermostat.monthlyGoal * 0.5),
-                    Math.floor(thermostat.monthlyGoal * 0.75),
-                    thermostat.monthlyGoal,
-                  ].map((mark) => (
-                    <div
-                      key={mark}
-                      className="w-0.5 h-full bg-white/50"
-                      style={{
-                        position: "absolute",
-                        left: `${(mark / thermostat.monthlyGoal) * 100}%`,
-                      }}
-                    />
-                  ))}
-                </div>
+              <div className="dash-progress-track" style={{ marginBottom: "8px" }}>
+                <div className="dash-progress-fill" style={{ width: `${thermostat.progress}%` }} />
+                {progressMarks.map((mark) => (
+                  <div
+                    key={mark}
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      bottom: 0,
+                      left: `${(mark / thermostat.monthlyGoal) * 100}%`,
+                      width: "1px",
+                      background: "rgba(255,255,255,0.18)",
+                    }}
+                  />
+                ))}
               </div>
-              <div className="flex justify-between text-xs text-gray-400 mb-4">
+              <div className="flex justify-between dash-mono dash-dim" style={{ fontSize: "0.7rem", marginBottom: "12px" }}>
                 <span>0</span>
                 <span>{Math.floor(thermostat.monthlyGoal * 0.25)}</span>
                 <span>{Math.floor(thermostat.monthlyGoal * 0.5)}</span>
@@ -8220,427 +8495,488 @@ const AgentDashboard = ({ user, onSignOut }) => {
                 <span>{thermostat.monthlyGoal} Sales</span>
               </div>
               <div className="text-center">
-                <div className="text-lg font-semibold text-white">
+                <div style={{ color: "var(--text)", fontSize: "1rem", fontWeight: 600 }}>
                   {thermostat.monthlySales} Sales This Month
                 </div>
-                <div className="text-sm text-gray-300">
-                  {thermostat.progress.toFixed(1)}% to {thermostat.monthlyGoal}{" "}
-                  sales goal
+                <div className="dash-sub" style={{ fontSize: "0.8rem" }}>
+                  {thermostat.progress.toFixed(1)}% to {thermostat.monthlyGoal} sales goal
                 </div>
               </div>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
-              {[
-                {
-                  label: "Leads Today",
-                  value: metrics.totalLeads,
-                  color: "text-cyan-400",
-                  icon: Users,
-                },
-                {
-                  label: "Sales Today",
-                  value: metrics.totalSales,
-                  color: "text-green-400",
-                  icon: Target,
-                },
-                {
-                  label: "Conversion Rate",
-                  value: `${metrics.conversionRate}%`,
-                  color: "text-blue-400",
-                  icon: TrendingUp,
-                },
-                {
-                  label: "Revenue Today",
-                  value: `${metrics.totalRevenue}`,
-                  color: "text-yellow-400",
-                  icon: DollarSign,
-                },
-                {
-                  label: "Referral Rate",
-                  value: `${metrics.referralRate}%`,
-                  color: "text-purple-400",
-                  icon: UserPlus,
-                },
-                {
-                  label: "Referrals",
-                  value: metrics.totalReferrals,
-                  color: "text-pink-400",
-                  icon: Award,
-                },
-              ].map((metric) => (
+
+            {/* 4. Stat bento grid */}
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3" style={{ marginBottom: "16px" }}>
+              {statCards.map((metric, i) => (
                 <div
                   key={metric.label}
-                  className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-4 border border-white/20`}
+                  className="dash-stat dash-animate"
+                  style={{ animationDelay: `${0.2 + i * 0.04}s` }}
                 >
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-start justify-between">
                     <div>
-                      <p className="text-gray-300 text-sm">{metric.label}</p>
-                      <p className={`text-2xl font-bold ${metric.color}`}>
-                        {metric.value}
+                      <p className="dash-sub" style={{ fontSize: "0.72rem", marginBottom: "6px" }}>
+                        {metric.label}
                       </p>
+                      <AnimatedNumber
+                        value={metric.value}
+                        decimals={metric.decimals || 0}
+                        prefix={metric.prefix || ""}
+                        suffix={metric.suffix || ""}
+                        className="dash-mono"
+                        style={{ fontSize: "1.45rem", fontWeight: 700, color: metric.color }}
+                      />
                     </div>
-                    <metric.icon className={`w-6 h-6 ${metric.color}`} />
+                    <metric.icon className="w-5 h-5" style={{ color: metric.color, opacity: 0.85 }} />
                   </div>
                 </div>
               ))}
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-              <div
-                className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-6 border border-white/20`}
-              >
+
+            {/* 5. Best Conversion + Best Sales */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3" style={{ marginBottom: "16px" }}>
+              <div className="dash-card dash-card-hover dash-animate" style={{ padding: "18px 20px", animationDelay: "0.45s" }}>
                 <div className="flex items-center gap-2 mb-4">
-                  <Trophy className="w-6 h-6 text-green-400" />
-                  <h3 className="text-lg font-semibold text-white">
-                    Best Conversion Rates
-                  </h3>
+                  <Trophy className="w-5 h-5" style={{ color: "var(--sale)" }} />
+                  <h3 style={{ color: "var(--text)", fontSize: "1rem", fontWeight: 700 }}>Best Conversion Rates</h3>
                 </div>
                 <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-300">Best Day:</span>
-                    <span className="text-green-400 font-bold">
-                      {allTimeBests.bestDay.rate.toFixed(1)}%
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-300">Best Week:</span>
-                    <span className="text-green-400 font-bold">
-                      {allTimeBests.bestWeek.rate.toFixed(1)}%
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-300">Best Month:</span>
-                    <span className="text-green-400 font-bold">
-                      {allTimeBests.bestMonth.rate.toFixed(1)}%
-                    </span>
-                  </div>
+                  {[
+                    { label: "Best Day", v: allTimeBests.bestDay.rate },
+                    { label: "Best Week", v: allTimeBests.bestWeek.rate },
+                    { label: "Best Month", v: allTimeBests.bestMonth.rate },
+                  ].map((row) => (
+                    <div key={row.label} className="flex justify-between items-center">
+                      <span className="dash-sub" style={{ fontSize: "0.85rem" }}>{row.label}:</span>
+                      <span className="dash-mono" style={{ color: "var(--sale)", fontWeight: 700 }}>
+                        {row.v.toFixed(1)}%
+                      </span>
+                    </div>
+                  ))}
                 </div>
               </div>
-              <div
-                className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-6 border border-white/20`}
-              >
+              <div className="dash-card dash-card-hover dash-animate" style={{ padding: "18px 20px", animationDelay: "0.5s" }}>
                 <div className="flex items-center gap-2 mb-4">
-                  <Zap className="w-6 h-6 text-yellow-400" />
-                  <h3 className="text-lg font-semibold text-white">
-                    Best Sales Performance
-                  </h3>
+                  <Zap className="w-5 h-5" style={{ color: "var(--warning)" }} />
+                  <h3 style={{ color: "var(--text)", fontSize: "1rem", fontWeight: 700 }}>Best Sales Performance</h3>
                 </div>
                 <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-300">Best Day:</span>
-                    <span className="text-yellow-400 font-bold">
-                      {allTimeBests.bestDaySales.sales} sales
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-300">Best Week:</span>
-                    <span className="text-yellow-400 font-bold">
-                      {allTimeBests.bestWeekSales.sales} sales
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-300">Best Month:</span>
-                    <span className="text-yellow-400 font-bold">
-                      {allTimeBests.bestMonthSales.sales} sales
-                    </span>
-                  </div>
+                  {[
+                    { label: "Best Day", v: allTimeBests.bestDaySales.sales },
+                    { label: "Best Week", v: allTimeBests.bestWeekSales.sales },
+                    { label: "Best Month", v: allTimeBests.bestMonthSales.sales },
+                  ].map((row) => (
+                    <div key={row.label} className="flex justify-between items-center">
+                      <span className="dash-sub" style={{ fontSize: "0.85rem" }}>{row.label}:</span>
+                      <span className="dash-mono" style={{ color: "var(--warning)", fontWeight: 700 }}>
+                        {row.v} sales
+                      </span>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div
-                className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-6 border border-white/20`}
-              >
-                <h3 className="text-xl font-semibold mb-4 text-white">
-                  Add New Lead
-                </h3>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Lead Type *
-                    </label>
-                    <select
-                      value={newLead.leadType}
-                      onChange={(e) =>
-                        setNewLead((prev) => ({
-                          ...prev,
-                          leadType: e.target.value,
-                        }))
-                      }
-                      className={`w-full bg-slate-800 border rounded-lg px-3 py-2 text-white ${
-                        formErrors.leadType
-                          ? "border-red-500"
-                          : "border-white/20"
-                      }`}
-                    >
-                      <option value="" className="bg-slate-800">
-                        Select Lead Type
-                      </option>
-                      {leadTypes.map((type) => (
-                        <option
-                          key={type}
-                          value={type}
-                          className="bg-slate-800"
-                        >
-                          {type}
-                        </option>
-                      ))}
-                    </select>
-                    {formErrors.leadType && (
-                      <p className="text-red-400 text-sm mt-1">
-                        {formErrors.leadType}
-                      </p>
-                    )}
-                  </div>
-                  {newLead.sale && (
-                    <>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">
-                          Client Name *
-                        </label>
-                        <input
-                          type="text"
-                          value={newLead.clientName}
-                          onChange={(e) =>
-                            setNewLead((prev) => ({
-                              ...prev,
-                              clientName: e.target.value,
-                            }))
-                          }
-                          className={`w-full bg-slate-800 border rounded-lg px-3 py-2 text-white placeholder-gray-400 ${
-                            formErrors.clientName
-                              ? "border-red-500"
-                              : "border-white/20"
-                          }`}
-                          placeholder="Enter client's full name"
-                        />
-                        {formErrors.clientName && (
-                          <p className="text-red-400 text-sm mt-1">
-                            {formErrors.clientName}
-                          </p>
-                        )}
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">
-                          Carrier *
-                        </label>
-                        <select
-                          value={newLead.carrier}
-                          onChange={(e) =>
-                            setNewLead((prev) => ({
-                              ...prev,
-                              carrier: e.target.value,
-                            }))
-                          }
-                          className={`w-full bg-slate-800 border rounded-lg px-3 py-2 text-white ${
-                            formErrors.carrier
-                              ? "border-red-500"
-                              : "border-white/20"
-                          }`}
-                        >
-                          <option value="" className="bg-slate-800">
-                            Select Carrier
-                          </option>
-                          {carriers.map((carrier) => (
-                            <option
-                              key={carrier}
-                              value={carrier}
-                              className="bg-slate-800"
-                            >
-                              {carrier}
-                            </option>
-                          ))}
-                        </select>
-                        {formErrors.carrier && (
-                          <p className="text-red-400 text-sm mt-1">
-                            {formErrors.carrier}
-                          </p>
-                        )}
-                      </div>
-                    </>
-                  )}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      CRM Link *
-                    </label>
-                    <input
-                      type="url"
-                      value={newLead.crmLink}
-                      onChange={(e) =>
-                        setNewLead((prev) => ({
-                          ...prev,
-                          crmLink: e.target.value,
-                        }))
-                      }
-                      className={`w-full bg-slate-800 border rounded-lg px-3 py-2 text-white placeholder-gray-400 ${
-                        formErrors.crmLink
-                          ? "border-red-500"
-                          : "border-white/20"
-                      }`}
-                      placeholder="https://crm.example.com/lead/12345"
-                    />
-                    {formErrors.crmLink && (
-                      <p className="text-red-400 text-sm mt-1">
-                        {formErrors.crmLink}
-                      </p>
-                    )}
-                  </div>
-                  {newLead.sale && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
-                        HRA ($15)
-                      </label>
-                      <select
-                        value={newLead.hra ? "yes" : "no"}
-                        onChange={(e) =>
-                          setNewLead((prev) => ({
-                            ...prev,
-                            hra: e.target.value === "yes",
-                            hraValue: e.target.value === "yes" ? 15 : 0,
-                          }))
-                        }
-                        className="w-full bg-slate-800 border border-white/20 rounded-lg px-3 py-2 text-white"
-                      >
-                        <option value="no" className="bg-slate-800">
-                          No
-                        </option>
-                        <option value="yes" className="bg-slate-800">
-                          Yes
-                        </option>
-                      </select>
-                    </div>
-                  )}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Notes *
-                    </label>
-                    <textarea
-                      value={newLead.notes}
-                      onChange={(e) =>
-                        setNewLead((prev) => ({
-                          ...prev,
-                          notes: e.target.value,
-                        }))
-                      }
-                      className={`w-full bg-slate-800 border rounded-lg px-3 py-2 h-20 resize-none text-white placeholder-gray-400 ${
-                        formErrors.notes ? "border-red-500" : "border-white/20"
-                      }`}
-                      placeholder="Add detailed notes about this lead..."
-                    />
-                    {formErrors.notes && (
-                      <p className="text-red-400 text-sm mt-1">
-                        {formErrors.notes}
-                      </p>
-                    )}
-                  </div>
-                  <button
-                    onClick={handleAddLead}
-                    disabled={isAddingLead}
-                    className={`w-full bg-gradient-to-r ${currentThemeStyles.accent} hover:shadow-lg py-3 px-4 rounded-lg font-semibold transition-all transform hover:scale-105 text-white ${isAddingLead ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  >
-                    {isAddingLead ? 'Adding...' : 'Add Lead'}
-                  </button>
+
+            {/* 6. Lead Log */}
+            <div className="dash-card dash-animate" style={{ padding: "18px 20px", animationDelay: "0.55s" }}>
+              <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <FileText className="w-5 h-5" style={{ color: "var(--referral)" }} />
+                  <h3 style={{ color: "var(--text)", fontSize: "1.05rem", fontWeight: 700 }}>Lead Log</h3>
+                  <span className="flex items-center gap-1" style={{ marginLeft: "4px" }}>
+                    <span className="dash-live-dot" style={{ width: "7px", height: "7px", borderRadius: "50%", background: "var(--sale)", display: "inline-block" }} />
+                    <span className="dash-mono" style={{ fontSize: "0.6rem", fontWeight: 700, letterSpacing: "0.1em", color: "var(--sale)" }}>LIVE</span>
+                  </span>
                 </div>
+                <span className="dash-sub" style={{ fontSize: "0.78rem" }}>
+                  {logLeads.length} {logLeads.length === 1 ? "lead" : "leads"} · {selectedDateLabel}
+                </span>
               </div>
-              <div
-                className={`${currentThemeStyles.card} backdrop-blur-sm rounded-xl p-6 border border-white/20`}
-              >
-                <h3 className="text-xl font-semibold mb-4 text-white">
-                  Leads for {(() => {
-                    const [year, month, day] = selectedDate.split("-").map(Number);
-                    return new Date(year, month - 1, day).toLocaleDateString();
-                  })()}
-                </h3>
-                <div className="space-y-3 max-h-96 overflow-y-auto">
-                  {selectedDateLeads.length === 0 ? (
-                    <p className="text-gray-300 text-center py-8">
-                      No leads for {(() => {
-                        const [year, month, day] = selectedDate.split("-").map(Number);
-                        return new Date(year, month - 1, day).toLocaleDateString();
-                      })()}. Add your first lead!
-                    </p>
-                  ) : (
-                    selectedDateLeads.slice(0, 10).map((lead) => (
-                      <div key={lead.id} className="bg-white/5 rounded-lg p-3">
-                        <div className="flex justify-between items-start">
-                          <div className="flex-1">
-                            <span
-                              className={`inline-block px-2 py-1 rounded text-xs font-medium ${
-                                lead.sale
-                                  ? "bg-green-500/20 text-green-400"
-                                  : "bg-blue-500/20 text-blue-400"
-                              }`}
+
+              {/* Scrollable log */}
+              <div className="lead-log-scroll" style={{ maxHeight: "60vh", paddingRight: "4px" }}>
+                {logLeads.length === 0 ? (
+                  <div className="dash-sub text-center" style={{ padding: "40px 0", fontSize: "0.9rem" }}>
+                    No leads for {selectedDateLabel}. Log your first lead below!
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {logLeads.map((lead, idx) => {
+                      const color = getLeadTypeColor(lead.leadType);
+                      const sale = isSaleLeadType(lead.leadType);
+                      const calls = dashCallsForLead(lead.id);
+                      return (
+                        <div key={lead.id}>
+                          {/* Lead row */}
+                          <div
+                            className="dash-lead-row"
+                            style={{
+                              padding: "9px 11px",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "9px",
+                              background: sale ? hexToRgba(color, 0.08) : "var(--card)",
+                            }}
+                          >
+                            <div
+                              className="dash-mono"
+                              style={{
+                                width: "24px",
+                                height: "24px",
+                                borderRadius: "6px",
+                                background: hexToRgba(color, 0.2),
+                                color,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontSize: "0.7rem",
+                                fontWeight: 700,
+                                flexShrink: 0,
+                              }}
                             >
-                              {lead.leadType}
+                              {idx + 1}
+                            </div>
+                            <select
+                              value={lead.leadType}
+                              onChange={async (e) => {
+                                const newType = e.target.value;
+                                const isSale = isSaleLeadType(newType);
+                                const res = await updateLead(lead.id, {
+                                  leadType: newType,
+                                  sale: isSale,
+                                  commission: isSale ? (lead.carrier === "Rewrite" ? 50 : 115) : 0,
+                                });
+                                if (!res.success) showToast(`Error updating lead: ${res.error}`, "error");
+                              }}
+                              className="dash-select dash-mono"
+                              style={{
+                                background: hexToRgba(color, 0.14),
+                                color,
+                                border: `1px solid ${hexToRgba(color, 0.3)}`,
+                                borderRadius: "var(--radius-xs)",
+                                padding: "4px 8px",
+                                fontSize: "0.72rem",
+                                fontWeight: 600,
+                                maxWidth: "170px",
+                                flexShrink: 0,
+                              }}
+                            >
+                              {leadTypes.map((type) => (
+                                <option key={type} value={type}>
+                                  {type.split(" - ")[0]}
+                                </option>
+                              ))}
+                            </select>
+                            <span
+                              className="dash-sub"
+                              style={{ fontSize: "0.8rem", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                            >
+                              {lead.notes}
                             </span>
                             {lead.clientName && (
-                              <span className="ml-2 text-white text-sm font-medium">
+                              <span style={{ fontSize: "0.78rem", color: "var(--text)", flexShrink: 0 }}>
                                 {lead.clientName}
                               </span>
                             )}
-                            {lead.carrier && (
-                              <span className="ml-2 text-gray-300 text-sm">
-                                {lead.carrier}
+                            {sale && (
+                              <span className="dash-mono" style={{ color: "var(--sale)", fontSize: "0.82rem", fontWeight: 700, flexShrink: 0 }}>
+                                ${lead.commission + (lead.hra ? lead.hraValue : 0)}
                               </span>
                             )}
-                            {lead.sale && (
-                              <span className="ml-2 text-yellow-400 text-sm">
-                                $
-                                {lead.commission +
-                                  (lead.hra ? lead.hraValue : 0)}
-                              </span>
+                            {lead.crmLink && (
+                              <a
+                                href={lead.crmLink}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{
+                                  fontSize: "0.68rem",
+                                  padding: "3px 8px",
+                                  borderRadius: "var(--radius-xs)",
+                                  background: "var(--card-hover)",
+                                  color: "var(--dash-sale)",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "4px",
+                                  textDecoration: "none",
+                                  flexShrink: 0,
+                                }}
+                              >
+                                <ExternalLink className="w-3 h-3" /> CRM
+                              </a>
                             )}
-                          </div>
-                          <div className="flex items-center gap-2">
+                            <span className="dash-mono dash-dim" style={{ fontSize: "0.7rem", flexShrink: 0 }}>
+                              {formatLogTime(lead.timestamp)}
+                            </span>
                             <button
                               onClick={() => setEditingLead(lead)}
-                              className="text-blue-400 hover:text-blue-300 text-xs"
+                              title="Edit lead"
+                              style={{ color: "var(--text-sub)", flexShrink: 0, display: "flex" }}
                             >
-                              Edit
+                              <Edit className="w-3.5 h-3.5" />
                             </button>
                             <button
                               onClick={async () => {
-                                if (window.confirm(`Are you sure you want to delete this lead?\n\nType: ${lead.leadType}\n${lead.clientName ? `Client: ${lead.clientName}` : ''}`)) {
+                                if (window.confirm(`Are you sure you want to delete this lead?\n\nType: ${lead.leadType}\n${lead.clientName ? `Client: ${lead.clientName}` : ""}`)) {
                                   const result = await deleteLead(lead.id);
-                                  if (result.success) {
-                                    showToast("Lead deleted successfully", "success");
-                                  } else {
-                                    showToast(`Error deleting lead: ${result.error}`, "error");
-                                  }
+                                  if (result.success) showToast("Lead deleted successfully", "success");
+                                  else showToast(`Error deleting lead: ${result.error}`, "error");
                                 }
                               }}
-                              className="text-red-400 hover:text-red-300 text-xs"
+                              title="Delete lead"
+                              style={{ color: "var(--negative)", flexShrink: 0, display: "flex" }}
                             >
-                              Delete
+                              <X className="w-3.5 h-3.5" />
                             </button>
-                            <span className="text-xs text-gray-400">
-                              {new Date(lead.timestamp).toLocaleTimeString()}
-                            </span>
                           </div>
+
+                          {/* Dash call rows */}
+                          {calls.map((dc, ci) => {
+                            const meta = DASH_RESULT_META[dc.result] || DASH_RESULT_META.no_answer;
+                            return (
+                              <div
+                                key={dc.id}
+                                className="dash-call-row"
+                                style={{
+                                  marginLeft: "24px",
+                                  marginTop: "4px",
+                                  padding: "6px 10px",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "8px",
+                                  borderLeft: "2px solid var(--border)",
+                                }}
+                              >
+                                <span style={{ fontSize: "0.8rem", flexShrink: 0 }}>📞</span>
+                                <span className="dash-mono dash-dim" style={{ fontSize: "0.62rem", fontWeight: 700, letterSpacing: "0.06em", flexShrink: 0 }}>
+                                  DASH {dc.dashNumber || ci + 1}
+                                </span>
+                                <select
+                                  value={dc.result}
+                                  onChange={async (e) => {
+                                    const res = await updateDashCall(dc.id, { result: e.target.value });
+                                    if (res.success) loadDashCalls();
+                                    else showToast(`Error updating call: ${res.error}`, "error");
+                                  }}
+                                  className="dash-select dash-mono"
+                                  style={{
+                                    background: hexToRgba(meta.color, 0.15),
+                                    color: meta.color,
+                                    border: `1px solid ${hexToRgba(meta.color, 0.3)}`,
+                                    borderRadius: "999px",
+                                    padding: "2px 8px",
+                                    fontSize: "0.66rem",
+                                    fontWeight: 700,
+                                    flexShrink: 0,
+                                  }}
+                                >
+                                  <option value="connected">Connected</option>
+                                  <option value="no_answer">No Answer</option>
+                                  <option value="voicemail">Voicemail</option>
+                                  <option value="busy">Busy</option>
+                                </select>
+                                <span className="dash-sub" style={{ fontSize: "0.75rem", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                  {dc.notes}
+                                </span>
+                                <span className="dash-mono dash-dim" style={{ fontSize: "0.68rem", flexShrink: 0 }}>
+                                  {formatLogTime(dc.timestamp)}
+                                </span>
+                                <button
+                                  onClick={() => handleDeleteDashCall(dc.id)}
+                                  title="Delete dash call"
+                                  style={{ color: "var(--text-dim)", flexShrink: 0, display: "flex" }}
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </div>
+                            );
+                          })}
                         </div>
-                        {lead.notes && (
-                          <p className="text-gray-300 text-sm mt-2">
-                            {lead.notes}
-                          </p>
-                        )}
-                        {lead.crmLink && (
-                          <a
-                            href={lead.crmLink}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-400 text-xs hover:underline mt-1 flex items-center gap-1"
-                          >
-                            <ExternalLink className="w-3 h-3" />
-                            View in CRM
-                          </a>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Auto-cycling input row */}
+              <div style={{ marginTop: "14px", paddingTop: "14px", borderTop: "1px solid var(--border)" }}>
+                {inputMode === "lead" ? (
+                  <div>
+                    <div className="flex items-center gap-2" style={{ marginBottom: "10px" }}>
+                      <Plus className="w-4 h-4" style={{ color: "var(--referral)" }} />
+                      <span className="dash-mono" style={{ fontSize: "0.7rem", fontWeight: 700, letterSpacing: "0.08em", color: "var(--referral)" }}>
+                        NEW LEAD
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      <div className="md:col-span-2">
+                        <select
+                          value={newLead.leadType}
+                          onChange={(e) => setNewLead((prev) => ({ ...prev, leadType: e.target.value }))}
+                          className="dash-select"
+                          style={{ width: "100%", padding: "8px 10px", fontSize: "0.85rem", borderColor: formErrors.leadType ? "var(--negative)" : undefined }}
+                        >
+                          <option value="">Select Lead Type</option>
+                          {leadTypes.map((type) => (
+                            <option key={type} value={type}>{type}</option>
+                          ))}
+                        </select>
+                        {formErrors.leadType && (
+                          <p style={{ color: "var(--negative)", fontSize: "0.72rem", marginTop: "4px" }}>{formErrors.leadType}</p>
                         )}
                       </div>
-                    ))
-                  )}
-                </div>
+                      {newLead.sale && (
+                        <>
+                          <div>
+                            <input
+                              type="text"
+                              value={newLead.clientName}
+                              onChange={(e) => setNewLead((prev) => ({ ...prev, clientName: e.target.value }))}
+                              className="dash-input"
+                              style={{ width: "100%", padding: "8px 10px", fontSize: "0.85rem", borderColor: formErrors.clientName ? "var(--negative)" : undefined }}
+                              placeholder="Client name"
+                            />
+                            {formErrors.clientName && (
+                              <p style={{ color: "var(--negative)", fontSize: "0.72rem", marginTop: "4px" }}>{formErrors.clientName}</p>
+                            )}
+                          </div>
+                          <div>
+                            <select
+                              value={newLead.carrier}
+                              onChange={(e) => setNewLead((prev) => ({ ...prev, carrier: e.target.value }))}
+                              className="dash-select"
+                              style={{ width: "100%", padding: "8px 10px", fontSize: "0.85rem", borderColor: formErrors.carrier ? "var(--negative)" : undefined }}
+                            >
+                              <option value="">Select Carrier</option>
+                              {carriers.map((carrier) => (
+                                <option key={carrier} value={carrier}>{carrier}</option>
+                              ))}
+                            </select>
+                            {formErrors.carrier && (
+                              <p style={{ color: "var(--negative)", fontSize: "0.72rem", marginTop: "4px" }}>{formErrors.carrier}</p>
+                            )}
+                          </div>
+                          <div>
+                            <select
+                              value={newLead.hra ? "yes" : "no"}
+                              onChange={(e) => setNewLead((prev) => ({ ...prev, hra: e.target.value === "yes", hraValue: e.target.value === "yes" ? 15 : 0 }))}
+                              className="dash-select"
+                              style={{ width: "100%", padding: "8px 10px", fontSize: "0.85rem" }}
+                            >
+                              <option value="no">HRA ($15): No</option>
+                              <option value="yes">HRA ($15): Yes</option>
+                            </select>
+                          </div>
+                        </>
+                      )}
+                      <div>
+                        <input
+                          type="url"
+                          value={newLead.crmLink}
+                          onChange={(e) => setNewLead((prev) => ({ ...prev, crmLink: e.target.value }))}
+                          className="dash-input"
+                          style={{ width: "100%", padding: "8px 10px", fontSize: "0.85rem", borderColor: formErrors.crmLink ? "var(--negative)" : undefined }}
+                          placeholder="CRM Link *"
+                        />
+                        {formErrors.crmLink && (
+                          <p style={{ color: "var(--negative)", fontSize: "0.72rem", marginTop: "4px" }}>{formErrors.crmLink}</p>
+                        )}
+                      </div>
+                      <div className={newLead.sale ? "" : "md:col-span-1"}>
+                        <input
+                          type="text"
+                          value={newLead.notes}
+                          onChange={(e) => setNewLead((prev) => ({ ...prev, notes: e.target.value }))}
+                          className="dash-input"
+                          style={{ width: "100%", padding: "8px 10px", fontSize: "0.85rem", borderColor: formErrors.notes ? "var(--negative)" : undefined }}
+                          placeholder="Notes *"
+                        />
+                        {formErrors.notes && (
+                          <p style={{ color: "var(--negative)", fontSize: "0.72rem", marginTop: "4px" }}>{formErrors.notes}</p>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      onClick={handleAddLead}
+                      disabled={isAddingLead || !leadFormValid}
+                      style={{
+                        width: "100%",
+                        marginTop: "10px",
+                        padding: "10px",
+                        borderRadius: "var(--radius-sm)",
+                        fontSize: "0.88rem",
+                        fontWeight: 700,
+                        color: leadFormValid && !isAddingLead ? "#0a0a0a" : "var(--text-dim)",
+                        background: leadFormValid && !isAddingLead ? "linear-gradient(90deg, #65a30d, #84cc16)" : "var(--card-hover)",
+                        cursor: leadFormValid && !isAddingLead ? "pointer" : "not-allowed",
+                        transition: "filter 0.15s ease",
+                      }}
+                    >
+                      {isAddingLead ? "Logging..." : "Log Lead"}
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap" style={{ marginBottom: "10px" }}>
+                      <span style={{ fontSize: "0.85rem" }}>📞</span>
+                      <span className="dash-mono" style={{ fontSize: "0.7rem", fontWeight: 700, letterSpacing: "0.08em", color: "var(--dash-sale)" }}>
+                        DASH CALL {dashNum}
+                      </span>
+                      {lastLead && (
+                        <span className="dash-sub" style={{ fontSize: "0.72rem" }}>
+                          for Lead #{logLeads.length} — {(lastLead.leadType || "").split(" - ")[0]}
+                        </span>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                      <select
+                        value={newDashCall.result}
+                        onChange={(e) => setNewDashCall((prev) => ({ ...prev, result: e.target.value }))}
+                        className="dash-select"
+                        style={{ width: "100%", padding: "8px 10px", fontSize: "0.85rem" }}
+                      >
+                        <option value="connected">Connected</option>
+                        <option value="no_answer">No Answer</option>
+                        <option value="voicemail">Voicemail</option>
+                        <option value="busy">Busy</option>
+                      </select>
+                      <div className="md:col-span-2">
+                        <input
+                          type="text"
+                          value={newDashCall.notes}
+                          onChange={(e) => setNewDashCall((prev) => ({ ...prev, notes: e.target.value }))}
+                          className="dash-input"
+                          style={{ width: "100%", padding: "8px 10px", fontSize: "0.85rem", borderColor: formErrors.dashNotes ? "var(--negative)" : undefined }}
+                          placeholder="Notes *"
+                        />
+                        {formErrors.dashNotes && (
+                          <p style={{ color: "var(--negative)", fontSize: "0.72rem", marginTop: "4px" }}>{formErrors.dashNotes}</p>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      onClick={handleAddDashCall}
+                      disabled={isLoggingDashCall}
+                      style={{
+                        width: "100%",
+                        marginTop: "10px",
+                        padding: "10px",
+                        borderRadius: "var(--radius-sm)",
+                        fontSize: "0.88rem",
+                        fontWeight: 700,
+                        color: "#0a0a0a",
+                        background: "var(--dash-sale)",
+                        cursor: isLoggingDashCall ? "not-allowed" : "pointer",
+                        opacity: isLoggingDashCall ? 0.6 : 1,
+                      }}
+                    >
+                      {isLoggingDashCall ? "Logging..." : "Log Call"}
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
-          </>
-        )}
+          </div>
+          );
+        })()}
         {activeTab === "analytics" && (
           <AnalyticsDashboard leads={leads} user={user} theme={currentTheme} />
         )}
