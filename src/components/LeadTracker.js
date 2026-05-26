@@ -184,6 +184,54 @@ const themes = {
       border: "rgba(255,255,255,0.06)",
     },
   },
+  // ── HALO THEME FAMILY ──────────────────────────────────────────────────
+  // UNSC base: near-black bg, cyan VISR HUD accent, Spartan-green brand. The
+  // halo-active class (added on the page wrapper) layers the HUD chrome on top
+  // via HaloDecorations' style block. Data colors stay constant across themes.
+  halo: {
+    primary: "from-[#0A0E10] via-[#0d1519] to-[#0A0E10]",
+    accent: "from-[#0E7A8C] to-[#21CFE8]",
+    card: "bg-[#121821]/80",
+    dash: {
+      bg: "#0A0E10",
+      card: "#121821",
+      cardHover: "#1A2230",
+      border: "rgba(33,207,232,0.20)",
+      text: "#e8f6f9",
+      textSub: "#7fa6b0",
+      textDim: "#3c5560",
+    },
+  },
+  // Forerunner: warm tan/steel with hard-light amber accents.
+  haloForerunner: {
+    primary: "from-[#0c0a06] via-[#171008] to-[#0c0a06]",
+    accent: "from-[#9a5208] to-[#FF8A12]",
+    card: "bg-[#171208]/80",
+    dash: {
+      bg: "#0c0a06",
+      card: "#171208",
+      cardHover: "#211a0e",
+      border: "rgba(255,138,18,0.22)",
+      text: "#f6efe2",
+      textSub: "#b0a07f",
+      textDim: "#5c503c",
+    },
+  },
+  // Banished: black + bone + Atriox red — a "danger admin console" mood.
+  haloBanished: {
+    primary: "from-[#0a0606] via-[#160a0a] to-[#0a0606]",
+    accent: "from-[#7a1414] to-[#B22222]",
+    card: "bg-[#160b0b]/80",
+    dash: {
+      bg: "#0a0606",
+      card: "#160b0b",
+      cardHover: "#1e0f0f",
+      border: "rgba(178,34,34,0.26)",
+      text: "#f6e8e8",
+      textSub: "#b08080",
+      textDim: "#5c3c3c",
+    },
+  },
 };
 
 // Default "bento dark" tokens used as a fallback if a theme lacks `dash`.
@@ -1411,6 +1459,156 @@ const runescapeIconEmojis = {
 
 // Icon types that should use Gnome Child face in RuneScape theme
 const runescapeFaceTypes = ['shield', 'users', 'user', 'chart'];
+
+// =============================================================================
+// HALO ("VISR OS") DECORATIONS — overlay + scoped .halo-active CSS.
+// Mirrors the HelloKitty / RuneScape decoration pattern: only mounts when a
+// halo theme is active, and carries all halo-specific styling in a <style>
+// block so nothing leaks to the other 8 themes. The accent color is driven by
+// the --halo-accent CSS var, which the page wrapper sets per variant
+// (cyan = UNSC, amber = Forerunner, red = Banished).
+// =============================================================================
+const HaloDecorations = ({ isActive }) => {
+  if (!isActive) return null;
+  return (
+    <>
+      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+        <div className="halo-grid" />
+        <div className="halo-scanlines" />
+        <div className="halo-bracket halo-bracket-tl" />
+        <div className="halo-bracket halo-bracket-tr" />
+        <div className="halo-bracket halo-bracket-bl" />
+        <div className="halo-bracket halo-bracket-br" />
+      </div>
+      <style>{`
+        .halo-active {
+          --halo-accent: #21CFE8;
+          --halo-accent-dim: #0E7A8C;
+          --halo-accent-glow: #6EEAF6;
+        }
+        .halo-active.haloForerunner {
+          --halo-accent: #FF8A12;
+          --halo-accent-dim: #9a5208;
+          --halo-accent-glow: #FFB155;
+        }
+        .halo-active.haloBanished {
+          --halo-accent: #B22222;
+          --halo-accent-dim: #6e1414;
+          --halo-accent-glow: #FF2E2E;
+        }
+
+        /* Typography — condensed industrial sans + geometric headers */
+        .halo-active,
+        .halo-active .dash-root {
+          font-family: "Saira", "Barlow", system-ui, sans-serif;
+        }
+        .halo-active h1,
+        .halo-active h2,
+        .halo-active h3,
+        .halo-active h4,
+        .halo-active h5 {
+          font-family: "Oxanium", "Aldrich", sans-serif !important;
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+        }
+        .halo-active button {
+          letter-spacing: 0.04em;
+        }
+        .halo-active .dash-mono {
+          font-family: "Share Tech Mono", "JetBrains Mono", monospace !important;
+        }
+
+        /* Background grid + scanline wash */
+        .halo-grid {
+          position: absolute;
+          inset: 0;
+          background-image:
+            linear-gradient(var(--halo-accent) 1px, transparent 1px),
+            linear-gradient(90deg, var(--halo-accent) 1px, transparent 1px);
+          background-size: 46px 46px;
+          opacity: 0.035;
+        }
+        .halo-scanlines {
+          position: absolute;
+          inset: 0;
+          background: repeating-linear-gradient(
+            0deg,
+            transparent 0,
+            transparent 2px,
+            rgba(255, 255, 255, 0.025) 3px
+          );
+          opacity: 0.6;
+        }
+
+        /* Viewport corner HUD brackets */
+        .halo-bracket {
+          position: absolute;
+          width: 40px;
+          height: 40px;
+          border: 2px solid var(--halo-accent);
+          opacity: 0.45;
+        }
+        .halo-bracket-tl { top: 86px; left: 10px; border-right: none; border-bottom: none; }
+        .halo-bracket-tr { top: 86px; right: 10px; border-left: none; border-bottom: none; }
+        .halo-bracket-bl { bottom: 14px; left: 10px; border-right: none; border-top: none; }
+        .halo-bracket-br { bottom: 14px; right: 10px; border-left: none; border-top: none; }
+
+        /* VISR card chrome: chamfered corners + accent border + inset glow +
+           bright top-left leading stroke. (clip-path clips outer glows, so the
+           glow is applied inset.) */
+        .halo-active .dash-card,
+        .halo-active .dash-stat {
+          position: relative;
+          border-color: var(--halo-accent-dim) !important;
+          box-shadow: inset 0 0 14px -6px var(--halo-accent);
+          clip-path: polygon(
+            0 7px, 7px 0,
+            calc(100% - 7px) 0, 100% 7px,
+            100% calc(100% - 7px), calc(100% - 7px) 100%,
+            7px 100%, 0 calc(100% - 7px)
+          );
+        }
+        .halo-active .dash-card::before {
+          content: "";
+          position: absolute;
+          top: 0;
+          left: 0;
+          height: 2px;
+          width: 34%;
+          background: var(--halo-accent);
+          box-shadow: 0 0 8px var(--halo-accent);
+        }
+
+        /* Monthly-progress bar reads as an energy shield */
+        .halo-active .dash-progress-fill {
+          background: linear-gradient(90deg, var(--halo-accent-dim), var(--halo-accent-glow)) !important;
+          box-shadow: 0 0 10px var(--halo-accent);
+        }
+
+        /* Inputs glow with the active accent on focus */
+        .halo-active input:focus,
+        .halo-active select:focus,
+        .halo-active textarea:focus {
+          border-color: var(--halo-accent) !important;
+          box-shadow: 0 0 0 1px var(--halo-accent);
+        }
+
+        /* Themed scrollbar */
+        .halo-active .lead-log-scroll::-webkit-scrollbar-thumb {
+          background: var(--halo-accent-dim);
+        }
+
+        @keyframes halo-recharge {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(100%); }
+        }
+      `}</style>
+    </>
+  );
+};
+
+// Map a theme key to its halo variant accent label (for HUD overlay tinting).
+const isHaloTheme = (key = "") => key === "halo" || key.startsWith("halo");
 
 // Global state for supervisor help requests and goals
 let globalSupervisorRequests = [];
@@ -6002,11 +6200,12 @@ const ManagerDashboard = ({ user, onSignOut }) => {
 
   return (
     <div
-      className={`min-h-screen bg-gradient-to-br ${currentThemeStyles.primary} ${currentTheme === 'helloKitty' ? 'hello-kitty-active text-gray-800' : currentTheme === 'runescape' ? 'runescape-active text-white' : 'text-white'}`}
+      className={`min-h-screen bg-gradient-to-br ${currentThemeStyles.primary} ${currentTheme === 'helloKitty' ? 'hello-kitty-active text-gray-800' : currentTheme === 'runescape' ? 'runescape-active text-white' : currentTheme.startsWith('halo') ? `halo-active ${currentTheme} text-white` : 'text-white'}`}
     >
       {/* Hello Kitty Decorations */}
       <HelloKittyDecorations isActive={currentTheme === 'helloKitty'} />
       <RuneScapeDecorations isActive={currentTheme === 'runescape'} />
+      <HaloDecorations isActive={isHaloTheme(currentTheme)} />
 
       {/* Toast Notification */}
       {toast && (
@@ -8609,6 +8808,22 @@ const AgentDashboard = ({ user, onSignOut }) => {
   const selectedDateLeads = getSelectedDateLeads();
   const allTimeBests = getAllTimeBests();
   const currentThemeStyles = themes[currentTheme];
+  // Halo theme: in-fiction vocabulary for the agent chrome.
+  const isHalo = isHaloTheme(currentTheme);
+  const haloSpree = (n) => {
+    const ladder = [
+      [40, "DEMON"],
+      [35, "GRIM REAPER"],
+      [30, "BOOGEYMAN"],
+      [25, "NIGHTMARE"],
+      [20, "RAMPAGE"],
+      [15, "RUNNING RIOT"],
+      [10, "KILLING FRENZY"],
+      [5, "KILLING SPREE"],
+    ];
+    for (const [threshold, name] of ladder) if (n >= threshold) return name;
+    return "SPREE";
+  };
   const goals = globalAgentGoals[user.email] || {
     dailySales: 10,
     weeklySales: 50,
@@ -8734,11 +8949,12 @@ const AgentDashboard = ({ user, onSignOut }) => {
 
   return (
     <div
-      className={`min-h-screen bg-gradient-to-br ${currentThemeStyles.primary} ${currentTheme === 'helloKitty' ? 'hello-kitty-active text-gray-800' : currentTheme === 'runescape' ? 'runescape-active text-white' : 'text-white'}`}
+      className={`min-h-screen bg-gradient-to-br ${currentThemeStyles.primary} ${currentTheme === 'helloKitty' ? 'hello-kitty-active text-gray-800' : currentTheme === 'runescape' ? 'runescape-active text-white' : currentTheme.startsWith('halo') ? `halo-active ${currentTheme} text-white` : 'text-white'}`}
     >
       {/* Hello Kitty Decorations */}
       <HelloKittyDecorations isActive={currentTheme === 'helloKitty'} />
       <RuneScapeDecorations isActive={currentTheme === 'runescape'} />
+      <HaloDecorations isActive={isHaloTheme(currentTheme)} />
 
       <Toast
         message={toast.message}
@@ -8758,10 +8974,10 @@ const AgentDashboard = ({ user, onSignOut }) => {
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-white">
-                  Sales Agent Dashboard
+                  {isHalo ? "Spartan Service Record" : "Sales Agent Dashboard"}
                   <HelloKittyBow isActive={currentTheme === 'helloKitty'} isRuneScape={currentTheme === 'runescape'} />
                 </h1>
-                <p className={currentTheme === 'helloKitty' ? 'text-pink-700' : currentTheme === 'runescape' ? 'text-amber-400' : 'text-gray-300'}>Welcome back, {user.name}</p>
+                <p className={currentTheme === 'helloKitty' ? 'text-pink-700' : currentTheme === 'runescape' ? 'text-amber-400' : 'text-gray-300'}>{isHalo ? `Spartan ${user.name} · Deployed` : `Welcome back, ${user.name}`}</p>
               </div>
             </div>
             <div className="flex items-center gap-4">
@@ -8800,7 +9016,7 @@ const AgentDashboard = ({ user, onSignOut }) => {
               <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${currentTheme === 'helloKitty' ? 'bg-gradient-to-r from-pink-400 to-rose-400' : currentTheme === 'runescape' ? 'bg-gradient-to-r from-yellow-600 to-amber-700' : 'bg-gradient-to-r from-orange-500 to-red-500'}`}>
                 {currentTheme === 'helloKitty' ? <span>💕</span> : currentTheme === 'runescape' ? <span>🪙</span> : <Flame className="w-5 h-5 text-white" />}
                 <span className="text-white font-bold">
-                  {streak} day streak!
+                  {isHalo ? `${streak}-Day ${haloSpree(streak)}` : `${streak} day streak!`}
                 </span>
               </div>
               <button
@@ -8808,7 +9024,7 @@ const AgentDashboard = ({ user, onSignOut }) => {
                 className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors text-white ${currentTheme === 'helloKitty' ? 'bg-pink-600 hover:bg-pink-700' : currentTheme === 'runescape' ? 'bg-amber-700 hover:bg-amber-800' : 'bg-red-600 hover:bg-red-700'}`}
               >
                 <LogOut className="w-4 h-4" />
-                Sign Out
+                {isHalo ? "Stand Down" : "Sign Out"}
               </button>
             </div>
           </div>
