@@ -69,6 +69,7 @@ import {
   Loader,
   RefreshCw,
   Download,
+  Search,
 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { useLeads } from "../hooks/useLeads";
@@ -303,6 +304,472 @@ const DASH_RESULT_META = {
   no_answer: { label: "No Answer", color: "#f43f5e" },
   voicemail: { label: "Voicemail", color: "#f59e0b" },
   busy: { label: "Busy", color: "#8b5cf6" },
+};
+
+// =============================================================================
+// TRAINING REFERENCE DATA (Rebuttals / Pitches / SEPs)
+// Hardcoded reference material for now — no Firestore. Content is placeholder
+// ("[Content to be added]") and will be filled in / moved to Firestore later.
+// Each item carries a sequence of flashcard `steps` ({ title, content }).
+// =============================================================================
+
+// Shared step templates (fresh array per item so navigation state stays per-item).
+const sepSteps = () => [
+  { title: "Identify the SEP", content: "[Content to be added]" },
+  { title: "Ask the qualifying question", content: "[Content to be added]" },
+  { title: "Confirm and proceed", content: "[Content to be added]" },
+];
+const rebuttalSteps = () => [
+  { title: "Acknowledge", content: "[Content to be added]" },
+  { title: "Reframe", content: "[Content to be added]" },
+  { title: "Redirect", content: "[Content to be added]" },
+];
+const pitchSteps = () => [
+  { title: "Setup", content: "[Content to be added]" },
+  { title: "Hook", content: "[Content to be added]" },
+  { title: "Value Prop", content: "[Content to be added]" },
+  { title: "Close", content: "[Content to be added]" },
+];
+
+// SEP item helper. opts: { tags: string[], requiresSup: bool }
+const sep = (code, name, opts = {}) => ({
+  code,
+  name,
+  tags: opts.tags || [],
+  requiresSup: !!opts.requiresSup,
+  steps: sepSteps(),
+});
+
+// NOTE: "Visible in MARX" tags below are placeholders to demonstrate the tag UI
+// and should be verified against MARX before this ships as real reference data.
+const SEP_DATA = {
+  categories: [
+    {
+      id: "enrollment",
+      name: "Enrollment Period SEPs",
+      icon: "📋",
+      color: "#22d3ee",
+      items: [
+        sep("OEP", "Open Enrollment Period (Jan 1 – Mar 31)", { tags: ["Visible in MARX"] }),
+        sep("IEP", "Initial Election Period"),
+        sep("OEP-N", "Open Enrollment Period — New"),
+        sep("ICEP", "Initial Coverage Election Period", { tags: ["Visible in MARX"] }),
+        sep("IEP 2", "Initial Election Period 2 (Turning 65)"),
+        sep("RET", "Retroactive Enrollment"),
+      ],
+    },
+    {
+      id: "life",
+      name: "Life Event SEPs",
+      icon: "🏠",
+      color: "#84cc16",
+      items: [
+        sep("MOVE", "Change of Address / Relocation"),
+        sep("LEC", "Loss of Employer Coverage"),
+        sep("LTC", "Leaving Long Term Care Facility"),
+        sep("INC", "Incarceration Release"),
+      ],
+    },
+    {
+      id: "medicaid",
+      name: "Medicaid & LIS (Extra Help) SEPs",
+      icon: "🏥",
+      color: "#8b5cf6",
+      items: [
+        sep("MCD", "Change in Medicaid Status"),
+        sep("MCD-GAIN", "Gaining Medicaid"),
+        sep("MCD-LOSS", "Loss of Medicaid"),
+        sep("NLS", "Gain/Loss/Change in LIS (Extra Help) Status"),
+      ],
+    },
+    {
+      id: "plan",
+      name: "Plan-Based SEPs",
+      icon: "📄",
+      color: "#f59e0b",
+      items: [
+        sep("LCC", "Loss of Chronic Condition Plan"),
+        sep("SNP", "Special Needs Plan Eligibility"),
+        sep("DIF", "Deemed / Auto-Assigned to Plan", { tags: ["Visible in MARX"] }),
+        sep("MYT", "Plan Termination (Mid-Year)"),
+        sep("EOC", "End of Contract — Plan Cancellation"),
+        sep("5 STAR", "5-Star Plan Enrollment", { tags: ["Visible in MARX"] }),
+      ],
+    },
+    {
+      id: "chronic",
+      name: "Chronic Condition & Special Need SEPs",
+      icon: "⚕️",
+      color: "#ec4899",
+      items: [
+        sep("CSN", "Chronic Special Needs Plan (C-SNP)", { requiresSup: true }),
+        sep("CDC", "Coordinated Care / VA / IHS", { requiresSup: true }),
+        sep("INT", "Institutional (HIDE/FIDE)", { requiresSup: true }),
+      ],
+    },
+    {
+      id: "pharma",
+      name: "Pharmaceutical Assistance SEPs",
+      icon: "💊",
+      color: "#f43f5e",
+      items: [
+        sep("SPAP", "State Pharmaceutical Assistance Program"),
+        sep("SPAP LOSS", "Loss of SPAP Coverage"),
+      ],
+    },
+    {
+      id: "disaster",
+      name: "Disaster Relief SEPs",
+      icon: "🌪️",
+      color: "#60a5fa",
+      items: [sep("FEMA", "FEMA-Declared Disaster Area", { tags: ["Visible in MARX"] })],
+    },
+  ],
+};
+
+const REBUTTALS_DATA = {
+  categories: [
+    {
+      id: "soa",
+      name: "SOA / Scope of Appointment Rebuttals",
+      icon: "🛡️",
+      color: "#22d3ee",
+      items: [
+        { name: "I didn't agree to this call", steps: rebuttalSteps() },
+        { name: "I don't want to sign anything", steps: rebuttalSteps() },
+        { name: "What is an SOA?", steps: rebuttalSteps() },
+      ],
+    },
+    {
+      id: "meds",
+      name: "Medication Rebuttals",
+      icon: "💊",
+      color: "#84cc16",
+      items: [
+        { name: "I don't want to change my medications", steps: rebuttalSteps() },
+        { name: "My doctor won't approve this", steps: rebuttalSteps() },
+        { name: "I need to check with my pharmacist", steps: rebuttalSteps() },
+      ],
+    },
+    {
+      id: "doctor",
+      name: "Doctor / Provider Rebuttals",
+      icon: "👨‍⚕️",
+      color: "#8b5cf6",
+      items: [
+        { name: "I don't want to change my doctor", steps: rebuttalSteps() },
+        { name: "My doctor isn't in your network", steps: rebuttalSteps() },
+        { name: "I need to ask my doctor first", steps: rebuttalSteps() },
+      ],
+    },
+    {
+      id: "cost",
+      name: "Cost / Value Rebuttals",
+      icon: "💰",
+      color: "#f59e0b",
+      items: [
+        { name: "I can't afford it", steps: rebuttalSteps() },
+        { name: "My current plan is cheaper", steps: rebuttalSteps() },
+        { name: "I don't see the value", steps: rebuttalSteps() },
+      ],
+    },
+    {
+      id: "thirdparty",
+      name: "Third Party Rebuttals",
+      icon: "👨‍👩‍👧",
+      color: "#ec4899",
+      items: [
+        { name: "I need to talk to my son/daughter first", steps: rebuttalSteps() },
+        { name: "My spouse handles this", steps: rebuttalSteps() },
+        { name: "Let me think about it", steps: rebuttalSteps() },
+      ],
+    },
+    {
+      id: "resistance",
+      name: "General Resistance",
+      icon: "🚫",
+      color: "#f43f5e",
+      items: [
+        { name: "I'm not interested", steps: rebuttalSteps() },
+        { name: "I already have coverage", steps: rebuttalSteps() },
+        { name: "Call me back later", steps: rebuttalSteps() },
+        { name: "Take me off your list", steps: rebuttalSteps() },
+      ],
+    },
+  ],
+};
+
+const PITCHES_DATA = {
+  categories: [
+    {
+      id: "opening",
+      name: "Opening Pitches",
+      icon: "📞",
+      color: "#22d3ee",
+      items: [
+        { name: "Cold Call Introduction", steps: pitchSteps() },
+        { name: "Warm Transfer Introduction", steps: pitchSteps() },
+        { name: "Callback Introduction", steps: pitchSteps() },
+        { name: "Dash Call Introduction", steps: pitchSteps() },
+      ],
+    },
+    {
+      id: "value",
+      name: "Value Pitches",
+      icon: "💎",
+      color: "#84cc16",
+      items: [
+        { name: "Dental / Vision / Hearing Benefits", steps: pitchSteps() },
+        { name: "OTC (Over-the-Counter) Benefits", steps: pitchSteps() },
+        { name: "Transportation Benefits", steps: pitchSteps() },
+        { name: "Grocery / Food Card Benefits", steps: pitchSteps() },
+        { name: "Prescription Drug Savings", steps: pitchSteps() },
+      ],
+    },
+    {
+      id: "plantype",
+      name: "Plan Type Pitches",
+      icon: "🏥",
+      color: "#8b5cf6",
+      items: [
+        { name: "MAPD (Medicare Advantage Prescription Drug)", steps: pitchSteps() },
+        { name: "DSNP (Dual Special Needs Plan)", steps: pitchSteps() },
+        { name: "HMO vs PPO Explanation", steps: pitchSteps() },
+        { name: "Med Supp Comparison", steps: pitchSteps() },
+      ],
+    },
+    {
+      id: "switch",
+      name: "Carrier Switch Pitches",
+      icon: "🔄",
+      color: "#f59e0b",
+      items: [
+        { name: "Switching from UHC", steps: pitchSteps() },
+        { name: "Switching from Humana", steps: pitchSteps() },
+        { name: "Switching from Aetna", steps: pitchSteps() },
+        { name: "Generic Carrier Switch", steps: pitchSteps() },
+      ],
+    },
+    {
+      id: "closing",
+      name: "Closing Pitches",
+      icon: "🎯",
+      color: "#ec4899",
+      items: [
+        { name: "Standard Close", steps: pitchSteps() },
+        { name: "Urgency Close", steps: pitchSteps() },
+        { name: "Benefit Summary Close", steps: pitchSteps() },
+        { name: "Referral Ask", steps: pitchSteps() },
+      ],
+    },
+  ],
+};
+
+const flashItemKey = (cat, item) => `${cat.id}::${item.code || item.name}`;
+
+// Shared collapsible-dropdown / flashcard UI used by the Rebuttals, Pitches and
+// SEPs tabs. Theme surface tokens are inherited via CSS vars from the wrapper.
+const FlashcardReference = ({ data, searchPlaceholder = "Search…", rootStyle }) => {
+  const [queryStr, setQueryStr] = React.useState("");
+  const [expanded, setExpanded] = React.useState({});
+  const [stepByItem, setStepByItem] = React.useState({});
+
+  const q = queryStr.trim().toLowerCase();
+  const categories = data.categories
+    .map((cat) => ({
+      ...cat,
+      items: cat.items.filter(
+        (it) =>
+          !q ||
+          (it.code || "").toLowerCase().includes(q) ||
+          (it.name || "").toLowerCase().includes(q)
+      ),
+    }))
+    .filter((cat) => cat.items.length > 0);
+
+  const allKeys = [];
+  categories.forEach((cat) =>
+    cat.items.forEach((it) => allKeys.push(flashItemKey(cat, it)))
+  );
+  const allExpanded = allKeys.length > 0 && allKeys.every((k) => expanded[k]);
+
+  const toggleAll = () => {
+    if (allExpanded) {
+      setExpanded({});
+    } else {
+      const next = {};
+      allKeys.forEach((k) => (next[k] = true));
+      setExpanded(next);
+    }
+  };
+  const toggleItem = (k) => setExpanded((p) => ({ ...p, [k]: !p[k] }));
+  const setStep = (k, idx) => setStepByItem((p) => ({ ...p, [k]: idx }));
+
+  return (
+    <div className="dash-root" style={rootStyle}>
+      {/* Header: search + expand/collapse toggle */}
+      <div className="flex items-center justify-between gap-3 flex-wrap" style={{ flexShrink: 0 }}>
+        <div style={{ position: "relative", flex: "1 1 240px", maxWidth: "440px" }}>
+          <Search
+            className="w-4 h-4"
+            style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "var(--text-dim)" }}
+          />
+          <input
+            type="text"
+            value={queryStr}
+            onChange={(e) => setQueryStr(e.target.value)}
+            placeholder={searchPlaceholder}
+            className="dash-input"
+            style={{ width: "100%", padding: "8px 10px 8px 32px", fontSize: "0.85rem" }}
+          />
+        </div>
+        <button
+          onClick={toggleAll}
+          className="dash-card dash-card-hover dash-mono"
+          style={{ padding: "8px 12px", fontSize: "0.72rem", fontWeight: 700, color: "var(--text-sub)", letterSpacing: "0.04em" }}
+        >
+          {allExpanded ? "Collapse All" : "Expand All"}
+        </button>
+      </div>
+
+      {/* Scrollable category list */}
+      <div className="lead-log-scroll" style={{ flex: "1 1 auto", minHeight: 0, paddingRight: "4px" }}>
+        {categories.length === 0 ? (
+          <div className="dash-sub text-center" style={{ padding: "40px 0", fontSize: "0.9rem" }}>
+            No matches for "{queryStr}"
+          </div>
+        ) : (
+          categories.map((cat, ci) => (
+            <div
+              key={cat.id}
+              className="dash-animate"
+              style={{ animationDelay: `${0.05 + ci * 0.05}s`, marginBottom: "16px" }}
+            >
+              {/* Category header */}
+              <div
+                style={{
+                  borderLeft: `3px solid ${cat.color}`,
+                  background: "var(--card)",
+                  borderRadius: "var(--radius-sm)",
+                  padding: "10px 14px",
+                  marginBottom: "8px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                }}
+              >
+                <span style={{ fontSize: "1rem" }}>{cat.icon}</span>
+                <span style={{ color: cat.color, fontWeight: 700, fontSize: "0.9rem" }}>{cat.name}</span>
+                <span className="dash-dim dash-mono" style={{ fontSize: "0.7rem", marginLeft: "auto" }}>
+                  {cat.items.length}
+                </span>
+              </div>
+
+              {/* Items */}
+              <div className="space-y-2">
+                {cat.items.map((it) => {
+                  const k = flashItemKey(cat, it);
+                  const isOpen = !!expanded[k];
+                  const stepIdx = Math.min(stepByItem[k] || 0, it.steps.length - 1);
+                  const step = it.steps[stepIdx];
+                  return (
+                    <div
+                      key={k}
+                      className="dash-card"
+                      style={{ overflow: "hidden", background: isOpen ? "var(--card-hover)" : "var(--card)" }}
+                    >
+                      {/* Clickable row */}
+                      <button
+                        onClick={() => toggleItem(k)}
+                        style={{ width: "100%", display: "flex", alignItems: "center", gap: "10px", padding: "10px 14px", textAlign: "left" }}
+                      >
+                        {it.code && (
+                          <span className="dash-mono" style={{ color: cat.color, fontWeight: 700, fontSize: "0.8rem", minWidth: "62px", flexShrink: 0 }}>
+                            {it.code}
+                          </span>
+                        )}
+                        <span
+                          style={{ flex: 1, minWidth: 0, color: "var(--text)", fontSize: "0.85rem", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                        >
+                          {it.name}
+                        </span>
+                        {it.requiresSup && (
+                          <span
+                            className="dash-mono"
+                            style={{ flexShrink: 0, fontSize: "0.6rem", fontWeight: 700, padding: "3px 7px", borderRadius: "var(--radius-xs)", background: hexToRgba("#f59e0b", 0.15), color: "#f59e0b", whiteSpace: "nowrap" }}
+                          >
+                            ⚠️ REQUIRES SUP APPROVAL
+                          </span>
+                        )}
+                        {(it.tags || []).map((tag) => (
+                          <span
+                            key={tag}
+                            className="dash-mono"
+                            style={{ flexShrink: 0, fontSize: "0.6rem", fontWeight: 700, padding: "3px 7px", borderRadius: "var(--radius-xs)", background: hexToRgba("#22d3ee", 0.15), color: "#22d3ee", whiteSpace: "nowrap" }}
+                          >
+                            → {tag}
+                          </span>
+                        ))}
+                        <ChevronDown
+                          className="w-4 h-4"
+                          style={{ flexShrink: 0, color: "var(--text-sub)", transition: "transform 0.2s ease", transform: isOpen ? "rotate(180deg)" : "rotate(0deg)" }}
+                        />
+                      </button>
+
+                      {/* Expanded flashcard */}
+                      {isOpen && (
+                        <div className="flash-expand" style={{ padding: "0 14px 14px 14px" }}>
+                          <div
+                            key={stepIdx}
+                            className="flash-step"
+                            style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "14px" }}
+                          >
+                            <div className="flex items-center gap-2" style={{ marginBottom: "8px" }}>
+                              <span
+                                className="dash-mono"
+                                style={{ width: "26px", height: "26px", borderRadius: "50%", background: hexToRgba(cat.color, 0.2), color: cat.color, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: "0.8rem", flexShrink: 0 }}
+                              >
+                                {stepIdx + 1}
+                              </span>
+                              <span style={{ color: "var(--text)", fontWeight: 700, fontSize: "0.9rem" }}>{step.title}</span>
+                            </div>
+                            <div className="dash-sub" style={{ fontSize: "0.85rem", minHeight: "40px", lineHeight: 1.5 }}>
+                              {step.content}
+                            </div>
+                            <div className="flex items-center justify-between" style={{ marginTop: "12px", gap: "8px" }}>
+                              <button
+                                onClick={() => setStep(k, stepIdx - 1)}
+                                disabled={stepIdx === 0}
+                                className="dash-card dash-card-hover"
+                                style={{ padding: "6px 12px", fontSize: "0.78rem", fontWeight: 600, color: "var(--text)", opacity: stepIdx === 0 ? 0.4 : 1, cursor: stepIdx === 0 ? "not-allowed" : "pointer" }}
+                              >
+                                ← Previous
+                              </button>
+                              <span className="dash-mono dash-sub" style={{ fontSize: "0.72rem" }}>
+                                Step {stepIdx + 1} of {it.steps.length}
+                              </span>
+                              <button
+                                onClick={() => setStep(k, stepIdx + 1)}
+                                disabled={stepIdx === it.steps.length - 1}
+                                className="dash-card dash-card-hover"
+                                style={{ padding: "6px 12px", fontSize: "0.78rem", fontWeight: 600, color: "var(--text)", opacity: stepIdx === it.steps.length - 1 ? 0.4 : 1, cursor: stepIdx === it.steps.length - 1 ? "not-allowed" : "pointer" }}
+                              >
+                                Next →
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
 };
 
 // Hello Kitty Decorations Component
@@ -8151,9 +8618,11 @@ const AgentDashboard = ({ user, onSignOut }) => {
   };
 
   // ---- New Lead Log derived data -------------------------------------------
-  // Dashboard surface tokens for the active theme (bento dark).
+  // Dashboard surface tokens for the active theme (bento dark). The CSS custom
+  // properties cascade to all descendants, so any tab wrapped with dashVars can
+  // use the .dash-* classes and var(--card) etc.
   const dashTokens = { ...DEFAULT_DASH_TOKENS, ...(currentThemeStyles.dash || {}) };
-  const dashRootStyle = {
+  const dashVars = {
     "--bg": dashTokens.bg,
     "--card": dashTokens.card,
     "--card-hover": dashTokens.cardHover,
@@ -8161,6 +8630,9 @@ const AgentDashboard = ({ user, onSignOut }) => {
     "--text": dashTokens.text || DEFAULT_DASH_TOKENS.text,
     "--text-sub": dashTokens.textSub || DEFAULT_DASH_TOKENS.textSub,
     "--text-dim": dashTokens.textDim || DEFAULT_DASH_TOKENS.textDim,
+  };
+  const dashRootStyle = {
+    ...dashVars,
     // Fill the viewport below the header + tab bar so the Lead Log can dominate.
     // minHeight (not a fixed height) lets the page grow/scroll only on very short
     // viewports where the 50vh log floor can't otherwise fit.
@@ -8169,6 +8641,15 @@ const AgentDashboard = ({ user, onSignOut }) => {
     gap: "8px",
     minHeight: "calc(100vh - 200px)",
     padding: "14px",
+  };
+  // Shared root style for the training reference tabs (Rebuttals/Pitches/SEPs/Lines).
+  const tabRootStyle = {
+    ...dashVars,
+    display: "flex",
+    flexDirection: "column",
+    gap: "12px",
+    minHeight: "calc(100vh - 200px)",
+    padding: "16px",
   };
 
   // Leads for the selected date, oldest-first, numbered 1..n for the log.
@@ -8338,10 +8819,16 @@ const AgentDashboard = ({ user, onSignOut }) => {
           {[
             { key: "dashboard", label: "Dashboard", icon: Target, iconType: "target" },
             { key: "analytics", label: "Analytics", icon: BarChart3, iconType: "chart" },
-            { key: "leaderboards", label: "Leaderboard", icon: Crown, iconType: "trophy" },
-            { key: "notifications", label: "Notifications", icon: Bell, iconType: "bell" },
-            { key: "supervisor", label: "Supervisor Help", icon: Headphones, iconType: "headphones" },
-            { key: "pvp", label: "PvP", icon: Sword, iconType: "star" },
+            // Training reference tabs (replaced Leaderboard / Notifications / Supervisor Help / PvP)
+            { key: "rebuttals", label: "Rebuttals", icon: Shield, iconType: "rebuttals" },
+            { key: "pitches", label: "Pitches", icon: MessageSquare, iconType: "pitches" },
+            { key: "seps", label: "SEPs", icon: Calendar, iconType: "seps" },
+            { key: "lines", label: "Lines", icon: FileText, iconType: "lines" },
+            // --- OLD TABS (commented out, restore if needed) ---
+            // { key: "leaderboards", label: "Leaderboard", icon: Crown, iconType: "trophy" },
+            // { key: "notifications", label: "Notifications", icon: Bell, iconType: "bell" },
+            // { key: "supervisor", label: "Supervisor Help", icon: Headphones, iconType: "headphones" },
+            // { key: "pvp", label: "PvP", icon: Sword, iconType: "star" },
           ].map((tab) => (
             <button
               key={tab.key}
@@ -8985,6 +9472,62 @@ const AgentDashboard = ({ user, onSignOut }) => {
         {activeTab === "analytics" && (
           <AnalyticsDashboard leads={leads} user={user} theme={currentTheme} />
         )}
+
+        {/* Training reference tabs */}
+        {activeTab === "rebuttals" && (
+          <FlashcardReference
+            data={REBUTTALS_DATA}
+            searchPlaceholder="Search rebuttals…"
+            rootStyle={tabRootStyle}
+          />
+        )}
+        {activeTab === "pitches" && (
+          <FlashcardReference
+            data={PITCHES_DATA}
+            searchPlaceholder="Search pitches…"
+            rootStyle={tabRootStyle}
+          />
+        )}
+        {activeTab === "seps" && (
+          <FlashcardReference
+            data={SEP_DATA}
+            searchPlaceholder="Search SEPs by code or name…"
+            rootStyle={tabRootStyle}
+          />
+        )}
+        {activeTab === "lines" && (
+          <div
+            className="dash-root"
+            style={{
+              ...tabRootStyle,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <div
+              className="dash-card dash-animate"
+              style={{ padding: "40px", textAlign: "center", maxWidth: "480px", animationDelay: "0.05s" }}
+            >
+              <FileText className="w-10 h-10" style={{ color: "var(--referral)", margin: "0 auto 12px" }} />
+              <h3 style={{ color: "var(--text)", fontSize: "1.1rem", fontWeight: 700, marginBottom: "6px" }}>
+                Lines
+              </h3>
+              <p className="dash-sub" style={{ fontSize: "0.9rem" }}>
+                Lines content coming soon.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/*
+          OLD AGENT TABS — Leaderboard / Notifications / Supervisor Help / PvP.
+          Their tab-bar buttons are commented out above, so `activeTab` can never
+          equal these keys and none of these branches render. The render code is
+          intentionally KEPT (not deleted) so the tabs can be restored later by
+          simply re-adding their buttons to the tab bar. (Leaving it live rather
+          than block-commenting avoids unused-variable build failures for the
+          Leaderboards / SupervisorHelp / PvPChallenges components.)
+        */}
         {activeTab === "leaderboards" && (
           leaderboardLoading ? (
             <div className="flex items-center justify-center p-12">
